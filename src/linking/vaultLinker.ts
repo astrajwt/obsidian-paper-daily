@@ -13,6 +13,10 @@ interface IndexEntry {
   keywords: string[];   // all matchable terms for this note
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -104,7 +108,7 @@ export class VaultLinker {
       for (const kw of entry.keywords) {
         // Prefer whole-word matches for short keywords to reduce noise
         if (kw.length <= 3) {
-          const re = new RegExp(`\\b${kw}\\b`);
+          const re = new RegExp(`\\b${escapeRegex(kw)}\\b`);
           if (re.test(haystack)) hits.push(kw);
         } else {
           if (haystack.includes(kw)) hits.push(kw);

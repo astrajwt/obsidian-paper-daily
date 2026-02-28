@@ -4706,6 +4706,9 @@ var Scheduler = class {
 };
 
 // src/linking/vaultLinker.ts
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 function normalize3(s) {
   return s.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -4775,7 +4778,7 @@ var VaultLinker = class {
       const hits = [];
       for (const kw of entry.keywords) {
         if (kw.length <= 3) {
-          const re = new RegExp(`\\b${kw}\\b`);
+          const re = new RegExp(`\\b${escapeRegex(kw)}\\b`);
           if (re.test(haystack))
             hits.push(kw);
         } else {
