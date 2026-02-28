@@ -14,7 +14,6 @@ import { downloadPapersForDay } from "../storage/paperDownloader";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
-import type { VaultLinker } from "../linking/vaultLinker";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -48,9 +47,9 @@ function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
   rankedPapers: Paper[],
+  hfDailyPapers: Paper[],
   trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }>,
   aiDigest: string,
-  relatedNotesMap: Map<string, string[]>,
   activeSources: string[],
   error?: string
 ): string {
@@ -87,6 +86,7 @@ function buildDailyMarkdown(
     const linksArr: string[] = [];
     if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
+    if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
     const linksStr = linksArr.join(", ");
     const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
     const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
@@ -98,15 +98,34 @@ function buildDailyMarkdown(
       `   - Links: ${linksStr}`,
       `   - Authors: ${authorsStr}`,
       `   - Updated: ${p.updated.slice(0, 10)}`,
-      relatedNotesMap.has(p.id) ? `   - Related Notes: ${relatedNotesMap.get(p.id)!.join(" ")}` : ""
     ].filter(Boolean).join("\n");
   });
-  const topPapersSection = `## Top Papers (ranked)\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
+  const topPapersSection = `## arXiv Papers (ranked)\n\n> Papers also featured on HuggingFace Daily are ranked higher (🤗 upvote boost).\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
+
+  // HuggingFace Daily Papers section
+  let hfSection = "";
+  if (hfDailyPapers.length > 0) {
+    const hfLines = hfDailyPapers.map((p, i) => {
+      const linksArr: string[] = [];
+      if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
+      if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
+      if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
+      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+      return [
+        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}`,
+        `   - Links: ${linksArr.join(", ")}`,
+        `   - Authors: ${authorsStr}`,
+        `   - Published: ${p.published.slice(0, 10)}`,
+      ].join("\n");
+    });
+    hfSection = `## HuggingFace Daily Papers\n\n> Sorted by community upvotes. Papers that also appear in arXiv results are ranked higher there.\n\n${hfLines.join("\n\n")}`;
+  }
 
   const allPapersRows = rankedPapers.map(p => {
     const links: string[] = [];
     if (p.links.html) links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
+    if (p.links.hf) links.push(`[HF](${p.links.hf})`);
     const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ");
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ");
     const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
@@ -126,19 +145,20 @@ function buildDailyMarkdown(
       const links: string[] = [];
       if (t.paper.links.html) links.push(`[arXiv](${t.paper.links.html})`);
       if (settings.includePdfLink && t.paper.links.pdf) links.push(`[PDF](${t.paper.links.pdf})`);
-      const notes = relatedNotesMap.get(t.paper.id);
+      if (t.paper.links.hf) links.push(`[HF](${t.paper.links.hf})`);
       return [
         `${i + 1}. **${t.paper.title}**`,
         `   - Hotness: ${t.hotness.toFixed(1)} — ${t.reasons.join(", ")}`,
         `   - Categories: ${t.paper.categories.join(", ")}`,
-        notes ? `   - Related Notes: ${notes.join(" ")}` : "",
         `   - Links: ${links.join(", ")} | Authors: ${t.paper.authors.slice(0, 3).join(", ")}${t.paper.authors.length > 3 ? " et al." : ""}`
       ].filter(Boolean).join("\n");
     });
     trendingSection = `## Trending Papers (no keyword match)\n\n> These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).\n\n${trendingLines.join("\n\n")}`;
   }
 
-  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection];
+  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
+  if (hfSection) sections.push("", hfSection);
+  sections.push("", topPapersSection, "", allPapersSection);
   if (trendingSection) sections.push("", trendingSection);
   return sections.join("\n");
 }
@@ -148,7 +168,6 @@ export interface DailyPipelineOptions {
   windowStart?: Date;
   windowEnd?: Date;
   skipDedup?: boolean;
-  linker?: VaultLinker;
 }
 
 export async function runDailyPipeline(
@@ -177,6 +196,7 @@ export async function runDailyPipeline(
   log(`Settings: categories=[${settings.categories.join(",")}] keywords=[${settings.keywords.join(",")}] maxResults=${settings.maxResultsPerDay}`);
 
   let papers: Paper[] = [];
+  let hfDailyPapers: Paper[] = [];
   let fetchError: string | undefined;
   let llmDigest = "";
   let llmError: string | undefined;
@@ -217,41 +237,29 @@ export async function runDailyPipeline(
   if (settings.hfSource?.enabled !== false) {
     try {
       const hfSource = new HFSource();
-      const hfPapers = await hfSource.fetchForDate(date);
-      log(`Step 1b HF FETCH: got ${hfPapers.length} papers for date=${date}`);
+      hfDailyPapers = await hfSource.fetchForDate(date);
+      log(`Step 1b HF FETCH: got ${hfDailyPapers.length} papers for date=${date}`);
 
-      if (hfPapers.length > 0) {
+      if (hfDailyPapers.length > 0) {
         activeSources.push("huggingface");
 
-        // Build lookup: base arXiv ID (no version) → HF upvotes
-        // Our arXiv IDs look like "arxiv:2502.12345v1", HF IDs like "arxiv:2502.12345"
+        // Enrich arXiv papers that also appear on HF with upvotes + HF link.
+        // HF-only papers are NOT merged into the arXiv list — they are displayed separately.
         const hfByBaseId = new Map<string, Paper>();
-        for (const hfp of hfPapers) {
+        for (const hfp of hfDailyPapers) {
           hfByBaseId.set(hfp.id, hfp);
         }
-
-        // Enrich arXiv papers that appear on HF: keep arXiv's full metadata
-        // (categories, versioned ID, complete authors) but add HF upvotes
-        const enrichedBaseIds = new Set<string>();
+        let enrichedCount = 0;
         for (const p of papers) {
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
           if (hfMatch) {
             p.hfUpvotes = hfMatch.hfUpvotes ?? 0;
-            enrichedBaseIds.add(baseId);
+            if (hfMatch.links.hf) p.links = { ...p.links, hf: hfMatch.links.hf };
+            enrichedCount++;
           }
         }
-        log(`Step 1b HF MERGE: enriched ${enrichedBaseIds.size}/${papers.length} arXiv papers with HF upvotes`);
-
-        // Add HF-only papers (community picks not covered by arXiv keyword query)
-        let hfOnlyCount = 0;
-        for (const hfp of hfPapers) {
-          if (!enrichedBaseIds.has(hfp.id)) {
-            papers.push(hfp);
-            hfOnlyCount++;
-          }
-        }
-        log(`Step 1b HF MERGE: added ${hfOnlyCount} HF-only papers (community picks outside arXiv filter)`);
+        log(`Step 1b HF MERGE: enriched ${enrichedCount}/${papers.length} arXiv papers with HF upvotes`);
       }
     } catch (err) {
       log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
@@ -273,22 +281,6 @@ export async function runDailyPipeline(
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
-  // ── Step 3b: Vault linking ────────────────────────────────────
-  const relatedNotesMap = new Map<string, string[]>();
-  if (settings.vaultLinking?.enabled && options.linker && rankedPapers.length > 0) {
-    let linkCount = 0;
-    for (const paper of rankedPapers) {
-      const matches = options.linker.findRelated(paper);
-      if (matches.length > 0) {
-        relatedNotesMap.set(paper.id, matches.map(m => `[[${m.displayName}]]`));
-        linkCount++;
-      }
-    }
-    log(`Step 3b LINKING: ${linkCount}/${rankedPapers.length} papers got related notes`);
-  } else {
-    log(`Step 3b LINKING: skipped (enabled=${settings.vaultLinking?.enabled} linker=${!!options.linker})`);
-  }
-
   // ── Step 3c: Trending (zero-score papers with high hotness) ───
   const trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }> = [];
   if (settings.trending?.enabled && papers.length > 0) {
@@ -303,15 +295,6 @@ export async function runDailyPipeline(
     const topTrending = scored.slice(0, settings.trending.topK ?? 5);
     trendingPapers.push(...topTrending);
 
-    // Also link trending papers
-    if (options.linker && settings.vaultLinking?.enabled) {
-      for (const t of trendingPapers) {
-        const matches = options.linker.findRelated(t.paper);
-        if (matches.length > 0) {
-          relatedNotesMap.set(t.paper.id, matches.map(m => `[[${m.displayName}]]`));
-        }
-      }
-    }
     log(`Step 3c TRENDING: ${unranked.length} unranked papers → ${trendingPapers.length} trending (minHotness=${settings.trending.minHotness})`);
   } else {
     log(`Step 3c TRENDING: skipped (enabled=${settings.trending?.enabled})`);
@@ -369,7 +352,7 @@ export async function runDailyPipeline(
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, relatedNotesMap, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

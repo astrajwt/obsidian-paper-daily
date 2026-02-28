@@ -35,6 +35,7 @@ export class HFSource implements PaperSource {
       const published = p.publishedAt ?? "";
       const htmlLink = `https://arxiv.org/abs/${baseId}`;
       const pdfLink = `https://arxiv.org/pdf/${baseId}`;
+      const hfLink = `https://huggingface.co/papers/${baseId}`;
 
       papers.push({
         id: `arxiv:${baseId}`,           // normalised without version so we can match
@@ -44,7 +45,7 @@ export class HFSource implements PaperSource {
         categories: [],
         published,
         updated: published,
-        links: { html: htmlLink, pdf: pdfLink },
+        links: { html: htmlLink, pdf: pdfLink, hf: hfLink },
         source: "hf",
         hfUpvotes: p.upvotes ?? 0
       });

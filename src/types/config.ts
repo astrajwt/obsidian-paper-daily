@@ -51,13 +51,6 @@ export interface PaperDailySettings {
   // Backfill
   backfillMaxDays: number;
 
-  // Vault linking
-  vaultLinking: {
-    enabled: boolean;
-    excludeFolders: string[];
-    maxLinksPerPaper: number;
-  };
-
   // Trending (zero-score papers with high hotness)
   trending: {
     enabled: boolean;
@@ -78,8 +71,12 @@ export interface PaperDailySettings {
 
   // Paper full-text download
   paperDownload: {
+    enabled: boolean;    // master toggle
     saveHtml: boolean;   // download HTML version and save as .md
     savePdf: boolean;    // download PDF and save as .pdf
     maxPapers: number;   // max papers to download per day
   };
+
+  // Settings UI language (does not affect AI output language)
+  uiLanguage?: "zh" | "en";
 }

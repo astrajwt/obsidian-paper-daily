@@ -234,7 +234,8 @@ export async function downloadPapersForDay(
   log: (msg: string) => void
 ): Promise<void> {
   const cfg = settings.paperDownload;
-  if (!cfg?.saveHtml && !cfg?.savePdf) return;
+  if (!cfg?.enabled) return;
+  if (!cfg.saveHtml && !cfg.savePdf) return;
 
   const topN = papers.slice(0, cfg.maxPapers ?? 5);
   log(`Step DOWNLOAD: ${topN.length} papers (saveHtml=${cfg.saveHtml} savePdf=${cfg.savePdf})`);

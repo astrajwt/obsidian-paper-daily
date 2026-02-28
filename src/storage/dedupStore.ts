@@ -54,6 +54,15 @@ export class DedupStore {
     await this.save();
   }
 
+  async clear(): Promise<void> {
+    this.map = {};
+    await this.save();
+  }
+
+  size(): number {
+    return Object.keys(this.map).length;
+  }
+
   getMap(): DedupMap {
     return { ...this.map };
   }

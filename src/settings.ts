@@ -275,12 +275,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   backfillMaxDays: 30,
 
-  vaultLinking: {
-    enabled: true,
-    excludeFolders: ["PaperDaily", "Clippings", "Readwise", "templates"],
-    maxLinksPerPaper: 3
-  },
-
   trending: {
     enabled: true,
     topK: 5,
@@ -297,6 +291,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   },
 
   paperDownload: {
+    enabled: false,
     saveHtml: false,
     savePdf: false,
     maxPapers: 5
@@ -820,61 +815,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // ── Vault Linking ─────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "笔记关联 / Vault Linking" });
-    containerEl.createEl("p", {
-      text: "自动在 Vault 中查找相关笔记，并在每日摘要的论文条目中添加 [[wikilinks]] | Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
-      cls: "setting-item-description"
-    });
-
-    new Setting(containerEl)
-      .setName("开启笔记关联 / Enable Vault Linking")
-      .setDesc("扫描 Vault 笔记并关联到每篇论文 | Scan vault notes and link related ones to each paper")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.vaultLinking.enabled)
-        .onChange(async (value) => {
-          this.plugin.settings.vaultLinking.enabled = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("排除目录 / Exclude Folders")
-      .setDesc("构建索引时跳过的目录，逗号分隔 | Comma-separated folder names to skip when building the index")
-      .addText(text => text
-        .setPlaceholder("PaperDaily,Clippings,Readwise")
-        .setValue(this.plugin.settings.vaultLinking.excludeFolders.join(","))
-        .onChange(async (value) => {
-          this.plugin.settings.vaultLinking.excludeFolders = value.split(",").map(s => s.trim()).filter(Boolean);
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("每篇最多关联数 / Max Links Per Paper")
-      .setDesc("每篇论文最多显示的关联笔记数 | Maximum number of related notes shown per paper")
-      .addSlider(slider => slider
-        .setLimits(1, 10, 1)
-        .setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.vaultLinking.maxLinksPerPaper = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("重建笔记索引 / Rebuild Note Index")
-      .setDesc("重新扫描 Vault 以更新索引（添加新笔记后运行）| Re-scan vault to update the note index (run after adding new notes)")
-      .addButton(btn => btn
-        .setButtonText("🔄 重建索引 / Rebuild Index")
-        .onClick(async () => {
-          btn.setButtonText("扫描中... / Scanning...").setDisabled(true);
-          try {
-            await this.plugin.rebuildLinkingIndex();
-            new Notice("Vault 索引已重建 / Vault index rebuilt.");
-          } finally {
-            btn.setButtonText("🔄 重建索引 / Rebuild Index").setDisabled(false);
-          }
-        }));
-
     // ── HuggingFace Papers ────────────────────────────────────────
     containerEl.createEl("h2", { text: "HuggingFace 论文源 / HuggingFace Papers" });
     containerEl.createEl("p", {
@@ -937,7 +877,23 @@ export class PaperDailySettingTab extends PluginSettingTab {
       cls: "setting-item-description"
     });
 
+    const dlSubContainer = containerEl.createDiv();
+    const refreshDlSub = () => {
+      dlSubContainer.style.display = this.plugin.settings.paperDownload?.enabled ? "" : "none";
+    };
+
     new Setting(containerEl)
+      .setName("开启全文下载 / Enable Paper Download")
+      .setDesc("开启后可选择下载 HTML 或 PDF | When enabled, choose to download HTML and/or PDF")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.paperDownload?.enabled ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, enabled: value };
+          await this.plugin.saveSettings();
+          refreshDlSub();
+        }));
+
+    new Setting(dlSubContainer)
       .setName("保存 HTML 为 Markdown / Save HTML as Markdown")
       .setDesc("抓取 arXiv HTML 版本并存为 .md 文件（需 arXiv 提供 HTML 版本，2023年后论文基本支持）| Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)")
       .addToggle(toggle => toggle
@@ -947,7 +903,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
+    new Setting(dlSubContainer)
       .setName("保存 PDF / Save PDF")
       .setDesc("下载 PDF 并存入 Vault（Obsidian 可直接预览）| Download the PDF and save it in the vault (viewable in Obsidian)")
       .addToggle(toggle => toggle
@@ -957,7 +913,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
+    new Setting(dlSubContainer)
       .setName("每日最多下载数 / Max papers to download per day")
       .setDesc("限制下载数量以避免等待时间过长 | Limit downloads to top-N ranked papers to avoid long wait times")
       .addSlider(slider => slider
@@ -968,6 +924,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, maxPapers: value };
           await this.plugin.saveSettings();
         }));
+
+    refreshDlSub();
 
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "历史回填 / Backfill" });
