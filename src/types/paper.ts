@@ -45,6 +45,8 @@ export interface RunState {
   } | null;
 }
 
+export type DedupMap = Record<string, string>; // paperId -> firstSeenDate (YYYY-MM-DD)
+
 export interface DailySnapshot {
   date: string;             // YYYY-MM-DD
   papers: Paper[];

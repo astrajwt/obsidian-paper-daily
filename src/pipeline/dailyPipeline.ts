@@ -3,6 +3,7 @@ import type { PaperDailySettings } from "../types/config";
 import type { Paper } from "../types/paper";
 import { VaultWriter } from "../storage/vaultWriter";
 import { StateStore } from "../storage/stateStore";
+import { DedupStore } from "../storage/dedupStore";
 import { SnapshotStore } from "../storage/snapshotStore";
 import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
@@ -158,6 +159,7 @@ export interface DailyPipelineOptions {
   targetDate?: string;
   windowStart?: Date;
   windowEnd?: Date;
+  skipDedup?: boolean;
   hfTrackStore?: HFTrackStore;
 }
 
@@ -165,6 +167,7 @@ export async function runDailyPipeline(
   app: App,
   settings: PaperDailySettings,
   stateStore: StateStore,
+  dedupStore: DedupStore,
   snapshotStore: SnapshotStore,
   options: DailyPipelineOptions = {}
 ): Promise<void> {
@@ -282,6 +285,13 @@ export async function runDailyPipeline(
   } else {
     log(`Step 1b HF FETCH: skipped (disabled)`);
   }
+
+  // ── Step 2: Dedup ─────────────────────────────────────────────
+  const countBeforeDedup = papers.length;
+  if (!options.skipDedup && papers.length > 0) {
+    papers = papers.filter(p => !dedupStore.hasId(p.id));
+  }
+  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
 
   // ── Step 3: Score + rank ──────────────────────────────────────
   let rankedPapers = papers.length > 0
@@ -434,7 +444,13 @@ ${JSON.stringify(papersForScoring)}`;
   await snapshotStore.writeSnapshot(date, rankedPapers, fetchError);
   log(`Step 6 SNAPSHOT: written to ${snapshotPath} (${rankedPapers.length} papers)`);
 
-  // ── Step 6: Update state ──────────────────────────────────────
+  // ── Step 7: Update dedup ──────────────────────────────────────
+  if (!options.skipDedup && rankedPapers.length > 0) {
+    await dedupStore.markSeenBatch(rankedPapers.map(p => p.id), date);
+    log(`Step 7 DEDUP: marked ${rankedPapers.length} IDs as seen`);
+  }
+
+  // ── Step 8: Update state ──────────────────────────────────────
   if (!options.targetDate) {
     await stateStore.setLastDailyRun(now.toISOString());
   }

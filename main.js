@@ -613,7 +613,7 @@ URL: ${result.url}
 \u53EF\u80FD\u539F\u56E0 / Possible causes:
 - \u672A\u8BBE\u7F6E\u5206\u7C7B / Categories not set
 - \u7F51\u7EDC\u95EE\u9898 / Network issue
-- \u65F6\u95F4\u7A97\u53E3\u5185\u65E0\u65B0\u8BBA\u6587 / No new papers in the time window`, "var(--color-orange)");
+- \u5DF2\u5168\u90E8\u5728\u53BB\u91CD\u7F13\u5B58\u4E2D / All papers already in dedup cache`, "var(--color-orange)");
           } else {
             setStatus(`\u2713 \u5DF2\u83B7\u53D6 ${result.total} \u7BC7\u8BBA\u6587 / ${result.total} papers fetched
 
@@ -750,6 +750,11 @@ URL: ${result.url}`, "var(--color-green)");
       });
     });
     refreshDlSub();
+    containerEl.createEl("h2", { text: "\u53BB\u91CD\u7F13\u5B58 / Dedup Cache" });
+    new import_obsidian.Setting(containerEl).setName("\u6E05\u7A7A\u53BB\u91CD\u7F13\u5B58 / Clear Seen IDs").setDesc("\u6E05\u7A7A\u540E\u4E0B\u6B21\u8FD0\u884C\u4F1A\u91CD\u65B0\u62C9\u53D6\u6240\u6709\u8BBA\u6587 | After clearing, the next run will re-fetch all papers within the time window").addButton((btn) => btn.setButtonText("\u6E05\u7A7A / Clear").setWarning().onClick(async () => {
+      await this.plugin.clearDedup();
+      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
+    }));
     containerEl.createEl("h2", { text: "\u5386\u53F2\u56DE\u586B / Backfill" });
     new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
@@ -877,6 +882,64 @@ var StateStore = class {
   async clearLastError() {
     this.state.lastError = null;
     await this.save();
+  }
+};
+
+// src/storage/dedupStore.ts
+var DedupStore = class {
+  constructor(writer, rootFolder) {
+    this.writer = writer;
+    this.map = {};
+    this.path = `${rootFolder}/cache/seen_ids.json`;
+  }
+  async load() {
+    const content = await this.writer.readNote(this.path);
+    if (content) {
+      try {
+        this.map = JSON.parse(content);
+      } catch (e) {
+        this.map = {};
+      }
+    }
+  }
+  async save() {
+    await this.writer.writeNote(this.path, JSON.stringify(this.map, null, 2));
+  }
+  hasId(id) {
+    return id in this.map;
+  }
+  async markSeen(id, date) {
+    if (!this.map[id]) {
+      this.map[id] = date;
+    }
+  }
+  async markSeenBatch(ids, date) {
+    for (const id of ids) {
+      await this.markSeen(id, date);
+    }
+    await this.save();
+  }
+  // Remove entries older than keepDays to limit growth
+  async prune(keepDays = 90) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - keepDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    for (const [id, date] of Object.entries(this.map)) {
+      if (date < cutoffStr) {
+        delete this.map[id];
+      }
+    }
+    await this.save();
+  }
+  async clear() {
+    this.map = {};
+    await this.save();
+  }
+  size() {
+    return Object.keys(this.map).length;
+  }
+  getMap() {
+    return { ...this.map };
   }
 };
 
@@ -4946,7 +5009,7 @@ ${trendingLines.join("\n\n")}`;
     sections.push("", trendingSection);
   return sections.join("\n");
 }
-async function runDailyPipeline(app, settings, stateStore, snapshotStore, options = {}) {
+async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
   var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
   const writer = new VaultWriter(app);
   const now = new Date();
@@ -5048,6 +5111,11 @@ async function runDailyPipeline(app, settings, stateStore, snapshotStore, option
   } else {
     log(`Step 1b HF FETCH: skipped (disabled)`);
   }
+  const countBeforeDedup = papers.length;
+  if (!options.skipDedup && papers.length > 0) {
+    papers = papers.filter((p) => !dedupStore.hasId(p.id));
+  }
+  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
   let rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
@@ -5194,6 +5262,10 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   }
   await snapshotStore.writeSnapshot(date, rankedPapers, fetchError);
   log(`Step 6 SNAPSHOT: written to ${snapshotPath} (${rankedPapers.length} papers)`);
+  if (!options.skipDedup && rankedPapers.length > 0) {
+    await dedupStore.markSeenBatch(rankedPapers.map((p) => p.id), date);
+    log(`Step 7 DEDUP: marked ${rankedPapers.length} IDs as seen`);
+  }
   if (!options.targetDate) {
     await stateStore.setLastDailyRun(now.toISOString());
   }
@@ -5214,7 +5286,7 @@ function addDays(d, n) {
 function toDateStr(d) {
   return d.toISOString().slice(0, 10);
 }
-async function runBackfillPipeline(app, settings, stateStore, snapshotStore, options) {
+async function runBackfillPipeline(app, settings, stateStore, dedupStore, snapshotStore, options) {
   const start = parseDateYMD(options.startDate);
   const end = parseDateYMD(options.endDate);
   const diffMs = end.getTime() - start.getTime();
@@ -5241,10 +5313,11 @@ async function runBackfillPipeline(app, settings, stateStore, snapshotStore, opt
     try {
       const dayStart = new Date(`${date}T00:00:00Z`);
       const dayEnd = new Date(`${date}T23:59:59Z`);
-      await runDailyPipeline(app, settings, stateStore, snapshotStore, {
+      await runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, {
         targetDate: date,
         windowStart: dayStart,
-        windowEnd: dayEnd
+        windowEnd: dayEnd,
+        skipDedup: false
       });
       processed.push(date);
     } catch (err) {
@@ -5337,9 +5410,11 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   async initStorage() {
     const writer = new VaultWriter(this.app);
     this.stateStore = new StateStore(writer, this.settings.rootFolder);
+    this.dedupStore = new DedupStore(writer, this.settings.rootFolder);
     this.snapshotStore = new SnapshotStore(writer, this.settings.rootFolder);
     this.hfTrackStore = new HFTrackStore(writer, this.settings.rootFolder);
     await this.stateStore.load();
+    await this.dedupStore.load();
     await this.hfTrackStore.load();
     const root = this.settings.rootFolder;
     for (const sub of ["inbox", "papers", "cache"]) {
@@ -5376,6 +5451,19 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       }
     });
     this.addCommand({
+      id: "rebuild-index",
+      name: "Rebuild index from local cache",
+      callback: async () => {
+        new import_obsidian7.Notice("Paper Daily: Rebuilding dedup index...");
+        try {
+          await this.dedupStore.load();
+          new import_obsidian7.Notice("Paper Daily: Index rebuilt.");
+        } catch (err) {
+          new import_obsidian7.Notice(`Paper Daily Error: ${String(err)}`);
+        }
+      }
+    });
+    this.addCommand({
       id: "open-settings",
       name: "Open settings",
       callback: () => {
@@ -5389,15 +5477,20 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       this.app,
       this.settings,
       this.stateStore,
+      this.dedupStore,
       this.snapshotStore,
       { hfTrackStore: this.hfTrackStore }
     );
+  }
+  async clearDedup() {
+    await this.dedupStore.clear();
   }
   async runBackfill(startDate, endDate, onProgress) {
     const result = await runBackfillPipeline(
       this.app,
       this.settings,
       this.stateStore,
+      this.dedupStore,
       this.snapshotStore,
       {
         startDate,

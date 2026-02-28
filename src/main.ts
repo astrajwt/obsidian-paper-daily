@@ -3,6 +3,7 @@ import type { PaperDailySettings } from "./types/config";
 import { DEFAULT_SETTINGS, PaperDailySettingTab } from "./settings";
 import { VaultWriter } from "./storage/vaultWriter";
 import { StateStore } from "./storage/stateStore";
+import { DedupStore } from "./storage/dedupStore";
 import { SnapshotStore } from "./storage/snapshotStore";
 import { HFTrackStore } from "./storage/hfTrackStore";
 import { runDailyPipeline } from "./pipeline/dailyPipeline";
@@ -14,6 +15,7 @@ export default class PaperDailyPlugin extends Plugin {
   settings!: PaperDailySettings;
 
   private stateStore!: StateStore;
+  private dedupStore!: DedupStore;
   private snapshotStore!: SnapshotStore;
   private hfTrackStore!: HFTrackStore;
   private scheduler!: Scheduler;
@@ -56,10 +58,12 @@ export default class PaperDailyPlugin extends Plugin {
   private async initStorage(): Promise<void> {
     const writer = new VaultWriter(this.app);
     this.stateStore = new StateStore(writer, this.settings.rootFolder);
+    this.dedupStore = new DedupStore(writer, this.settings.rootFolder);
     this.snapshotStore = new SnapshotStore(writer, this.settings.rootFolder);
     this.hfTrackStore = new HFTrackStore(writer, this.settings.rootFolder);
 
     await this.stateStore.load();
+    await this.dedupStore.load();
     await this.hfTrackStore.load();
 
     const root = this.settings.rootFolder;
@@ -101,6 +105,20 @@ export default class PaperDailyPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "rebuild-index",
+      name: "Rebuild index from local cache",
+      callback: async () => {
+        new Notice("Paper Daily: Rebuilding dedup index...");
+        try {
+          await this.dedupStore.load();
+          new Notice("Paper Daily: Index rebuilt.");
+        } catch (err) {
+          new Notice(`Paper Daily Error: ${String(err)}`);
+        }
+      }
+    });
+
+    this.addCommand({
       id: "open-settings",
       name: "Open settings",
       callback: () => {
@@ -116,9 +134,14 @@ export default class PaperDailyPlugin extends Plugin {
       this.app,
       this.settings,
       this.stateStore,
+      this.dedupStore,
       this.snapshotStore,
       { hfTrackStore: this.hfTrackStore }
     );
+  }
+
+  async clearDedup(): Promise<void> {
+    await this.dedupStore.clear();
   }
 
   async runBackfill(startDate: string, endDate: string, onProgress: (msg: string) => void): Promise<void> {
@@ -126,6 +149,7 @@ export default class PaperDailyPlugin extends Plugin {
       this.app,
       this.settings,
       this.stateStore,
+      this.dedupStore,
       this.snapshotStore,
       {
         startDate,

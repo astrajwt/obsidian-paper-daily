@@ -1,6 +1,7 @@
 import type { App } from "obsidian";
 import type { PaperDailySettings } from "../types/config";
 import { StateStore } from "../storage/stateStore";
+import { DedupStore } from "../storage/dedupStore";
 import { SnapshotStore } from "../storage/snapshotStore";
 import { runDailyPipeline } from "./dailyPipeline";
 
@@ -29,6 +30,7 @@ export async function runBackfillPipeline(
   app: App,
   settings: PaperDailySettings,
   stateStore: StateStore,
+  dedupStore: DedupStore,
   snapshotStore: SnapshotStore,
   options: BackfillOptions
 ): Promise<{ processed: string[]; errors: Record<string, string> }> {
@@ -67,10 +69,11 @@ export async function runBackfillPipeline(
       const dayStart = new Date(`${date}T00:00:00Z`);
       const dayEnd = new Date(`${date}T23:59:59Z`);
 
-      await runDailyPipeline(app, settings, stateStore, snapshotStore, {
+      await runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, {
         targetDate: date,
         windowStart: dayStart,
         windowEnd: dayEnd,
+        skipDedup: false
       });
       processed.push(date);
     } catch (err) {
