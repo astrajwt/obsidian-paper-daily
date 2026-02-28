@@ -40,6 +40,7 @@ export default class PaperDailyPlugin extends Plugin {
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
     this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
     this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
+    this.settings.deepRead = Object.assign({}, DEFAULT_SETTINGS.deepRead, this.settings.deepRead);
     // Migrate interestKeywords from legacy string[] to InterestKeyword[]
     if (Array.isArray(this.settings.interestKeywords) &&
         this.settings.interestKeywords.length > 0 &&
