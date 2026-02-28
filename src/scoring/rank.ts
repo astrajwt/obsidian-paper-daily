@@ -9,7 +9,6 @@ export function rankPapers(
   directions: DirectionConfig[],
   directionTopK: number
 ): Paper[] {
-  // Compute scores for all papers
   const scored = papers.map(paper => {
     const interestHits = computeInterestHits(paper, interestKeywords);
     const directionScores = computeDirectionScores(paper, directions);
@@ -18,23 +17,30 @@ export function rankPapers(
     const totalDirectionScore = Object.values(directionScores).reduce((a, b) => a + b, 0);
     const interestScore = interestHits.length;
 
+    // Ranking priority (descending importance):
+    //   ① HuggingFace community upvotes  — log scale so 1 upvote > nothing,
+    //                                       but 100 upvotes doesn't fully eclipse relevance
+    //   ② Direction relevance score       — keyword matches × direction weight
+    //   ③ Interest keyword hits           — explicit user interest
+    //   ④ Recency                         — tiebreaker only
+    const hfScore = Math.log1p(paper.hfUpvotes ?? 0) * 10;
+    const rankScore = hfScore + totalDirectionScore * 2 + interestScore;
+
     return {
       ...paper,
       interestHits,
       directionScores,
       topDirections,
-      _rankScore: totalDirectionScore * 2 + interestScore
+      _rankScore: rankScore
     };
   });
 
-  // Sort: primary by rankScore, secondary by updated/published (most recent first)
   scored.sort((a, b) => {
-    if (b._rankScore !== a._rankScore) return b._rankScore - a._rankScore;
+    if (Math.abs(b._rankScore - a._rankScore) > 0.001) return b._rankScore - a._rankScore;
     const dateA = new Date(a.updated || a.published).getTime();
     const dateB = new Date(b.updated || b.published).getTime();
     return dateB - dateA;
   });
 
-  // Remove internal _rankScore before returning
   return scored.map(({ _rankScore: _r, ...paper }) => paper as Paper);
 }

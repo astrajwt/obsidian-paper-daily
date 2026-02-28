@@ -225,31 +225,33 @@ export async function runDailyPipeline(
 
         // Build lookup: base arXiv ID (no version) → HF upvotes
         // Our arXiv IDs look like "arxiv:2502.12345v1", HF IDs like "arxiv:2502.12345"
-        const hfUpvoteMap = new Map<string, number>();
-        const hfById = new Map<string, Paper>();
+        const hfByBaseId = new Map<string, Paper>();
         for (const hfp of hfPapers) {
-          hfUpvoteMap.set(hfp.id, hfp.hfUpvotes ?? 0);
-          hfById.set(hfp.id, hfp);
+          hfByBaseId.set(hfp.id, hfp);
         }
 
-        // Enrich arXiv papers with upvotes
-        const enrichedIds = new Set<string>();
+        // Enrich arXiv papers that appear on HF: keep arXiv's full metadata
+        // (categories, versioned ID, complete authors) but add HF upvotes
+        const enrichedBaseIds = new Set<string>();
         for (const p of papers) {
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
-          if (hfUpvoteMap.has(baseId)) {
-            p.hfUpvotes = hfUpvoteMap.get(baseId);
-            enrichedIds.add(baseId);
+          const hfMatch = hfByBaseId.get(baseId);
+          if (hfMatch) {
+            p.hfUpvotes = hfMatch.hfUpvotes ?? 0;
+            enrichedBaseIds.add(baseId);
           }
         }
-        log(`Step 1b HF FETCH: enriched ${enrichedIds.size} arXiv papers with upvotes`);
+        log(`Step 1b HF MERGE: enriched ${enrichedBaseIds.size}/${papers.length} arXiv papers with HF upvotes`);
 
-        // Add HF-only papers (not found in arXiv results) to the pool
+        // Add HF-only papers (community picks not covered by arXiv keyword query)
+        let hfOnlyCount = 0;
         for (const hfp of hfPapers) {
-          if (!enrichedIds.has(hfp.id)) {
+          if (!enrichedBaseIds.has(hfp.id)) {
             papers.push(hfp);
+            hfOnlyCount++;
           }
         }
-        log(`Step 1b HF FETCH: added ${hfPapers.length - enrichedIds.size} HF-only papers to pool`);
+        log(`Step 1b HF MERGE: added ${hfOnlyCount} HF-only papers (community picks outside arXiv filter)`);
       }
     } catch (err) {
       log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
@@ -333,6 +335,8 @@ export async function runDailyPipeline(
         categories: p.categories,
         directions: p.topDirections ?? [],
         interestHits: p.interestHits ?? [],
+        hfUpvotes: p.hfUpvotes ?? 0,
+        source: p.source,
         published: p.published,
         updated: p.updated,
         links: p.links

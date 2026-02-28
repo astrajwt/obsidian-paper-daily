@@ -99,30 +99,61 @@ function detectPreset(baseUrl) {
   }
   return baseUrl ? "custom" : "deepseek";
 }
-var DEFAULT_DAILY_PROMPT = `You are a research paper analyst specializing in AI/ML systems, RL, and LLM infrastructure.
+var DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst with deep expertise in LLM systems, RL, and AI infrastructure. You are opinionated, precise, and engineering-focused.
 
-Today's date: {{date}}
+Today: {{date}}
+Output language: {{language}}
 
-Pre-computed top directions for today:
+## Context
+Papers below have been pre-ranked by three signals (in priority order):
+1. **HuggingFace community upvotes** \u2014 real-time signal of what the AI community finds impactful. Papers with hfUpvotes > 0 were featured on huggingface.co/papers.
+2. **Direction relevance score** \u2014 keyword match strength against configured research directions.
+3. **Interest keyword hits** \u2014 alignment with user-specified interest keywords.
+
+## Today's top research directions (pre-computed):
 {{topDirections}}
 
-Papers to analyze (JSON):
+## Papers to analyze (JSON, pre-ranked):
 {{papers_json}}
 
-Please generate a structured daily digest in {{language}} with:
+---
 
-1. **\u4ECA\u65E5\u8981\u70B9 / Key Takeaways** (3-5 bullet points summarizing overall trends)
+Generate the daily digest with the following sections:
 
-2. **Top Directions Today** (use the pre-computed directions above, add brief commentary on why these papers matter for each direction)
+### \u4ECA\u65E5\u8981\u70B9 / Key Takeaways
+3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Be direct.
 
-3. **Top Papers** \u2014 for each paper provide:
-   - One-line contribution summary
-   - Directions it belongs to + which keywords matched
-   - Why it matters (engineering/system perspective)
-   - Key limitations
-   - Links
+### \u65B9\u5411\u8109\u640F / Direction Pulse
+For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
 
-Format as clean Markdown. Be concise and engineering-focused.`;
+### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
+For **each paper** in the list, output exactly this structure:
+
+**[N]. {title}**
+- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {brief interpretation: e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173" / "\u672A\u4E0A\u699C"}
+- \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
+- \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
+- \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
+- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on?
+- \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, etc.
+- \u{1F517} {links}
+
+Value rating guide \u2014 be calibrated, not generous:
+\u2605\u2605\u2605\u2605\u2605  Breakthrough: likely to shift practice or become a citation anchor
+\u2605\u2605\u2605\u2605\u2606  Strong: clear improvement, solid evaluation, worth reading in full
+\u2605\u2605\u2605\u2606\u2606  Solid: incremental but honest; good for domain awareness
+\u2605\u2605\u2606\u2606\u2606  Weak: narrow scope, questionable baselines, or limited novelty
+\u2605\u2606\u2606\u2606\u2606  Skip: below standard, off-topic, or superseded
+
+### \u4ECA\u65E5\u7ED3\u8BED / Closing
+2\u20133 sentences: what's the most important thing to keep an eye on from today's batch?
+
+---
+Rules:
+- Do NOT hedge every sentence. State your assessment directly.
+- If hfUpvotes is high but direction relevance is low, note the discrepancy.
+- If a paper seems overhyped relative to its technical content, say so.
+- Keep engineering perspective front and center.`;
 var DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
 
 Week: {{week}}
@@ -1137,21 +1168,24 @@ function aggregateDirections(papers) {
 // src/scoring/rank.ts
 function rankPapers(papers, interestKeywords, directions, directionTopK) {
   const scored = papers.map((paper) => {
+    var _a2;
     const interestHits = computeInterestHits(paper, interestKeywords);
     const directionScores = computeDirectionScores(paper, directions);
     const topDirections = getTopDirections(directionScores, directionTopK);
     const totalDirectionScore = Object.values(directionScores).reduce((a, b) => a + b, 0);
     const interestScore = interestHits.length;
+    const hfScore = Math.log1p((_a2 = paper.hfUpvotes) != null ? _a2 : 0) * 10;
+    const rankScore = hfScore + totalDirectionScore * 2 + interestScore;
     return {
       ...paper,
       interestHits,
       directionScores,
       topDirections,
-      _rankScore: totalDirectionScore * 2 + interestScore
+      _rankScore: rankScore
     };
   });
   scored.sort((a, b) => {
-    if (b._rankScore !== a._rankScore)
+    if (Math.abs(b._rankScore - a._rankScore) > 1e-3)
       return b._rankScore - a._rankScore;
     const dateA = new Date(a.updated || a.published).getTime();
     const dateB = new Date(b.updated || b.published).getTime();
@@ -4912,27 +4946,28 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       log(`Step 1b HF FETCH: got ${hfPapers.length} papers for date=${date}`);
       if (hfPapers.length > 0) {
         activeSources.push("huggingface");
-        const hfUpvoteMap = /* @__PURE__ */ new Map();
-        const hfById = /* @__PURE__ */ new Map();
+        const hfByBaseId = /* @__PURE__ */ new Map();
         for (const hfp of hfPapers) {
-          hfUpvoteMap.set(hfp.id, (_e = hfp.hfUpvotes) != null ? _e : 0);
-          hfById.set(hfp.id, hfp);
+          hfByBaseId.set(hfp.id, hfp);
         }
-        const enrichedIds = /* @__PURE__ */ new Set();
+        const enrichedBaseIds = /* @__PURE__ */ new Set();
         for (const p of papers) {
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
-          if (hfUpvoteMap.has(baseId)) {
-            p.hfUpvotes = hfUpvoteMap.get(baseId);
-            enrichedIds.add(baseId);
+          const hfMatch = hfByBaseId.get(baseId);
+          if (hfMatch) {
+            p.hfUpvotes = (_e = hfMatch.hfUpvotes) != null ? _e : 0;
+            enrichedBaseIds.add(baseId);
           }
         }
-        log(`Step 1b HF FETCH: enriched ${enrichedIds.size} arXiv papers with upvotes`);
+        log(`Step 1b HF MERGE: enriched ${enrichedBaseIds.size}/${papers.length} arXiv papers with HF upvotes`);
+        let hfOnlyCount = 0;
         for (const hfp of hfPapers) {
-          if (!enrichedIds.has(hfp.id)) {
+          if (!enrichedBaseIds.has(hfp.id)) {
             papers.push(hfp);
+            hfOnlyCount++;
           }
         }
-        log(`Step 1b HF FETCH: added ${hfPapers.length - enrichedIds.size} HF-only papers to pool`);
+        log(`Step 1b HF MERGE: added ${hfOnlyCount} HF-only papers (community picks outside arXiv filter)`);
       }
     } catch (err) {
       log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
@@ -4996,7 +5031,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       const llm = buildLLMProvider(settings);
       const topK = Math.min(rankedPapers.length, 10);
       const topPapersForLLM = rankedPapers.slice(0, topK).map((p) => {
-        var _a3, _b2;
+        var _a3, _b2, _c2;
         return {
           id: p.id,
           title: p.title,
@@ -5004,6 +5039,8 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           categories: p.categories,
           directions: (_a3 = p.topDirections) != null ? _a3 : [],
           interestHits: (_b2 = p.interestHits) != null ? _b2 : [],
+          hfUpvotes: (_c2 = p.hfUpvotes) != null ? _c2 : 0,
+          source: p.source,
           published: p.published,
           updated: p.updated,
           links: p.links
