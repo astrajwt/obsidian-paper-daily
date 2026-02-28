@@ -1,0 +1,10 @@
+{
+  "id": "paper-daily",
+  "name": "Paper Daily",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Daily arXiv paper digest: fetch, score, and summarize research papers with AI",
+  "author": "Paper Daily",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
