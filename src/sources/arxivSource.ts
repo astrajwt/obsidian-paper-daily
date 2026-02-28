@@ -126,7 +126,10 @@ export class ArxivSource implements PaperSource {
           if (paper) papers.push(paper);
         }
 
-        return papers;
+        // Filter to the requested time window so dedup only marks genuinely
+        // new papers as seen. Without this, every run marks the same rolling
+        // batch of results as seen and subsequent runs show nothing.
+        return this.filterByWindow(papers, params.windowStart, params.windowEnd);
       } catch (err) {
         const msg = String(err);
         if (msg.includes("429") && attempt < delays.length) {

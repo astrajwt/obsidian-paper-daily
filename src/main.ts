@@ -128,6 +128,10 @@ export default class PaperDailyPlugin extends Plugin {
     );
   }
 
+  async clearDedup(): Promise<void> {
+    await this.dedupStore.clear();
+  }
+
   async runBackfill(startDate: string, endDate: string, onProgress: (msg: string) => void): Promise<void> {
     const result = await runBackfillPipeline(
       this.app,

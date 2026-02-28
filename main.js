@@ -721,6 +721,11 @@ URL: ${result.url}`, "var(--color-green)");
       });
     });
     refreshDlSub();
+    containerEl.createEl("h2", { text: "\u53BB\u91CD\u7F13\u5B58 / Dedup Cache" });
+    new import_obsidian.Setting(containerEl).setName("\u6E05\u7A7A\u53BB\u91CD\u7F13\u5B58 / Clear Seen IDs").setDesc("\u6E05\u7A7A\u540E\u4E0B\u6B21\u8FD0\u884C\u4F1A\u91CD\u65B0\u62C9\u53D6\u6240\u6709\u8BBA\u6587 | After clearing, the next run will re-fetch all papers within the time window").addButton((btn) => btn.setButtonText("\u6E05\u7A7A / Clear").setWarning().onClick(async () => {
+      await this.plugin.clearDedup();
+      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
+    }));
     containerEl.createEl("h2", { text: "\u5386\u53F2\u56DE\u586B / Backfill" });
     new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
@@ -1069,7 +1074,7 @@ var ArxivSource = class {
           if (paper)
             papers.push(paper);
         }
-        return papers;
+        return this.filterByWindow(papers, params.windowStart, params.windowEnd);
       } catch (err) {
         const msg = String(err);
         if (msg.includes("429") && attempt < delays.length) {
@@ -5332,6 +5337,9 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       this.dedupStore,
       this.snapshotStore
     );
+  }
+  async clearDedup() {
+    await this.dedupStore.clear();
   }
   async runBackfill(startDate, endDate, onProgress) {
     const result = await runBackfillPipeline(
