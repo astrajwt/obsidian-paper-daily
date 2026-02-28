@@ -4343,16 +4343,31 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
-  const windowEnd = (_b = options.windowEnd) != null ? _b : now;
-  const windowStart = (_c = options.windowStart) != null ? _c : new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1e3);
-  const inboxPath = `${settings.rootFolder}/inbox/${date}.md`;
   const logPath = `${settings.rootFolder}/cache/runs.log`;
+  const inboxPath = `${settings.rootFolder}/inbox/${date}.md`;
+  const snapshotPath = `${settings.rootFolder}/papers/${date}.json`;
+  const logLines = [];
+  const log = (msg) => {
+    const line = `[${new Date().toISOString()}] ${msg}`;
+    logLines.push(line);
+    console.log(`[PaperDaily] ${msg}`);
+  };
+  log(`=== Daily pipeline START date=${date} ===`);
+  log(`Settings: categories=[${settings.categories.join(",")}] keywords=[${settings.keywords.join(",")}] maxResults=${settings.maxResultsPerDay}`);
   let papers = [];
   let fetchError;
   let llmDigest = "";
   let llmError;
+  let fetchUrl = "";
   try {
     const source = new ArxivSource();
+    const windowEnd = (_b = options.windowEnd) != null ? _b : now;
+    const windowStart = (_c = options.windowStart) != null ? _c : new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1e3);
+    fetchUrl = source.buildUrl(
+      { categories: settings.categories, keywords: settings.keywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
+      settings.maxResultsPerDay * 3
+    );
+    log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
       keywords: settings.keywords,
@@ -4362,15 +4377,24 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       windowEnd,
       targetDate: date
     });
+    log(`Step 1 FETCH: got ${papers.length} papers`);
+    if (papers.length > 0) {
+      log(`Step 1 FETCH: first="${papers[0].title.slice(0, 80)}" published=${papers[0].published.slice(0, 10)}`);
+    }
   } catch (err) {
     fetchError = String(err);
+    log(`Step 1 FETCH ERROR: ${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
+  const countBeforeDedup = papers.length;
   if (!options.skipDedup && papers.length > 0) {
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
+  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
   const rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
+  log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
+    log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
       const topK = Math.min(rankedPapers.length, 10);
@@ -4395,18 +4419,19 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });
-      const result = await llm.generate({
-        prompt,
-        temperature: settings.llm.temperature,
-        maxTokens: settings.llm.maxTokens
-      });
+      const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
       llmDigest = result.text;
+      log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);
     } catch (err) {
       llmError = String(err);
+      log(`Step 4 LLM ERROR: ${llmError}`);
       await stateStore.setLastError("llm", llmError);
     }
   } else if (!settings.llm.apiKey) {
     llmError = "LLM API key not configured";
+    log(`Step 4 LLM: skipped (no API key)`);
+  } else {
+    log(`Step 4 LLM: skipped (0 papers)`);
   }
   const errorMsg = fetchError ? `Fetch failed: ${fetchError}${llmError ? `
 
@@ -4414,24 +4439,23 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   try {
     const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, errorMsg);
     await writer.writeNote(inboxPath, markdown);
+    log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
+    log(`Step 5 WRITE ERROR: ${String(err)}`);
     await stateStore.setLastError("write", String(err));
     throw err;
   }
-  await snapshotStore.writeSnapshot(
-    date,
-    rankedPapers,
-    fetchError
-  );
+  await snapshotStore.writeSnapshot(date, rankedPapers, fetchError);
+  log(`Step 6 SNAPSHOT: written to ${snapshotPath} (${rankedPapers.length} papers)`);
   if (!options.skipDedup && rankedPapers.length > 0) {
     await dedupStore.markSeenBatch(rankedPapers.map((p) => p.id), date);
+    log(`Step 7 DEDUP: marked ${rankedPapers.length} IDs as seen`);
   }
   if (!options.targetDate) {
     await stateStore.setLastDailyRun(now.toISOString());
   }
-  const logLine = `[${now.toISOString()}] daily date=${date} fetched=${papers.length} ranked=${rankedPapers.length} fetchError=${fetchError != null ? fetchError : "none"} llmError=${llmError != null ? llmError : "none"}
-`;
-  await writer.appendToNote(logPath, logLine);
+  log(`=== Daily pipeline END date=${date} papers=${rankedPapers.length} ===`);
+  await writer.appendToNote(logPath, logLines.join("\n") + "\n");
 }
 
 // src/pipeline/backfillPipeline.ts
