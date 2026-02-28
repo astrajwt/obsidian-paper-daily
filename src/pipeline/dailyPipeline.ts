@@ -10,6 +10,7 @@ import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
 import { computeHotness } from "../scoring/hotness";
+import { downloadPapersForDay } from "../storage/paperDownloader";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -312,6 +313,11 @@ export async function runDailyPipeline(
     log(`Step 3c TRENDING: ${unranked.length} unranked papers → ${trendingPapers.length} trending (minHotness=${settings.trending.minHotness})`);
   } else {
     log(`Step 3c TRENDING: skipped (enabled=${settings.trending?.enabled})`);
+  }
+
+  // ── Step 3d: Download full text ───────────────────────────────
+  if (rankedPapers.length > 0) {
+    await downloadPapersForDay(app, rankedPapers, settings, log);
   }
 
   // ── Step 4: LLM ───────────────────────────────────────────────

@@ -226,6 +226,12 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   hfSource: {
     enabled: true
+  },
+
+  paperDownload: {
+    saveHtml: false,
+    savePdf: false,
+    maxPapers: 5
   }
 };
 
@@ -815,6 +821,45 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.hfSource?.enabled ?? true)
         .onChange(async (value) => {
           this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+          await this.plugin.saveSettings();
+        }));
+
+    // ── Paper Download ────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "Paper Download" });
+    containerEl.createEl("p", {
+      text: "Download the full text of top-ranked papers. HTML is converted to Markdown and saved under papers/html/. PDFs are saved under papers/pdf/. Already-downloaded files are skipped.",
+      cls: "setting-item-description"
+    });
+
+    new Setting(containerEl)
+      .setName("Save HTML as Markdown")
+      .setDesc("Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.paperDownload?.saveHtml ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, saveHtml: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Save PDF")
+      .setDesc("Download the PDF and save it in the vault (viewable in Obsidian)")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Max papers to download per day")
+      .setDesc("Limit downloads to top-N ranked papers to avoid long wait times")
+      .addSlider(slider => slider
+        .setLimits(1, 30, 1)
+        .setValue(this.plugin.settings.paperDownload?.maxPapers ?? 5)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, maxPapers: value };
           await this.plugin.saveSettings();
         }));
 

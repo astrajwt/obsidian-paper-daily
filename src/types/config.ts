@@ -69,4 +69,11 @@ export interface PaperDailySettings {
   hfSource: {
     enabled: boolean;
   };
+
+  // Paper full-text download
+  paperDownload: {
+    saveHtml: boolean;   // download HTML version and save as .md
+    savePdf: boolean;    // download PDF and save as .pdf
+    maxPapers: number;   // max papers to download per day
+  };
 }
