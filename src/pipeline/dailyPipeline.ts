@@ -37,6 +37,14 @@ function fillTemplate(template: string, vars: Record<string, string>): string {
   return result;
 }
 
+function getActivePrompt(settings: PaperDailySettings): string {
+  if (settings.promptLibrary && settings.activePromptId) {
+    const tpl = settings.promptLibrary.find(t => t.id === settings.activePromptId);
+    if (tpl) return tpl.prompt;
+  }
+  return settings.llm.dailyPromptTemplate; // fallback for existing users
+}
+
 function formatTopDirections(papers: Paper[], topK: number): string {
   const dirAgg = aggregateDirections(papers);
   const sorted = Object.entries(dirAgg)
@@ -205,6 +213,8 @@ export interface DailyPipelineOptions {
   windowEnd?: Date;
   skipDedup?: boolean;
   hfTrackStore?: HFTrackStore;
+  /** Called at each major pipeline step with a human-readable status message */
+  onProgress?: (msg: string) => void;
 }
 
 export async function runDailyPipeline(
@@ -228,6 +238,16 @@ export async function runDailyPipeline(
     logLines.push(line);
     console.log(`[PaperDaily] ${msg}`);
   };
+  const progress = options.onProgress ?? (() => {});
+
+  // Token usage accumulator
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  const trackUsage = (label: string, inputTokens: number, outputTokens: number) => {
+    totalInputTokens += inputTokens;
+    totalOutputTokens += outputTokens;
+    log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
+  };
 
   log(`=== Daily pipeline START date=${date} ===`);
   log(`Settings: categories=[${settings.categories.join(",")}] keywords=[${settings.keywords.join(",")}] maxResults=${settings.maxResultsPerDay}`);
@@ -240,6 +260,7 @@ export async function runDailyPipeline(
   const activeSources: string[] = [];
 
   // ── Step 1: Fetch arXiv ───────────────────────────────────────
+  progress(`[1/5] 📡 拉取 arXiv 论文...`);
   let fetchUrl = "";
   try {
     const source = new ArxivSource();
@@ -272,6 +293,7 @@ export async function runDailyPipeline(
 
   // ── Step 1b: Fetch HuggingFace Papers ─────────────────────────
   if (settings.hfSource?.enabled !== false) {
+    progress(`[1/5] 🤗 拉取 HuggingFace 论文...`);
     try {
       const hfSource = new HFSource();
       const lookback = settings.hfSource?.lookbackDays ?? 3;
@@ -345,6 +367,7 @@ export async function runDailyPipeline(
 
   // ── Step 3b: LLM scoring (all papers) ────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
+    progress(`[2/5] ⭐ LLM 打分中... (${rankedPapers.length} 篇)`);
     try {
       const llm = buildLLMProvider(settings);
       const kwStr = settings.interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
@@ -373,6 +396,7 @@ Papers:
 ${JSON.stringify(papersForScoring)}`;
 
       const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 4096 });
+      if (result.usage) trackUsage("Step 3b scoring", result.usage.inputTokens, result.usage.outputTokens);
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const scores: Array<{ id: string; score: number; reason: string; summary?: string }> = JSON.parse(jsonMatch[0]);
@@ -580,6 +604,7 @@ ${JSON.stringify(papersForSummary)}`;
 
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
+    progress(`[4/5] 🤖 生成摘要... (${settings.llm.model})`);
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
@@ -603,7 +628,7 @@ ${JSON.stringify(papersForSummary)}`;
         hfUpvotes: p.hfUpvotes ?? 0,
         ...(p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {})
       }));
-      const prompt = fillTemplate(settings.llm.dailyPromptTemplate, {
+      const prompt = fillTemplate(getActivePrompt(settings), {
         date,
         topDirections: topDirsStr,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
@@ -613,6 +638,7 @@ ${JSON.stringify(papersForSummary)}`;
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
       llmDigest = result.text;
+      if (result.usage) trackUsage("Step 4 digest", result.usage.inputTokens, result.usage.outputTokens);
       log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);
     } catch (err) {
       llmError = String(err);
@@ -631,6 +657,7 @@ ${JSON.stringify(papersForSummary)}`;
     ? `Fetch failed: ${fetchError}${llmError ? `\n\nLLM failed: ${llmError}` : ""}`
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
+  progress(`[5/5] 💾 写入文件...`);
   try {
     const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
@@ -657,6 +684,12 @@ ${JSON.stringify(papersForSummary)}`;
   }
 
   log(`=== Daily pipeline END date=${date} papers=${rankedPapers.length} ===`);
+
+  // ── Emit final progress summary ───────────────────────────────
+  const tokenSummary = totalInputTokens > 0
+    ? ` | tokens: ${totalInputTokens.toLocaleString()}→${totalOutputTokens.toLocaleString()}`
+    : "";
+  progress(`✅ 完成！${rankedPapers.length} 篇论文${tokenSummary}`);
 
   // ── Flush log ─────────────────────────────────────────────────
   await writer.appendToNote(logPath, logLines.join("\n") + "\n");

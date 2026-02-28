@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type PaperDailyPlugin from "./main";
-import type { PaperDailySettings, DirectionConfig } from "./types/config";
+import type { PaperDailySettings, DirectionConfig, PromptTemplate } from "./types/config";
 
 interface ProviderPreset {
   label: string;
@@ -136,6 +136,78 @@ Rules:
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
 - 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".`;
+
+export const DEFAULT_QUICKSCAN_PROMPT = `You are a senior AI/ML research analyst. Be concise and opinionated. No fluff.
+
+Today: {{date}}
+Output language: {{language}}
+
+## Top directions today:
+{{topDirections}}
+
+## Papers (pre-ranked):
+{{papers_json}}
+{{fulltext_section}}
+## HuggingFace Daily:
+{{hf_papers_json}}
+
+---
+
+### 今日速览 / Quick Scan
+For each arXiv paper, one line each — no exceptions, no skipping:
+**N. Title** — one sentence: what they did and whether it matters (be direct; say "incremental" or "skip" if warranted).
+
+### 方向信号 / Direction Signal
+2–3 sentences total: what is today's research collectively signaling? Any emerging pattern or surprising gap?
+
+### HF 热点 / HF Highlights
+Top 3–5 HF picks not already covered above: title + one-line verdict on whether the community hype is warranted.
+
+### 今日结语 / Closing
+One sentence. The single most important thing from today.
+
+---
+Rules: Be blunt. Shorter is better. No per-paper section breakdowns.`;
+
+export const DEFAULT_REVIEW_PROMPT = `You are a rigorous peer reviewer at a top AI conference (NeurIPS/ICML/ICLR). Evaluate research quality critically and fairly.
+
+Today: {{date}}
+Output language: {{language}}
+
+## Research directions active today:
+{{topDirections}}
+
+## Papers to review:
+{{papers_json}}
+{{fulltext_section}}
+
+---
+
+### 技术评审 / Technical Review
+
+For **each paper** in the arXiv list:
+
+**[N]. {title}**
+- 🔬 方法核心 / Method: What is the key technical novelty? Is it principled or ad hoc? Any theoretical guarantees?
+- 📊 实验严谨性 / Rigor: Are baselines fair and up-to-date? Are ablations sufficient? Any obvious cherry-picking?
+- 📈 结果可信度 / Credibility: How strong is the evidence? What controls are missing? Is the gain meaningful in practice?
+- 🔁 可复现性 / Reproducibility: Code released? Compute requirements? Can a grad student replicate this in a week?
+- 📚 建议 / Recommendation: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
+
+### 今日批次质量评估 / Batch Quality Assessment
+2–3 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? Any standout outliers?
+
+---
+Rules:
+- Be skeptical but fair. Avoid enthusiasm not backed by evidence.
+- Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
+- Recommendations must be specific — no "interesting direction" hedging.`;
+
+export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
+  { id: "builtin_engineering", name: "工程精读", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
+  { id: "builtin_quickscan",   name: "速览",     prompt: DEFAULT_QUICKSCAN_PROMPT, builtin: true },
+  { id: "builtin_review",      name: "技术评审", prompt: DEFAULT_REVIEW_PROMPT, builtin: true },
+];
 
 export const DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
 
@@ -324,6 +396,9 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     maxCharsPerPaper: 8000,
     cacheTTLDays: 60,
   },
+
+  promptLibrary: DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t })),
+  activePromptId: "builtin_engineering",
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -674,24 +749,148 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // ── Prompt Templates ─────────────────────────────────────────
-    containerEl.createEl("h3", { text: "每日摘要 Prompt 模板 / Daily Prompt Template" });
-    containerEl.createEl("p", {
-      text: "占位符 / Placeholders: {{date}}, {{topDirections}}, {{papers_json}}, {{language}}",
-      cls: "setting-item-description"
-    });
-    const dailyPromptTA = containerEl.createEl("textarea");
-    dailyPromptTA.style.width = "100%";
-    dailyPromptTA.style.height = "180px";
-    dailyPromptTA.style.fontFamily = "monospace";
-    dailyPromptTA.style.fontSize = "11px";
-    dailyPromptTA.value = this.plugin.settings.llm.dailyPromptTemplate;
-    new Setting(containerEl)
-      .addButton(btn => btn.setButtonText("保存 Prompt / Save Daily Prompt").onClick(async () => {
-        this.plugin.settings.llm.dailyPromptTemplate = dailyPromptTA.value;
-        await this.plugin.saveSettings();
-        new Notice("每日摘要 Prompt 已保存 / Daily prompt saved.");
-      }));
+    // ── Prompt Templates (tabbed library) ────────────────────────
+    containerEl.createEl("h3", { text: "Prompt 模板库 / Prompt Library" });
+    {
+      const desc = containerEl.createEl("p", {
+        text: "点击 Tab 切换并激活模板。占位符：{{date}} {{topDirections}} {{papers_json}} {{hf_papers_json}} {{fulltext_section}} {{language}}",
+        cls: "setting-item-description"
+      });
+      desc.style.marginBottom = "10px";
+
+      // Ensure library is initialized
+      if (!this.plugin.settings.promptLibrary || this.plugin.settings.promptLibrary.length === 0) {
+        this.plugin.settings.promptLibrary = DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t }));
+        this.plugin.settings.activePromptId = "builtin_engineering";
+      }
+      if (!this.plugin.settings.activePromptId) {
+        this.plugin.settings.activePromptId = this.plugin.settings.promptLibrary[0].id;
+      }
+
+      let selectedId = this.plugin.settings.activePromptId;
+
+      const tabBar = containerEl.createDiv();
+      tabBar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;align-items:center;";
+
+      const promptTA = containerEl.createEl("textarea");
+      promptTA.style.cssText = "width:100%;height:300px;font-family:monospace;font-size:11px;padding:8px;resize:vertical;box-sizing:border-box;";
+
+      const actionsRow = containerEl.createDiv();
+      actionsRow.style.cssText = "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;";
+
+      const renderTabs = () => {
+        tabBar.empty();
+        const lib = this.plugin.settings.promptLibrary!;
+        for (const tpl of lib) {
+          const isSelected = tpl.id === selectedId;
+          const btn = tabBar.createEl("button", { text: tpl.name });
+          const accent = "var(--interactive-accent)";
+          const border = "var(--background-modifier-border)";
+          btn.style.cssText = [
+            "padding:5px 14px",
+            "border-radius:5px",
+            "cursor:pointer",
+            "font-size:0.85em",
+            `border:2px solid ${isSelected ? accent : border}`,
+            `background:${isSelected ? accent : "var(--background-secondary)"}`,
+            `color:${isSelected ? "var(--text-on-accent)" : "var(--text-normal)"}`,
+            "font-weight:" + (isSelected ? "600" : "400"),
+            "transition:all 0.1s",
+          ].join(";");
+          btn.onclick = () => {
+            selectedId = tpl.id;
+            this.plugin.settings.activePromptId = tpl.id;
+            this.plugin.saveSettings();
+            promptTA.value = tpl.prompt;
+            renderTabs();
+            renderActions();
+          };
+        }
+        // Add new template button
+        const addBtn = tabBar.createEl("button", { text: "＋ 新建" });
+        addBtn.style.cssText = "padding:5px 12px;border-radius:5px;cursor:pointer;font-size:0.85em;border:2px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);";
+        addBtn.onclick = async () => {
+          const lib2 = this.plugin.settings.promptLibrary!;
+          const newTpl: PromptTemplate = {
+            id: `custom_${Date.now()}`,
+            name: `自定义 ${lib2.filter(t => !t.builtin).length + 1}`,
+            prompt: DEFAULT_DAILY_PROMPT,
+          };
+          lib2.push(newTpl);
+          selectedId = newTpl.id;
+          this.plugin.settings.activePromptId = newTpl.id;
+          await this.plugin.saveSettings();
+          promptTA.value = newTpl.prompt;
+          renderTabs();
+          renderActions();
+        };
+      };
+
+      const renderActions = () => {
+        actionsRow.empty();
+        const lib = this.plugin.settings.promptLibrary!;
+        const tpl = lib.find(t => t.id === selectedId);
+        if (!tpl) return;
+
+        // Save
+        const saveBtn = actionsRow.createEl("button", { text: "保存 / Save" });
+        saveBtn.style.cssText = "padding:4px 16px;border-radius:4px;cursor:pointer;font-size:0.85em;background:var(--interactive-accent);color:var(--text-on-accent);border:none;font-weight:600;";
+        saveBtn.onclick = async () => {
+          tpl.prompt = promptTA.value;
+          await this.plugin.saveSettings();
+          new Notice(`模板已保存：${tpl.name}`);
+        };
+
+        // Rename
+        const renameBtn = actionsRow.createEl("button", { text: "重命名 / Rename" });
+        renameBtn.style.cssText = "padding:4px 14px;border-radius:4px;cursor:pointer;font-size:0.85em;background:var(--background-secondary);border:1px solid var(--background-modifier-border);color:var(--text-normal);";
+        renameBtn.onclick = async () => {
+          const newName = prompt("新名称 / New name:", tpl.name);
+          if (newName?.trim()) {
+            tpl.name = newName.trim();
+            await this.plugin.saveSettings();
+            renderTabs();
+          }
+        };
+
+        // Reset (built-in only)
+        if (tpl.builtin) {
+          const resetBtn = actionsRow.createEl("button", { text: "重置默认 / Reset" });
+          resetBtn.style.cssText = "padding:4px 14px;border-radius:4px;cursor:pointer;font-size:0.85em;background:var(--background-secondary);border:1px solid var(--background-modifier-border);color:var(--text-muted);";
+          resetBtn.onclick = async () => {
+            const def = DEFAULT_PROMPT_LIBRARY.find(d => d.id === tpl.id);
+            if (def) {
+              tpl.prompt = def.prompt;
+              promptTA.value = tpl.prompt;
+              await this.plugin.saveSettings();
+              new Notice("已重置为默认 / Reset to default.");
+            }
+          };
+        }
+
+        // Delete (custom only, keep at least 1)
+        if (!tpl.builtin && lib.length > 1) {
+          const delBtn = actionsRow.createEl("button", { text: "删除 / Delete" });
+          delBtn.style.cssText = "padding:4px 14px;border-radius:4px;cursor:pointer;font-size:0.85em;background:var(--background-secondary);border:1px solid var(--text-error,#cc4444);color:var(--text-error,#cc4444);";
+          delBtn.onclick = async () => {
+            const idx = lib.findIndex(t => t.id === selectedId);
+            lib.splice(idx, 1);
+            selectedId = lib[Math.max(0, idx - 1)].id;
+            this.plugin.settings.activePromptId = selectedId;
+            promptTA.value = lib.find(t => t.id === selectedId)!.prompt;
+            await this.plugin.saveSettings();
+            renderTabs();
+            renderActions();
+          };
+        }
+      };
+
+      // Initialize
+      const initTpl = this.plugin.settings.promptLibrary!.find(t => t.id === selectedId) ?? this.plugin.settings.promptLibrary![0];
+      promptTA.value = initTpl.prompt;
+      renderTabs();
+      renderActions();
+    }
 
     // ── Output ───────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "输出格式 / Output" });
@@ -806,9 +1005,9 @@ export class PaperDailySettingTab extends PluginSettingTab {
           .setCta()
           .onClick(async () => {
             btn.setButtonText("Running...").setDisabled(true);
-            setStatus("正在抓取论文并生成摘要... / Fetching papers and generating digest...");
+            setStatus("启动中...");
             try {
-              await this.plugin.runDaily();
+              await this.plugin.runDaily((msg) => setStatus(msg));
               setStatus("✓ 完成！请查看 PaperDaily/inbox/ 中今天的文件 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
             } catch (err) {
               setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");

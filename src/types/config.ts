@@ -1,3 +1,10 @@
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  prompt: string;
+  builtin?: boolean;
+}
+
 export interface DirectionConfig {
   name: string;
   weight: number;
@@ -80,6 +87,10 @@ export interface PaperDailySettings {
   paperDownload: {
     savePdf: boolean;
   };
+
+  // Prompt template library
+  promptLibrary?: PromptTemplate[];
+  activePromptId?: string;
 
   // Detail section top-K display counts
   arxivDetailTopK: number;  // how many arXiv papers to show in the detailed section
