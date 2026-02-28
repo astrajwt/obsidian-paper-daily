@@ -12,6 +12,10 @@ export interface DirectionConfig {
     keywords: string[];
     categories?: string[];
   };
+  /** Keywords sent to arXiv API query for this direction (OR-ed together).
+   *  If empty/omitted, this direction does not add API-level filters.
+   *  Use sparingly — these narrow what arXiv returns before local scoring. */
+  queryKeywords?: string[];
 }
 
 export interface InterestKeyword {

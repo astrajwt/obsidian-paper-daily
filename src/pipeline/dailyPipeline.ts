@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import type { PaperDailySettings } from "../types/config";
+import type { PaperDailySettings, InterestKeyword } from "../types/config";
 import type { Paper } from "../types/paper";
 import { VaultWriter } from "../storage/vaultWriter";
 import { StateStore } from "../storage/stateStore";
@@ -11,7 +11,6 @@ import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
 import { computeHotness } from "../scoring/hotness";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
-import { FulltextCache } from "../storage/fulltextCache";
 import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
@@ -20,6 +19,30 @@ import type { HFTrackStore } from "../storage/hfTrackStore";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** Merge settings.keywords with per-direction queryKeywords (deduped). */
+function computeEffectiveQueryKeywords(settings: PaperDailySettings): string[] {
+  const fromDirections = settings.directions.flatMap(d => d.queryKeywords ?? []);
+  return [...new Set([...settings.keywords, ...fromDirections])];
+}
+
+/** Derive interest keywords from direction match.keywords (weighted by direction.weight),
+ *  merged with any explicit settings.interestKeywords (explicit takes priority). */
+function computeEffectiveInterestKeywords(settings: PaperDailySettings): InterestKeyword[] {
+  const explicit = settings.interestKeywords ?? [];
+  const explicitSet = new Set(explicit.map(k => k.keyword.toLowerCase()));
+  const seen = new Set<string>(explicitSet);
+  const fromDirections: InterestKeyword[] = [];
+  for (const dir of settings.directions) {
+    for (const kw of dir.match.keywords) {
+      const key = kw.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      fromDirections.push({ keyword: kw, weight: Math.min(5, Math.round(dir.weight * 2)) });
+    }
+  }
+  return [...explicit, ...fromDirections];
 }
 
 function buildLLMProvider(settings: PaperDailySettings): LLMProvider {
@@ -62,7 +85,6 @@ function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
   rankedPapers: Paper[],
-  hfDailyPapers: Paper[],
   trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[]; llmSummary?: string }>,
   aiDigest: string,
   activeSources: string[],
@@ -93,7 +115,7 @@ function buildDailyMarkdown(
     ? `## 今日要点（AI 总结）\n\n> **Error**: ${error}`
     : `## 今日要点（AI 总结）\n\n${aiDigest}`;
 
-  // ── arXiv Top-K Detailed Section ─────────────────────────────
+  // ── Top-K Detailed Section ────────────────────────────────────
   const arxivTopK = settings.arxivDetailTopK ?? 10;
   const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
   const arxivDetailedLines = arxivTopPapers.map((p, i) => {
@@ -103,51 +125,18 @@ function buildDailyMarkdown(
     if (p.links.hf) links.push(`[HF](${p.links.hf})`);
     const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ") || "_none_";
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ") || "_none_";
-    const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
+    const hfBadge = p.links.hf ? ` 🤗 HF${p.hfUpvotes ? ` ${p.hfUpvotes}↑` : ""}` : "";
     const scoreStr = p.llmScore != null
       ? ` ⭐ ${p.llmScore}/10${p.llmScoreReason ? ` — ${p.llmScoreReason}` : ""}`
       : "";
     const summaryLine = p.llmSummary ? `\n   > ${p.llmSummary}` : "";
     return [
-      `${i + 1}. **${p.title}**${upvoteStr}${scoreStr}${summaryLine}`,
+      `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
       `   - ${links.join(" · ")} | Updated: ${p.updated.slice(0, 10)}`,
       `   - Directions: ${dirStr} | Hits: ${hitsStr}`,
     ].join("\n");
   });
-  const arxivDetailedSection = `## arXiv Top ${arxivTopK} Papers\n\n${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
-
-  // ── HuggingFace Top-K Detailed Section ───────────────────────
-  const hfTopK = settings.hfDetailTopK ?? 10;
-  let hfDetailedSection = "";
-  if (hfDailyPapers.length > 0) {
-    const arxivBaseIds = new Set(
-      rankedPapers.map(p => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
-    );
-    const hfTopPapers = hfDailyPapers.slice(0, hfTopK);
-    const alsoInArxivCount = hfTopPapers.filter(p => arxivBaseIds.has(p.id)).length;
-    const countNote = hfDailyPapers.length > hfTopK
-      ? `共 ${hfDailyPapers.length} 篇，展示前 ${hfTopK} 篇。`
-      : `共 ${hfDailyPapers.length} 篇。`;
-    const overlapNote = alsoInArxivCount > 0
-      ? `其中 ${alsoInArxivCount} 篇同时出现在今日 arXiv 检索结果中。`
-      : "";
-    const hfLines = hfTopPapers.map((p, i) => {
-      const linksArr: string[] = [];
-      if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
-      if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
-      if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
-      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-      const arxivBadge = arxivBaseIds.has(p.id) ? " 📄 今日 arXiv 收录" : "";
-      const streakBadge = (p.hfStreak ?? 1) > 1 ? ` 🔥 霸榜${p.hfStreak}天` : "";
-      return [
-        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}${streakBadge}`,
-        `   - Links: ${linksArr.join(", ")}`,
-        `   - Authors: ${authorsStr}`,
-        `   - Published: ${p.published.slice(0, 10)}`,
-      ].join("\n");
-    });
-    hfDetailedSection = `## HuggingFace Daily Papers\n\n${countNote}${overlapNote ? " " + overlapNote : ""}\n\n${hfLines.join("\n\n")}`;
-  }
+  const arxivDetailedSection = `## Top ${arxivTopK} Papers\n\n${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
 
   // ── All Papers Table ──────────────────────────────────────────
   const tableRows = rankedPapers.map((p, i) => {
@@ -156,14 +145,13 @@ function buildDailyMarkdown(
       : escapeTableCell(p.title);
     const linkParts: string[] = [];
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
-    if (p.links.hf) linkParts.push(`[HF](${p.links.hf})`);
+    if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    const upvote = p.hfUpvotes != null ? `🤗${p.hfUpvotes} ` : "";
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
     const dirs = (p.topDirections ?? []).slice(0, 2).join(", ") || "-";
     const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
-    return `| ${i + 1} | ${titleLink} | ${upvote}${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
   });
   const allPapersTableSection = [
     "## All Papers",
@@ -201,7 +189,6 @@ function buildDailyMarkdown(
 
   const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection,
     "", arxivDetailedSection];
-  if (hfDetailedSection) sections.push("", hfDetailedSection);
   sections.push("", allPapersTableSection);
   if (trendingSection) sections.push("", trendingSection);
   return sections.join("\n");
@@ -250,7 +237,10 @@ export async function runDailyPipeline(
   };
 
   log(`=== Daily pipeline START date=${date} ===`);
-  log(`Settings: categories=[${settings.categories.join(",")}] keywords=[${settings.keywords.join(",")}] maxResults=${settings.maxResultsPerDay}`);
+
+  const effectiveQueryKeywords = computeEffectiveQueryKeywords(settings);
+  const effectiveInterestKeywords = computeEffectiveInterestKeywords(settings);
+  log(`Settings: categories=[${settings.categories.join(",")}] queryKeywords=[${effectiveQueryKeywords.join(",")}] interestKeywords=${effectiveInterestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
 
   let papers: Paper[] = [];
   let hfDailyPapers: Paper[] = [];
@@ -267,13 +257,13 @@ export async function runDailyPipeline(
     const windowEnd = options.windowEnd ?? now;
     const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1000);
     fetchUrl = source.buildUrl(
-      { categories: settings.categories, keywords: settings.keywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
+      { categories: settings.categories, keywords: effectiveQueryKeywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
       settings.maxResultsPerDay * 3
     );
     log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
-      keywords: settings.keywords,
+      keywords: effectiveQueryKeywords,
       maxResults: settings.maxResultsPerDay,
       sortBy: settings.sortBy,
       windowStart,
@@ -334,6 +324,9 @@ export async function runDailyPipeline(
           hfByBaseId.set(hfp.id, hfp);
         }
         let enrichedCount = 0;
+        const arxivBaseIds = new Set(
+          papers.map(p => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+        );
         for (const p of papers) {
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
@@ -344,6 +337,13 @@ export async function runDailyPipeline(
           }
         }
         log(`Step 1b HF MERGE: enriched ${enrichedCount}/${papers.length} arXiv papers with HF upvotes`);
+
+        // Add HF-only papers (not in arXiv results) to main scoring pool
+        const hfOnlyPapers = hfDailyPapers.filter(p => !arxivBaseIds.has(p.id));
+        if (hfOnlyPapers.length > 0) {
+          papers.push(...hfOnlyPapers);
+          log(`Step 1b HF MERGE: added ${hfOnlyPapers.length} HF-only papers to scoring pool`);
+        }
       }
     } catch (err) {
       log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
@@ -361,7 +361,7 @@ export async function runDailyPipeline(
 
   // ── Step 3: Score + rank ──────────────────────────────────────
   let rankedPapers = papers.length > 0
-    ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK)
+    ? rankPapers(papers, effectiveInterestKeywords, settings.directions, settings.directionTopK)
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
@@ -370,7 +370,7 @@ export async function runDailyPipeline(
     progress(`[2/5] ⭐ LLM 打分中... (${rankedPapers.length} 篇)`);
     try {
       const llm = buildLLMProvider(settings);
-      const kwStr = settings.interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const kwStr = effectiveInterestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
       const papersForScoring = rankedPapers.map(p => ({
         id: p.id,
         title: p.title,
@@ -567,32 +567,20 @@ ${JSON.stringify(papersForSummary)}`;
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
     const maxChars = settings.deepRead.maxCharsPerPaper ?? 8000;
-    const cache = new FulltextCache(writer, app, settings.rootFolder);
     const parts: string[] = [];
 
     for (let i = 0; i < topN; i++) {
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      let text = await cache.get(baseId);
-      if (!text) {
-        log(`Step 3f FULLTEXT: fetching ${baseId}...`);
-        text = await fetchArxivFullText(baseId, maxChars);
-        if (text) {
-          await cache.set(baseId, text);
-          log(`Step 3f FULLTEXT: cached ${baseId} (${text.length} chars)`);
-        } else {
-          log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
-        }
-      } else {
-        log(`Step 3f FULLTEXT: cache hit for ${baseId} (${text.length} chars)`);
-      }
+      log(`Step 3f FULLTEXT: fetching ${baseId}...`);
+      const text = await fetchArxivFullText(baseId, maxChars);
       if (text) {
         parts.push(`### [${i + 1}] ${paper.title}\n\n${text}`);
+        log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
+      } else {
+        log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
       }
     }
-
-    const pruned = await cache.prune(settings.deepRead.cacheTTLDays ?? 60);
-    if (pruned > 0) log(`Step 3f FULLTEXT: pruned ${pruned} stale cache entries`);
 
     if (parts.length > 0) {
       fulltextSection = `\n\n## Full Paper Text (top ${parts.length} papers — use this for deeper per-paper analysis):\n> Texts are truncated. Focus on methods, experiments, and findings.\n\n${parts.join("\n\n---\n\n")}`;
@@ -659,7 +647,7 @@ ${JSON.stringify(papersForSummary)}`;
 
   progress(`[5/5] 💾 写入文件...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, llmDigest, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

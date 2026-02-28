@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => PaperDailyPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian9 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -105,12 +105,12 @@ Today: {{date}}
 Output language: {{language}}
 
 ## Context
-arXiv papers below have been pre-ranked by: HuggingFace upvotes \u2192 direction relevance \u2192 interest keyword weight.
+Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes \u2192 direction relevance \u2192 interest keyword weight.
 
 ## Today's top research directions (pre-computed):
 {{topDirections}}
 
-## arXiv papers to analyze (pre-ranked):
+## Papers to analyze (pre-ranked, arXiv + HF):
 {{papers_json}}
 {{fulltext_section}}
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
@@ -127,10 +127,10 @@ Generate the daily digest with the following sections:
 For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
 
 ### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
-For **each paper** in the arXiv list, output exactly this structure:
+For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
-- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {brief interpretation: e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173" / "\u672A\u4E0A\u699C"}
+- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173"} (omit this line entirely if hfUpvotes is 0 or not present)
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
@@ -205,7 +205,7 @@ Output language: {{language}}
 
 ### \u6280\u672F\u8BC4\u5BA1 / Technical Review
 
-For **each paper** in the arXiv list:
+For **each paper** in the list:
 
 **[N]. {title}**
 - \u{1F52C} \u65B9\u6CD5\u6838\u5FC3 / Method: What is the key technical novelty? Is it principled or ad hoc? Any theoretical guarantees?
@@ -263,96 +263,1051 @@ Format as clean Markdown.`;
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
   keywords: [],
-  interestKeywords: [
-    { keyword: "rlhf", weight: 3 },
-    { keyword: "ppo", weight: 2 },
-    { keyword: "dpo", weight: 2 },
-    { keyword: "grpo", weight: 2 },
-    { keyword: "agent", weight: 3 },
-    { keyword: "agentic rl", weight: 3 },
-    { keyword: "kv cache", weight: 3 },
-    { keyword: "speculative decoding", weight: 3 },
-    { keyword: "moe", weight: 2 },
-    { keyword: "pretraining", weight: 2 },
-    { keyword: "scaling", weight: 2 },
-    { keyword: "long context", weight: 2 },
-    { keyword: "multimodal", weight: 2 },
-    { keyword: "reward model", weight: 3 }
-  ],
+  interestKeywords: [],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
   directions: [
     {
-      name: "RLHF & Post-training",
-      weight: 1.5,
-      match: {
-        keywords: ["rlhf", "ppo", "dpo", "grpo", "reward model", "preference", "post-training", "alignment", "rlaif", "constitutional ai"],
-        categories: ["cs.AI", "cs.LG"]
+      "name": "RLHF & Post-training",
+      "weight": 1.5,
+      "match": {
+        "keywords": [
+          "rlhf",
+          "post-training",
+          "alignment",
+          "preference optimization",
+          "preference modeling",
+          "reward modeling",
+          "reward model",
+          "rm",
+          "ppo",
+          "ppg",
+          "a2c",
+          "actor-critic",
+          "gae",
+          "kl penalty",
+          "kl regularization",
+          "dpo",
+          "ipo",
+          "kto",
+          "orpo",
+          "simpo",
+          "grpo",
+          "rrhf",
+          "rlaif",
+          "constitutional ai",
+          "self-critique",
+          "verifier",
+          "process reward model",
+          "prm",
+          "outcome reward model",
+          "orm",
+          "pairwise preference",
+          "listwise preference",
+          "ranking loss",
+          "direct preference learning",
+          "rejection sampling",
+          "best-of-n",
+          "ppo clip",
+          "advantage normalization",
+          "reward hacking",
+          "over-optimization",
+          "sft",
+          "instruction tuning",
+          "chat tuning",
+          "alignment tax",
+          "post-training data pipeline",
+          "preference dataset",
+          "human feedback",
+          "synthetic preference",
+          "offline rlhf",
+          "on-policy rlhf",
+          "off-policy rlhf",
+          "replay buffer",
+          "policy lag",
+          "importance sampling",
+          "bandit feedback",
+          "implicit reward"
+        ],
+        "categories": ["cs.AI", "cs.LG", "cs.CL"]
       }
     },
     {
-      name: "Agentic RL",
-      weight: 1.4,
-      match: {
-        keywords: ["agentic rl", "agent", "tool use", "tool call", "planner", "react", "function calling", "multi-agent", "agentic", "self-play", "verifier"],
-        categories: ["cs.AI"]
+      "name": "Agentic RL & Tool Use",
+      "weight": 1.4,
+      "match": {
+        "keywords": [
+          "agent",
+          "agentic",
+          "agentic rl",
+          "tool use",
+          "tool calling",
+          "tool call",
+          "function calling",
+          "planner",
+          "planning",
+          "react",
+          "reasoning and acting",
+          "multi-agent",
+          "self-play",
+          "self-improvement",
+          "reflection",
+          "memory",
+          "scratchpad",
+          "verifier",
+          "judge model",
+          "critic model",
+          "tree search",
+          "mcts",
+          "best-first search",
+          "beam search agent",
+          "program of thoughts",
+          "cot",
+          "chain-of-thought",
+          "workflow agent",
+          "orchestrator",
+          "executor",
+          "sandbox",
+          "isolated execution",
+          "code interpreter",
+          "browser tool",
+          "retrieval tool",
+          "rpc tool",
+          "tool latency",
+          "tool reliability",
+          "agent evaluation",
+          "agent benchmarks",
+          "webshop",
+          "hotpotqa",
+          "alfworld",
+          "babyai",
+          "digital agents",
+          "ui agent",
+          "computer use",
+          "grounding",
+          "action space",
+          "credit assignment",
+          "long-horizon",
+          "hierarchical rl",
+          "options",
+          "skills",
+          "task decomposition",
+          "delegation",
+          "autonomous agents",
+          "multi-turn tool calling"
+        ],
+        "categories": ["cs.AI", "cs.CL", "cs.LG"]
       }
     },
     {
-      name: "Pre-training",
-      weight: 1.4,
-      match: {
-        keywords: ["pretraining", "pre-training", "scaling law", "data curation", "tokenizer", "continual learning", "continual pretraining", "foundation model", "corpus", "training data"],
-        categories: ["cs.LG", "cs.CL"]
+      "name": "Pre-training & Data Curation",
+      "weight": 1.4,
+      "match": {
+        "keywords": [
+          "pretraining",
+          "pre-training",
+          "scaling law",
+          "chinchilla",
+          "compute-optimal",
+          "data-optimal",
+          "tokenizer",
+          "bpe",
+          "sentencepiece",
+          "unigram tokenizer",
+          "vocab",
+          "data curation",
+          "data deduplication",
+          "near-duplicate",
+          "minhash",
+          "simhash",
+          "quality filtering",
+          "language id",
+          "toxicity filtering",
+          "pii filtering",
+          "data provenance",
+          "data governance",
+          "dataset mixing",
+          "mixture weights",
+          "curriculum learning",
+          "continual learning",
+          "continual pretraining",
+          "domain adaptation",
+          "instruction data",
+          "synthetic data",
+          "self-instruct",
+          "distillation data",
+          "corpus",
+          "training data",
+          "web data",
+          "common crawl",
+          "document parsing",
+          "pdf parsing",
+          "html to text",
+          "multilingual",
+          "code data",
+          "dedup at scale",
+          "data pipeline",
+          "etl",
+          "spark",
+          "ray data",
+          "mapreduce",
+          "data lake",
+          "parquet",
+          "arrow",
+          "shuffling",
+          "sampling",
+          "token counting",
+          "data skew"
+        ],
+        "categories": ["cs.LG", "cs.CL", "cs.IR", "cs.DC"]
       }
     },
     {
-      name: "Inference Serving",
-      weight: 1.3,
-      match: {
-        keywords: ["kv cache", "pagedattention", "speculative decoding", "speculative", "vllm", "sglang", "tensorrt", "inference serving", "throughput", "latency", "prefill", "decode"],
-        categories: ["cs.DC", "cs.AR"]
+      "name": "Inference Serving & LLM Systems",
+      "weight": 1.3,
+      "match": {
+        "keywords": [
+          "inference serving",
+          "llm serving",
+          "serving system",
+          "throughput",
+          "latency",
+          "goodput",
+          "slo",
+          "sla",
+          "ttft",
+          "tbt",
+          "prefill",
+          "decode",
+          "prefill decode separation",
+          "pd separation",
+          "disaggregated serving",
+          "kv cache",
+          "kvcache",
+          "pagedattention",
+          "paged attention",
+          "continuous batching",
+          "dynamic batching",
+          "microbatching",
+          "chunked prefill",
+          "prefix cache",
+          "prompt cache",
+          "cache reuse",
+          "cache eviction",
+          "cache admission",
+          "hot spot migration",
+          "kv offload",
+          "cpu offload",
+          "kv compression",
+          "kv quantization",
+          "speculative decoding",
+          "draft model",
+          "verify model",
+          "eagle",
+          "medusa",
+          "lookahead decoding",
+          "rejection sampling decoding",
+          "tensor parallel inference",
+          "pipeline parallel inference",
+          "disaggregated kv",
+          "rdma kv transfer",
+          "nvlink",
+          "infiniband",
+          "gdr",
+          "gpu direct rdma",
+          "vllm",
+          "sglang",
+          "tensorrt-llm",
+          "fastertransformer",
+          "triton inference",
+          "onnx runtime",
+          "torch compile serving",
+          "cuda graphs",
+          "streaming generation",
+          "server-sent events",
+          "grpc",
+          "http streaming",
+          "load shedding",
+          "early rejection",
+          "overload control",
+          "rate limiting",
+          "token bucket",
+          "admission control",
+          "routing",
+          "request scheduling",
+          "kv-aware scheduling"
+        ],
+        "categories": ["cs.DC", "cs.AR", "cs.NI", "cs.LG"]
       }
     },
     {
-      name: "Training Systems",
-      weight: 1.2,
-      match: {
-        keywords: ["fsdp", "zero", "deepspeed", "megatron", "pipeline parallel", "tensor parallel", "checkpoint", "distributed training", "communication overhead"],
-        categories: ["cs.DC"]
+      "name": "Training Systems & Distributed Optimization",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "distributed training",
+          "data parallel",
+          "dp",
+          "tensor parallel",
+          "tp",
+          "pipeline parallel",
+          "pp",
+          "sequence parallel",
+          "sp",
+          "context parallel",
+          "cp",
+          "expert parallel",
+          "ep",
+          "fsdp",
+          "zero",
+          "deepspeed",
+          "megatron",
+          "torch distributed",
+          "nccl",
+          "gloo",
+          "mpi",
+          "allreduce",
+          "reducescatter",
+          "allgather",
+          "alltoall",
+          "collective communication",
+          "communication overhead",
+          "overlap communication",
+          "gradient accumulation",
+          "microbatch",
+          "activation checkpointing",
+          "recompute",
+          "optimizer state sharding",
+          "parameter sharding",
+          "mixed precision",
+          "fp16",
+          "bf16",
+          "fp8",
+          "amp",
+          "loss scaling",
+          "gradient clipping",
+          "optimizer",
+          "adamw",
+          "lion",
+          "adafactor",
+          "shampoo",
+          "8-bit optimizer",
+          "quantized optimizer",
+          "checkpoint",
+          "checkpointing",
+          "async checkpoint",
+          "incremental checkpoint",
+          "elastic training",
+          "fault tolerance",
+          "preemption",
+          "resilience",
+          "straggler mitigation",
+          "load balancing",
+          "pipeline bubbles",
+          "schedule",
+          "1f1b",
+          "interleaved pipeline"
+        ],
+        "categories": ["cs.DC", "cs.LG", "cs.NI"]
       }
     },
     {
-      name: "MoE",
-      weight: 1.2,
-      match: {
-        keywords: ["moe", "mixture of experts", "expert", "alltoall", "routing", "sparse", "load balancing"],
-        categories: ["cs.LG", "cs.AI"]
+      "name": "MoE Systems & Sparse Training/Inference",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "moe",
+          "mixture of experts",
+          "expert",
+          "sparse",
+          "sparse activation",
+          "top-k routing",
+          "router",
+          "routing",
+          "token routing",
+          "load balancing",
+          "auxiliary loss",
+          "router z-loss",
+          "capacity factor",
+          "expert capacity",
+          "expert parallel",
+          "alltoall",
+          "dispatch",
+          "combine",
+          "expert choice",
+          "token choice",
+          "switch transformer",
+          "gshard",
+          "deepseek moe",
+          "sparse attention",
+          "moe inference",
+          "moe serving",
+          "expert cache",
+          "expert placement",
+          "expert replication",
+          "hot experts",
+          "routing collapse",
+          "router instability",
+          "communication heavy",
+          "a2a optimization",
+          "hierarchical alltoall"
+        ],
+        "categories": ["cs.LG", "cs.AI", "cs.DC"]
       }
     },
     {
-      name: "Long Context & Efficiency",
-      weight: 1.2,
-      match: {
-        keywords: ["long context", "context length", "context window", "position encoding", "rope", "flash attention", "linear attention", "mamba", "ssm", "state space model", "recurrent"],
-        categories: ["cs.LG", "cs.CL"]
+      "name": "Long Context, Attention & Efficiency",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "long context",
+          "context length",
+          "context window",
+          "128k",
+          "1m context",
+          "rope",
+          "rotary position embedding",
+          "yarn",
+          "ntk",
+          "alibi",
+          "position encoding",
+          "kv cache growth",
+          "sliding window attention",
+          "windowed attention",
+          "ring attention",
+          "flash attention",
+          "flashattention",
+          "flashinfer",
+          "fused attention",
+          "gqa",
+          "mqa",
+          "mla",
+          "linear attention",
+          "performer",
+          "reformer",
+          "kernel attention",
+          "block sparse attention",
+          "paged kv",
+          "kv eviction",
+          "attention compression",
+          "token pruning",
+          "mamba",
+          "ssm",
+          "state space model",
+          "recurrent",
+          "rwkv",
+          "hyena",
+          "memory efficient attention",
+          "chunked prefill",
+          "context parallelism"
+        ],
+        "categories": ["cs.LG", "cs.CL", "cs.DC"]
       }
     },
     {
-      name: "Multimodal",
-      weight: 1.1,
-      match: {
-        keywords: ["multimodal", "vision language", "vlm", "image generation", "diffusion model", "text-to-image", "clip", "vit", "visual", "video generation"],
-        categories: ["cs.CV", "cs.LG"]
+      "name": "Multimodal Systems & VLM Infrastructure",
+      "weight": 1.1,
+      "match": {
+        "keywords": [
+          "multimodal",
+          "vision language model",
+          "vlm",
+          "vision-language",
+          "image encoder",
+          "clip",
+          "vit",
+          "llava",
+          "qwen-vl",
+          "video understanding",
+          "video llm",
+          "speech",
+          "asr",
+          "tts",
+          "streaming asr",
+          "diffusion model",
+          "text-to-image",
+          "image generation",
+          "video generation",
+          "multimodal tokenization",
+          "patch embedding",
+          "vq",
+          "vq-vae",
+          "multimodal serving",
+          "multi-modal batching",
+          "prefill with vision tokens",
+          "vision kv cache"
+        ],
+        "categories": ["cs.CV", "cs.CL", "cs.LG", "cs.DC"]
       }
     },
     {
-      name: "Quantization & Compression",
-      weight: 1.1,
-      match: {
-        keywords: ["quantization", "pruning", "knowledge distillation", "compression", "int4", "int8", "gguf", "sparsity", "efficient inference", "model compression"],
-        categories: ["cs.LG", "cs.AR"]
+      "name": "Quantization, Distillation & Compression",
+      "weight": 1.1,
+      "match": {
+        "keywords": [
+          "quantization",
+          "ptq",
+          "qat",
+          "int8",
+          "int4",
+          "nf4",
+          "fp8",
+          "awq",
+          "gptq",
+          "smoothquant",
+          "gguf",
+          "ggml",
+          "tensor quantization",
+          "activation quantization",
+          "weight-only quantization",
+          "kv quantization",
+          "compression",
+          "pruning",
+          "structured pruning",
+          "unstructured pruning",
+          "sparsity",
+          "2:4 sparsity",
+          "model compression",
+          "knowledge distillation",
+          "distillation",
+          "teacher student",
+          "logit distillation",
+          "sequence-level distillation",
+          "speculative distillation",
+          "low rank",
+          "lora",
+          "qlora",
+          "adapters",
+          "parameter efficient fine-tuning",
+          "peft"
+        ],
+        "categories": ["cs.LG", "cs.AR", "cs.DC"]
+      }
+    },
+    {
+      "name": "Retrieval, RAG & Vector Infrastructure",
+      "weight": 1.25,
+      "match": {
+        "keywords": [
+          "retrieval augmented generation",
+          "rag",
+          "retriever",
+          "reranker",
+          "dense retrieval",
+          "sparse retrieval",
+          "bm25",
+          "splade",
+          "colbert",
+          "embedding",
+          "text embedding",
+          "vector database",
+          "vector db",
+          "faiss",
+          "hnsw",
+          "ivf",
+          "pq",
+          "ann",
+          "approximate nearest neighbor",
+          "index building",
+          "index serving",
+          "hybrid search",
+          "query rewriting",
+          "semantic search",
+          "document chunking",
+          "chunking strategy",
+          "contextual retrieval",
+          "citation",
+          "grounded generation",
+          "hallucination reduction",
+          "knowledge base",
+          "kb",
+          "retrieval latency",
+          "caching retrieval",
+          "online indexing",
+          "incremental indexing"
+        ],
+        "categories": ["cs.IR", "cs.CL", "cs.DC", "cs.AI"]
+      }
+    },
+    {
+      "name": "Evaluation, Benchmarking & E2E Quality",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "evaluation",
+          "benchmark",
+          "eval harness",
+          "offline eval",
+          "online eval",
+          "a/b testing",
+          "ab test",
+          "canary",
+          "shadow traffic",
+          "regression testing",
+          "golden set",
+          "rubric",
+          "judge model",
+          "llm-as-a-judge",
+          "pairwise eval",
+          "win rate",
+          "preference eval",
+          "calibration",
+          "reliability",
+          "toxicity eval",
+          "safety eval",
+          "latency eval",
+          "throughput eval",
+          "cost eval",
+          "prompt robustness",
+          "adversarial eval",
+          "dataset shift",
+          "drift detection",
+          "observability metrics",
+          "ttft p90",
+          "tbt p90",
+          "tail latency"
+        ],
+        "categories": ["cs.AI", "cs.LG", "cs.SE", "cs.DC"]
+      }
+    },
+    {
+      "name": "Compilers, Graph Optimization & Kernel Fusion",
+      "weight": 1.25,
+      "match": {
+        "keywords": [
+          "compiler",
+          "graph compiler",
+          "xla",
+          "tvm",
+          "mlir",
+          "llvm",
+          "torch compile",
+          "torchdynamo",
+          "aotautograd",
+          "inductor",
+          "triton",
+          "cutlass",
+          "cute",
+          "kernel fusion",
+          "operator fusion",
+          "epilogue fusion",
+          "memory planning",
+          "liveness analysis",
+          "layout optimization",
+          "tiling",
+          "autotuning",
+          "code generation",
+          "vectorization",
+          "tensor cores",
+          "wmma",
+          "mma",
+          "flash attention kernel",
+          "fused softmax",
+          "fused layernorm",
+          "quantized kernels",
+          "cuda graphs",
+          "stream capture",
+          "graph replay",
+          "nvrtc"
+        ],
+        "categories": ["cs.PL", "cs.DC", "cs.AR", "cs.LG"]
+      }
+    },
+    {
+      "name": "GPU Architecture & Performance Engineering",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "gpu architecture",
+          "sm",
+          "warp",
+          "block",
+          "occupancy",
+          "register pressure",
+          "shared memory",
+          "bank conflict",
+          "l1 cache",
+          "l2 cache",
+          "hbm",
+          "memory bandwidth",
+          "latency hiding",
+          "instruction throughput",
+          "tensor core",
+          "pipeline",
+          "async copy",
+          "cp.async",
+          "prefetch",
+          "stream",
+          "overlap compute communication",
+          "ncu",
+          "nsight compute",
+          "nsight systems",
+          "profiling",
+          "roofline",
+          "bottleneck analysis",
+          "kernel launch overhead",
+          "persistent kernel",
+          "cuda stream priority",
+          "mps",
+          "cuda mps"
+        ],
+        "categories": ["cs.AR", "cs.DC"]
+      }
+    },
+    {
+      "name": "Networking, RDMA & Collective Communication",
+      "weight": 1.25,
+      "match": {
+        "keywords": [
+          "rdma",
+          "infiniband",
+          "roce",
+          "gdr",
+          "gpudirect",
+          "gpudirect rdma",
+          "nccl",
+          "sharp",
+          "collective offload",
+          "allreduce",
+          "reducescatter",
+          "allgather",
+          "alltoall",
+          "topology",
+          "nvlink",
+          "pcie",
+          "nic",
+          "congestion control",
+          "pfc",
+          "ecmp",
+          "fat-tree",
+          "dragonfly",
+          "ring allreduce",
+          "tree allreduce",
+          "hierarchical collectives",
+          "latency jitter",
+          "tail latency networking",
+          "zero-copy",
+          "dma",
+          "rdma verbs",
+          "ibverbs",
+          "ucx"
+        ],
+        "categories": ["cs.NI", "cs.DC"]
+      }
+    },
+    {
+      "name": "Storage, Checkpointing & State Management",
+      "weight": 1.2,
+      "match": {
+        "keywords": [
+          "checkpoint",
+          "checkpointing",
+          "distributed checkpoint",
+          "sharded checkpoint",
+          "async checkpoint",
+          "incremental checkpoint",
+          "delta checkpoint",
+          "snapshot",
+          "fault tolerance",
+          "restart",
+          "preemption",
+          "elasticity",
+          "optimizer state",
+          "state dict",
+          "safetensors",
+          "tensorstore",
+          "zarr",
+          "object store",
+          "s3",
+          "oss",
+          "hdfs",
+          "nvme",
+          "ssd",
+          "io bandwidth",
+          "io pipeline",
+          "write amplification",
+          "compression",
+          "dedup",
+          "metadata scaling",
+          "manifest",
+          "commit protocol",
+          "two-phase commit"
+        ],
+        "categories": ["cs.DC", "cs.OS"]
+      }
+    },
+    {
+      "name": "Cluster Scheduling, Orchestration & Resource Management",
+      "weight": 1.25,
+      "match": {
+        "keywords": [
+          "scheduler",
+          "cluster scheduler",
+          "kubernetes",
+          "k8s",
+          "slurm",
+          "yarn",
+          "mesos",
+          "ray",
+          "placement",
+          "gang scheduling",
+          "bin packing",
+          "gpu scheduling",
+          "heterogeneous scheduling",
+          "fair scheduling",
+          "priority scheduling",
+          "quota",
+          "preemption",
+          "backfilling",
+          "elastic training",
+          "autoscaling",
+          "horizontal pod autoscaler",
+          "resource isolation",
+          "cgroups",
+          "numa",
+          "topology-aware scheduling",
+          "node affinity",
+          "pod affinity",
+          "time slicing",
+          "mig",
+          "multi-instance gpu",
+          "virtualization",
+          "container runtime",
+          "nvidia container toolkit",
+          "device plugin",
+          "capacity planning"
+        ],
+        "categories": ["cs.DC", "cs.OS", "cs.NI"]
+      }
+    },
+    {
+      "name": "MLOps, Deployment & Lifecycle Management",
+      "weight": 1.15,
+      "match": {
+        "keywords": [
+          "mlops",
+          "model deployment",
+          "ci/cd",
+          "continuous training",
+          "continuous evaluation",
+          "model registry",
+          "artifact store",
+          "experiment tracking",
+          "wandb",
+          "mlflow",
+          "feature store",
+          "data versioning",
+          "dvc",
+          "lineage",
+          "rollout",
+          "rollback",
+          "blue green deployment",
+          "canary deployment",
+          "shadow deployment",
+          "serving gateway",
+          "api gateway",
+          "rate limiting",
+          "auth",
+          "apikey rotation",
+          "secret management",
+          "vault",
+          "k8s secrets",
+          "configuration management",
+          "terraform",
+          "helm",
+          "observability"
+        ],
+        "categories": ["cs.SE", "cs.DC"]
+      }
+    },
+    {
+      "name": "Observability, Profiling & Reliability Engineering",
+      "weight": 1.15,
+      "match": {
+        "keywords": [
+          "observability",
+          "monitoring",
+          "logging",
+          "tracing",
+          "distributed tracing",
+          "opentelemetry",
+          "prometheus",
+          "grafana",
+          "jaeger",
+          "slo monitoring",
+          "tail latency",
+          "p99",
+          "p999",
+          "alerting",
+          "incident",
+          "postmortem",
+          "reliability",
+          "sre",
+          "capacity",
+          "load testing",
+          "stress testing",
+          "chaos engineering",
+          "fault injection",
+          "profiling",
+          "cpu profiling",
+          "gpu profiling",
+          "nsys",
+          "ncu",
+          "memory leak",
+          "fragmentation",
+          "oom analysis"
+        ],
+        "categories": ["cs.SE", "cs.DC", "cs.OS"]
+      }
+    },
+    {
+      "name": "Security, Privacy & Model Abuse (Infra-focused)",
+      "weight": 1.1,
+      "match": {
+        "keywords": [
+          "security",
+          "privacy",
+          "pii",
+          "data leakage",
+          "secret leakage",
+          "apikey leakage",
+          "key management",
+          "rotation",
+          "abuse detection",
+          "rate limit abuse",
+          "prompt injection",
+          "jailbreak",
+          "data exfiltration",
+          "model extraction",
+          "model stealing",
+          "distillation attack",
+          "membership inference",
+          "model inversion",
+          "watermarking",
+          "trace watermark",
+          "fingerprinting",
+          "content filtering",
+          "policy enforcement",
+          "sandboxing",
+          "isolation",
+          "secure execution"
+        ],
+        "categories": ["cs.CR", "cs.AI", "cs.SE"]
+      }
+    },
+    {
+      "name": "Edge/On-device LLM Systems",
+      "weight": 1.1,
+      "match": {
+        "keywords": [
+          "edge llm",
+          "on-device llm",
+          "mobile inference",
+          "embedded",
+          "automotive",
+          "npu",
+          "dsp",
+          "heterogeneous compute",
+          "lpddr",
+          "gddr",
+          "unified memory",
+          "kv cache tiering",
+          "cpu-gpu offload",
+          "streaming",
+          "low latency",
+          "power efficiency",
+          "thermal",
+          "quantized inference",
+          "int4 runtime",
+          "gguf runtime",
+          "onnx",
+          "tflite",
+          "coreml",
+          "tensorrt",
+          "ascend",
+          "mps",
+          "metal performance shaders"
+        ],
+        "categories": ["cs.AR", "cs.DC", "cs.OS"]
+      }
+    },
+    {
+      "name": "Data Systems for ML (ETL, Lakes, Streaming)",
+      "weight": 1.15,
+      "match": {
+        "keywords": [
+          "data systems",
+          "etl",
+          "elt",
+          "data pipeline",
+          "batch processing",
+          "stream processing",
+          "kafka",
+          "pulsar",
+          "flink",
+          "spark",
+          "ray",
+          "data lake",
+          "lakehouse",
+          "delta lake",
+          "iceberg",
+          "hudi",
+          "parquet",
+          "arrow",
+          "orc",
+          "schema evolution",
+          "data validation",
+          "great expectations",
+          "data quality",
+          "backfill",
+          "incremental processing",
+          "cdc",
+          "change data capture",
+          "feature computation",
+          "materialization",
+          "cache",
+          "online offline consistency"
+        ],
+        "categories": ["cs.DB", "cs.DC", "cs.SE"]
+      }
+    },
+    {
+      "name": "Memory Management & KVCache Engineering",
+      "weight": 1.25,
+      "match": {
+        "keywords": [
+          "memory management",
+          "allocator",
+          "fragmentation",
+          "arena allocator",
+          "paging",
+          "paged kv cache",
+          "block manager",
+          "slab allocator",
+          "cuda memory pool",
+          "unified virtual addressing",
+          "prefetching",
+          "pin memory",
+          "pinned memory",
+          "zero-copy",
+          "kv cache reuse",
+          "prefix hash",
+          "dedup",
+          "admission control cache",
+          "eviction policy",
+          "lru",
+          "lfu",
+          "clock algorithm",
+          "hotset",
+          "tiered cache",
+          "cpu dram cache",
+          "ssd cache",
+          "compression cache",
+          "kv spill",
+          "kv restore"
+        ],
+        "categories": ["cs.OS", "cs.DC", "cs.AR"]
       }
     }
   ],
@@ -391,7 +1346,7 @@ var DEFAULT_SETTINGS = {
     feeds: []
   },
   paperDownload: {
-    savePdf: false
+    savePdf: true
   },
   arxivDetailTopK: 10,
   hfDetailTopK: 10,
@@ -402,7 +1357,7 @@ var DEFAULT_SETTINGS = {
     cacheTTLDays: 60
   },
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t })),
-  activePromptId: "builtin_engineering"
+  activePromptId: "builtin_review"
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -1634,42 +2589,8 @@ async function readPaperPdfAsBase64(app, rootFolder, paperId) {
   }
 }
 
-// src/storage/fulltextCache.ts
-var import_obsidian6 = require("obsidian");
-var FulltextCache = class {
-  constructor(writer, app, rootFolder) {
-    this.writer = writer;
-    this.app = app;
-    this.dir = `${rootFolder}/cache/fulltext`;
-  }
-  keyToPath(baseId) {
-    return `${this.dir}/${baseId}.md`;
-  }
-  async get(baseId) {
-    return await this.writer.readNote(this.keyToPath(baseId));
-  }
-  async set(baseId, text) {
-    await this.writer.writeNote(this.keyToPath(baseId), text);
-  }
-  /** Delete cache files not modified within ttlDays. Returns count deleted. */
-  async prune(ttlDays) {
-    const cutoff = Date.now() - ttlDays * 86400 * 1e3;
-    let deleted = 0;
-    const folder = this.app.vault.getAbstractFileByPath((0, import_obsidian6.normalizePath)(this.dir));
-    if (!(folder instanceof import_obsidian6.TFolder))
-      return 0;
-    for (const child of [...folder.children]) {
-      if (child instanceof import_obsidian6.TFile && child.stat.mtime < cutoff) {
-        await this.app.vault.delete(child);
-        deleted++;
-      }
-    }
-    return deleted;
-  }
-};
-
 // src/sources/ar5ivFetcher.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 async function fetchArxivFullText(baseId, maxChars) {
   const urls = [
     `https://arxiv.org/html/${baseId}`,
@@ -1677,7 +2598,7 @@ async function fetchArxivFullText(baseId, maxChars) {
   ];
   for (const url of urls) {
     try {
-      const resp = await (0, import_obsidian7.requestUrl)({ url, method: "GET" });
+      const resp = await (0, import_obsidian6.requestUrl)({ url, method: "GET" });
       if (resp.status === 200 && resp.text.length > 500) {
         return extractText(resp.text, maxChars);
       }
@@ -1710,7 +2631,7 @@ function extractText(html, maxChars) {
 }
 
 // src/llm/openaiCompatible.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var OpenAICompatibleProvider = class {
   constructor(baseUrl, apiKey, model) {
     this.baseUrl = baseUrl;
@@ -1731,7 +2652,7 @@ var OpenAICompatibleProvider = class {
       max_tokens: (_b = input.maxTokens) != null ? _b : 4096
     };
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
-    const response = await (0, import_obsidian8.requestUrl)({
+    const response = await (0, import_obsidian7.requestUrl)({
       url,
       method: "POST",
       headers: {
@@ -5001,6 +5922,30 @@ var AnthropicProvider = class {
 function getISODate(d) {
   return d.toISOString().slice(0, 10);
 }
+function computeEffectiveQueryKeywords(settings) {
+  const fromDirections = settings.directions.flatMap((d) => {
+    var _a2;
+    return (_a2 = d.queryKeywords) != null ? _a2 : [];
+  });
+  return [.../* @__PURE__ */ new Set([...settings.keywords, ...fromDirections])];
+}
+function computeEffectiveInterestKeywords(settings) {
+  var _a2;
+  const explicit = (_a2 = settings.interestKeywords) != null ? _a2 : [];
+  const explicitSet = new Set(explicit.map((k) => k.keyword.toLowerCase()));
+  const seen = new Set(explicitSet);
+  const fromDirections = [];
+  for (const dir of settings.directions) {
+    for (const kw of dir.match.keywords) {
+      const key = kw.toLowerCase();
+      if (seen.has(key))
+        continue;
+      seen.add(key);
+      fromDirections.push({ keyword: kw, weight: Math.min(5, Math.round(dir.weight * 2)) });
+    }
+  }
+  return [...explicit, ...fromDirections];
+}
 function buildLLMProvider(settings) {
   if (settings.llm.provider === "anthropic") {
     return new AnthropicProvider(settings.llm.apiKey, settings.llm.model);
@@ -5032,8 +5977,8 @@ function formatTopDirections(papers, topK) {
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
-function buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, aiDigest, activeSources, error) {
-  var _a2, _b, _c, _d;
+function buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, aiDigest, activeSources, error) {
+  var _a2, _b, _c;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -5066,54 +6011,19 @@ ${aiDigest}`;
       links.push(`[HF](${p.links.hf})`);
     const dirStr = ((_a3 = p.topDirections) != null ? _a3 : []).slice(0, 2).join(", ") || "_none_";
     const hitsStr = ((_b2 = p.interestHits) != null ? _b2 : []).slice(0, 3).join(", ") || "_none_";
-    const upvoteStr = p.hfUpvotes != null ? ` \u{1F917} ${p.hfUpvotes}` : "";
+    const hfBadge = p.links.hf ? ` \u{1F917} HF${p.hfUpvotes ? ` ${p.hfUpvotes}\u2191` : ""}` : "";
     const scoreStr = p.llmScore != null ? ` \u2B50 ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
     const summaryLine = p.llmSummary ? `
    > ${p.llmSummary}` : "";
     return [
-      `${i + 1}. **${p.title}**${upvoteStr}${scoreStr}${summaryLine}`,
+      `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
       `   - ${links.join(" \xB7 ")} | Updated: ${p.updated.slice(0, 10)}`,
       `   - Directions: ${dirStr} | Hits: ${hitsStr}`
     ].join("\n");
   });
-  const arxivDetailedSection = `## arXiv Top ${arxivTopK} Papers
+  const arxivDetailedSection = `## Top ${arxivTopK} Papers
 
 ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
-  const hfTopK = (_b = settings.hfDetailTopK) != null ? _b : 10;
-  let hfDetailedSection = "";
-  if (hfDailyPapers.length > 0) {
-    const arxivBaseIds = new Set(
-      rankedPapers.map((p) => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
-    );
-    const hfTopPapers = hfDailyPapers.slice(0, hfTopK);
-    const alsoInArxivCount = hfTopPapers.filter((p) => arxivBaseIds.has(p.id)).length;
-    const countNote = hfDailyPapers.length > hfTopK ? `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5C55\u793A\u524D ${hfTopK} \u7BC7\u3002` : `\u5171 ${hfDailyPapers.length} \u7BC7\u3002`;
-    const overlapNote = alsoInArxivCount > 0 ? `\u5176\u4E2D ${alsoInArxivCount} \u7BC7\u540C\u65F6\u51FA\u73B0\u5728\u4ECA\u65E5 arXiv \u68C0\u7D22\u7ED3\u679C\u4E2D\u3002` : "";
-    const hfLines = hfTopPapers.map((p, i) => {
-      var _a3, _b2;
-      const linksArr = [];
-      if (p.links.hf)
-        linksArr.push(`[HF](${p.links.hf})`);
-      if (p.links.html)
-        linksArr.push(`[arXiv](${p.links.html})`);
-      if (settings.includePdfLink && p.links.pdf)
-        linksArr.push(`[PDF](${p.links.pdf})`);
-      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-      const arxivBadge = arxivBaseIds.has(p.id) ? " \u{1F4C4} \u4ECA\u65E5 arXiv \u6536\u5F55" : "";
-      const streakBadge = ((_a3 = p.hfStreak) != null ? _a3 : 1) > 1 ? ` \u{1F525} \u9738\u699C${p.hfStreak}\u5929` : "";
-      return [
-        `${i + 1}. **${p.title}** \u{1F917} ${(_b2 = p.hfUpvotes) != null ? _b2 : 0}${arxivBadge}${streakBadge}`,
-        `   - Links: ${linksArr.join(", ")}`,
-        `   - Authors: ${authorsStr}`,
-        `   - Published: ${p.published.slice(0, 10)}`
-      ].join("\n");
-    });
-    hfDetailedSection = `## HuggingFace Daily Papers
-
-${countNote}${overlapNote ? " " + overlapNote : ""}
-
-${hfLines.join("\n\n")}`;
-  }
   const tableRows = rankedPapers.map((p, i) => {
     var _a3, _b2, _c2;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
@@ -5121,15 +6031,14 @@ ${hfLines.join("\n\n")}`;
     if (p.links.html)
       linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf)
-      linkParts.push(`[HF](${p.links.hf})`);
+      linkParts.push(`[\u{1F917} HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf)
       linkParts.push(`[PDF](${p.links.pdf})`);
-    const upvote = p.hfUpvotes != null ? `\u{1F917}${p.hfUpvotes} ` : "";
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
     const dirs = ((_b2 = p.topDirections) != null ? _b2 : []).slice(0, 2).join(", ") || "-";
     const hits = ((_c2 = p.interestHits) != null ? _c2 : []).slice(0, 3).join(", ") || "-";
-    return `| ${i + 1} | ${titleLink} | ${upvote}${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
   });
   const allPapersTableSection = [
     "## All Papers",
@@ -5140,7 +6049,7 @@ ${hfLines.join("\n\n")}`;
   ].join("\n");
   let trendingSection = "";
   if (trendingPapers.length > 0) {
-    const trendingMode = (_d = (_c = settings.trending) == null ? void 0 : _c.mode) != null ? _d : "heuristic";
+    const trendingMode = (_c = (_b = settings.trending) == null ? void 0 : _b.mode) != null ? _c : "heuristic";
     const trendingDesc = trendingMode === "llm" ? "These papers were identified by LLM as noteworthy among papers not matched by interest keywords." : "These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).";
     const trendingLines = trendingPapers.map((t, i) => {
       const links = [];
@@ -5177,15 +6086,13 @@ ${trendingLines.join("\n\n")}`;
     "",
     arxivDetailedSection
   ];
-  if (hfDetailedSection)
-    sections.push("", hfDetailedSection);
   sections.push("", allPapersTableSection);
   if (trendingSection)
     sections.push("", trendingSection);
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5208,7 +6115,9 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
   };
   log(`=== Daily pipeline START date=${date} ===`);
-  log(`Settings: categories=[${settings.categories.join(",")}] keywords=[${settings.keywords.join(",")}] maxResults=${settings.maxResultsPerDay}`);
+  const effectiveQueryKeywords = computeEffectiveQueryKeywords(settings);
+  const effectiveInterestKeywords = computeEffectiveInterestKeywords(settings);
+  log(`Settings: categories=[${settings.categories.join(",")}] queryKeywords=[${effectiveQueryKeywords.join(",")}] interestKeywords=${effectiveInterestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
   let papers = [];
   let hfDailyPapers = [];
   let fetchError;
@@ -5222,13 +6131,13 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     const windowEnd = (_c = options.windowEnd) != null ? _c : now;
     const windowStart = (_d = options.windowStart) != null ? _d : new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1e3);
     fetchUrl = source.buildUrl(
-      { categories: settings.categories, keywords: settings.keywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
+      { categories: settings.categories, keywords: effectiveQueryKeywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
       settings.maxResultsPerDay * 3
     );
     log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
-      keywords: settings.keywords,
+      keywords: effectiveQueryKeywords,
       maxResults: settings.maxResultsPerDay,
       sortBy: settings.sortBy,
       windowStart,
@@ -5279,6 +6188,9 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           hfByBaseId.set(hfp.id, hfp);
         }
         let enrichedCount = 0;
+        const arxivBaseIds = new Set(
+          papers.map((p) => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+        );
         for (const p of papers) {
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
@@ -5290,6 +6202,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           }
         }
         log(`Step 1b HF MERGE: enriched ${enrichedCount}/${papers.length} arXiv papers with HF upvotes`);
+        const hfOnlyPapers = hfDailyPapers.filter((p) => !arxivBaseIds.has(p.id));
+        if (hfOnlyPapers.length > 0) {
+          papers.push(...hfOnlyPapers);
+          log(`Step 1b HF MERGE: added ${hfOnlyPapers.length} HF-only papers to scoring pool`);
+        }
       }
     } catch (err) {
       log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
@@ -5302,13 +6219,13 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
-  let rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
+  let rankedPapers = papers.length > 0 ? rankPapers(papers, effectiveInterestKeywords, settings.directions, settings.directionTopK) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[2/5] \u2B50 LLM \u6253\u5206\u4E2D... (${rankedPapers.length} \u7BC7)`);
     try {
       const llm = buildLLMProvider(settings);
-      const kwStr = settings.interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const kwStr = effectiveInterestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
       const papersForScoring = rankedPapers.map((p) => {
         var _a3, _b2;
         return {
@@ -5494,33 +6411,21 @@ ${JSON.stringify(papersForSummary)}`;
   if (((_s = settings.deepRead) == null ? void 0 : _s.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN = Math.min((_t = settings.deepRead.topN) != null ? _t : 5, rankedPapers.length);
     const maxChars = (_u = settings.deepRead.maxCharsPerPaper) != null ? _u : 8e3;
-    const cache = new FulltextCache(writer, app, settings.rootFolder);
     const parts = [];
     for (let i = 0; i < topN; i++) {
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      let text = await cache.get(baseId);
-      if (!text) {
-        log(`Step 3f FULLTEXT: fetching ${baseId}...`);
-        text = await fetchArxivFullText(baseId, maxChars);
-        if (text) {
-          await cache.set(baseId, text);
-          log(`Step 3f FULLTEXT: cached ${baseId} (${text.length} chars)`);
-        } else {
-          log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
-        }
-      } else {
-        log(`Step 3f FULLTEXT: cache hit for ${baseId} (${text.length} chars)`);
-      }
+      log(`Step 3f FULLTEXT: fetching ${baseId}...`);
+      const text = await fetchArxivFullText(baseId, maxChars);
       if (text) {
         parts.push(`### [${i + 1}] ${paper.title}
 
 ${text}`);
+        log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
+      } else {
+        log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
       }
     }
-    const pruned = await cache.prune((_v = settings.deepRead.cacheTTLDays) != null ? _v : 60);
-    if (pruned > 0)
-      log(`Step 3f FULLTEXT: pruned ${pruned} stale cache entries`);
     if (parts.length > 0) {
       fulltextSection = `
 
@@ -5531,7 +6436,7 @@ ${parts.join("\n\n---\n\n")}`;
     }
     log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
   } else {
-    log(`Step 3f FULLTEXT: skipped (enabled=${(_x = (_w = settings.deepRead) == null ? void 0 : _w.enabled) != null ? _x : false})`);
+    log(`Step 3f FULLTEXT: skipped (enabled=${(_w = (_v = settings.deepRead) == null ? void 0 : _v.enabled) != null ? _w : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F916} \u751F\u6210\u6458\u8981... (${settings.llm.model})`);
@@ -5593,7 +6498,7 @@ ${parts.join("\n\n---\n\n")}`;
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   progress(`[5/5] \u{1F4BE} \u5199\u5165\u6587\u4EF6...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, llmDigest, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
@@ -5722,7 +6627,7 @@ var Scheduler = class {
 };
 
 // src/main.ts
-var PaperDailyPlugin = class extends import_obsidian9.Plugin {
+var PaperDailyPlugin = class extends import_obsidian8.Plugin {
   async onload() {
     await this.loadSettings();
     await this.initStorage();
@@ -5777,7 +6682,7 @@ var PaperDailyPlugin = class extends import_obsidian9.Plugin {
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
       callback: async () => {
-        const notice = new import_obsidian9.Notice("Paper Daily: \u542F\u52A8\u4E2D...", 0);
+        const notice = new import_obsidian8.Notice("Paper Daily: \u542F\u52A8\u4E2D...", 0);
         try {
           await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
           setTimeout(() => notice.hide(), 4e3);
@@ -5798,12 +6703,12 @@ var PaperDailyPlugin = class extends import_obsidian9.Plugin {
       id: "rebuild-index",
       name: "Rebuild index from local cache",
       callback: async () => {
-        new import_obsidian9.Notice("Paper Daily: Rebuilding dedup index...");
+        new import_obsidian8.Notice("Paper Daily: Rebuilding dedup index...");
         try {
           await this.dedupStore.load();
-          new import_obsidian9.Notice("Paper Daily: Index rebuilt.");
+          new import_obsidian8.Notice("Paper Daily: Index rebuilt.");
         } catch (err) {
-          new import_obsidian9.Notice(`Paper Daily Error: ${String(err)}`);
+          new import_obsidian8.Notice(`Paper Daily Error: ${String(err)}`);
         }
       }
     });
@@ -5876,7 +6781,7 @@ var PaperDailyPlugin = class extends import_obsidian9.Plugin {
     }
   }
 };
-var BackfillModal = class extends import_obsidian9.Modal {
+var BackfillModal = class extends import_obsidian8.Modal {
   constructor(app, plugin) {
     super(app);
     this.startDate = "";
@@ -5887,14 +6792,14 @@ var BackfillModal = class extends import_obsidian9.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
-    new import_obsidian9.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
+    new import_obsidian8.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
       this.startDate = v;
     }));
-    new import_obsidian9.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
+    new import_obsidian8.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
       this.endDate = v;
     }));
     this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
-    new import_obsidian9.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
+    new import_obsidian8.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
       if (!this.startDate || !this.endDate) {
         this.statusEl.setText("Please enter both start and end dates.");
         return;
