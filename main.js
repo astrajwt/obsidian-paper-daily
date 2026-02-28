@@ -1331,11 +1331,6 @@ var DEFAULT_SETTINGS = {
     dailyTime: "08:30"
   },
   backfillMaxDays: 30,
-  trending: {
-    enabled: true,
-    mode: "heuristic",
-    topK: 5
-  },
   hfSource: {
     enabled: true,
     lookbackDays: 3,
@@ -1783,26 +1778,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       });
     });
-    containerEl.createEl("h2", { text: "\u70ED\u5EA6\u8BBA\u6587 / Trending Papers" });
-    containerEl.createEl("p", {
-      text: "\u5C06\u672A\u547D\u4E2D\u4EFB\u4F55\u5173\u952E\u8BCD\u4F46\u70ED\u5EA6\u8F83\u9AD8\u7684\u8BBA\u6587\u4E5F\u7EB3\u5165\u6458\u8981\u3002\u70ED\u5EA6 = \u7248\u672C\u4FEE\u8BA2\u6B21\u6570 + \u8DE8\u9886\u57DF\u5206\u7C7B\u6570 + \u53D1\u5E03\u65F6\u95F4 + HF \u70B9\u8D5E\u6570 | Include high-hotness papers even if they don't match any keyword. Hotness = revision version + cross-listing + recency + HF upvotes.",
-      cls: "setting-item-description"
-    });
-    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u70ED\u5EA6\u6A21\u5F0F / Enable Trending Mode").setDesc("\u5728\u6458\u8981\u672B\u5C3E\u9644\u52A0\u70ED\u5EA6\u8BBA\u6587\u677F\u5757 | Append a Trending section with papers not matched by keywords").addToggle((toggle) => toggle.setValue(this.plugin.settings.trending.enabled).onChange(async (value) => {
-      this.plugin.settings.trending.enabled = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u70ED\u5EA6\u68C0\u6D4B\u6A21\u5F0F / Trending Detection Mode").setDesc("heuristic\uFF1A\u57FA\u4E8E\u7248\u672C\u4FEE\u8BA2 / \u591A\u5206\u7C7B / \u65F6\u6548 / HF \u8D5E\u6570\u6253\u5206 | llm\uFF1A\u5927\u6A21\u578B\u5BF9\u6458\u8981\u6253\u5206\u5E76\u751F\u6210\u8BE6\u7EC6\u6458\u8981").addDropdown((drop) => {
-      var _a3;
-      return drop.addOption("heuristic", "Heuristic\uFF08\u542F\u53D1\u5F0F\uFF09").addOption("llm", "LLM\uFF08\u5927\u6A21\u578B\u6253\u5206\uFF09").setValue((_a3 = this.plugin.settings.trending.mode) != null ? _a3 : "heuristic").onChange(async (value) => {
-        this.plugin.settings.trending.mode = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u70ED\u5EA6\u8BBA\u6587\u6570 Top-K / Trending Top-K").setDesc("\u6BCF\u65E5\u6700\u591A\u5C55\u793A\u7684\u70ED\u5EA6\u8BBA\u6587\u6570 | Max number of trending papers to include per day").addSlider((slider) => slider.setLimits(1, 20, 1).setValue(this.plugin.settings.trending.topK).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.trending.topK = value;
-      await this.plugin.saveSettings();
-    }));
     containerEl.createEl("h2", { text: "HuggingFace \u8BBA\u6587\u6E90 / HuggingFace Papers" });
     containerEl.createEl("p", {
       text: "\u4ECE huggingface.co/papers \u6293\u53D6\u6BCF\u65E5\u7CBE\u9009\u8BBA\u6587\u3002HF \u70B9\u8D5E\u6570\u4F5C\u4E3A\u6392\u540D\u9996\u8981\u4FE1\u53F7\uFF0C\u672A\u88AB arXiv \u5173\u952E\u8BCD\u8986\u76D6\u7684\u793E\u533A\u7CBE\u9009\u8BBA\u6587\u4E5F\u4F1A\u81EA\u52A8\u8865\u5145\u8FDB\u6765 | Fetch daily featured papers from huggingface.co/papers. HF upvotes are the primary ranking signal; community picks outside your arXiv filters are added automatically.",
@@ -2447,69 +2422,6 @@ function rankPapers(papers, interestKeywords, directions, directionTopK) {
   return scored.map(({ _rankScore: _r, ...paper }) => paper);
 }
 
-// src/scoring/hotness.ts
-function extractVersion(paperId) {
-  const m = paperId.match(/v(\d+)$/i);
-  return m ? parseInt(m[1], 10) : 1;
-}
-function hoursSincePublished(paper) {
-  const dateStr = paper.published || paper.updated;
-  if (!dateStr)
-    return 9999;
-  const d = new Date(dateStr);
-  return (Date.now() - d.getTime()) / (1e3 * 3600);
-}
-function computeHotness(paper) {
-  var _a2;
-  let score = 0;
-  const reasons = [];
-  const version = extractVersion(paper.id);
-  if (version >= 4) {
-    score += 3;
-    reasons.push(`v${version} (heavily revised)`);
-  } else if (version === 3) {
-    score += 2;
-    reasons.push(`v${version} (revised twice)`);
-  } else if (version === 2) {
-    score += 1;
-    reasons.push(`v${version} (revised once)`);
-  }
-  const uniqueCats = new Set(paper.categories).size;
-  if (uniqueCats >= 4) {
-    score += 3;
-    reasons.push(`${uniqueCats} categories (broad impact)`);
-  } else if (uniqueCats === 3) {
-    score += 2;
-    reasons.push(`${uniqueCats} categories`);
-  } else if (uniqueCats === 2) {
-    score += 1;
-    reasons.push(`${uniqueCats} categories`);
-  }
-  const hours = hoursSincePublished(paper);
-  if (hours <= 24) {
-    score += 3;
-    reasons.push("published <24h ago");
-  } else if (hours <= 48) {
-    score += 2;
-    reasons.push("published <48h ago");
-  } else if (hours <= 72) {
-    score += 1;
-    reasons.push("published <72h ago");
-  }
-  const upvotes = (_a2 = paper.hfUpvotes) != null ? _a2 : 0;
-  if (upvotes >= 21) {
-    score += 3;
-    reasons.push(`${upvotes} HF upvotes`);
-  } else if (upvotes >= 6) {
-    score += 2;
-    reasons.push(`${upvotes} HF upvotes`);
-  } else if (upvotes >= 1) {
-    score += 1;
-    reasons.push(`${upvotes} HF upvotes`);
-  }
-  return { score, reasons };
-}
-
 // src/storage/paperDownloader.ts
 var import_obsidian5 = require("obsidian");
 function sleep(ms) {
@@ -2568,25 +2480,6 @@ async function downloadPapersForDay(app, papers, settings, log) {
     await downloadOne(app, paper, settings.rootFolder, log);
   }
   log(`Step DOWNLOAD: done`);
-}
-async function readPaperPdfAsBase64(app, rootFolder, paperId) {
-  const arxivId = paperId.replace(/^arxiv:/i, "");
-  const filename = arxivId.replace(/[/\\:*?"<>|]/g, "_");
-  const pdfPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/pdf/${filename}.pdf`);
-  const abstractFile = app.vault.getAbstractFileByPath(pdfPath);
-  if (!(abstractFile instanceof import_obsidian5.TFile))
-    return null;
-  try {
-    const buffer = await app.vault.readBinary(abstractFile);
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    bytes.forEach((b) => {
-      binary += String.fromCharCode(b);
-    });
-    return btoa(binary);
-  } catch (e) {
-    return null;
-  }
 }
 
 // src/sources/ar5ivFetcher.ts
@@ -5977,8 +5870,8 @@ function formatTopDirections(papers, topK) {
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
-function buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, aiDigest, activeSources, error) {
-  var _a2, _b, _c;
+function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, error) {
+  var _a2;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -6001,7 +5894,7 @@ ${aiDigest}`;
   const arxivTopK = (_a2 = settings.arxivDetailTopK) != null ? _a2 : 10;
   const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
   const arxivDetailedLines = arxivTopPapers.map((p, i) => {
-    var _a3, _b2;
+    var _a3, _b;
     const links = [];
     if (p.links.html)
       links.push(`[arXiv](${p.links.html})`);
@@ -6010,7 +5903,7 @@ ${aiDigest}`;
     if (p.links.hf)
       links.push(`[HF](${p.links.hf})`);
     const dirStr = ((_a3 = p.topDirections) != null ? _a3 : []).slice(0, 2).join(", ") || "_none_";
-    const hitsStr = ((_b2 = p.interestHits) != null ? _b2 : []).slice(0, 3).join(", ") || "_none_";
+    const hitsStr = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "_none_";
     const hfBadge = p.links.hf ? ` \u{1F917} HF${p.hfUpvotes ? ` ${p.hfUpvotes}\u2191` : ""}` : "";
     const scoreStr = p.llmScore != null ? ` \u2B50 ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
     const summaryLine = p.llmSummary ? `
@@ -6025,7 +5918,7 @@ ${aiDigest}`;
 
 ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b2, _c2;
+    var _a3, _b, _c;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -6036,8 +5929,8 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
       linkParts.push(`[PDF](${p.links.pdf})`);
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
-    const dirs = ((_b2 = p.topDirections) != null ? _b2 : []).slice(0, 2).join(", ") || "-";
-    const hits = ((_c2 = p.interestHits) != null ? _c2 : []).slice(0, 3).join(", ") || "-";
+    const dirs = ((_b = p.topDirections) != null ? _b : []).slice(0, 2).join(", ") || "-";
+    const hits = ((_c = p.interestHits) != null ? _c : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
   });
   const allPapersTableSection = [
@@ -6047,34 +5940,6 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
     "|---|-------|-------|-------|---------|------------|------|",
     ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | | |"]
   ].join("\n");
-  let trendingSection = "";
-  if (trendingPapers.length > 0) {
-    const trendingMode = (_c = (_b = settings.trending) == null ? void 0 : _b.mode) != null ? _c : "heuristic";
-    const trendingDesc = trendingMode === "llm" ? "These papers were identified by LLM as noteworthy among papers not matched by interest keywords." : "These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).";
-    const trendingLines = trendingPapers.map((t, i) => {
-      const links = [];
-      if (t.paper.links.html)
-        links.push(`[arXiv](${t.paper.links.html})`);
-      if (settings.includePdfLink && t.paper.links.pdf)
-        links.push(`[PDF](${t.paper.links.pdf})`);
-      if (t.paper.links.hf)
-        links.push(`[HF](${t.paper.links.hf})`);
-      const summaryLine = t.llmSummary ? `
-   > ${t.llmSummary}` : "";
-      const hotnessLine = t.reasons.length > 0 ? `Hotness: ${t.hotness.toFixed(0)} \u2014 ${t.reasons.join(", ")}` : `LLM score: ${t.hotness.toFixed(0)}/10`;
-      return [
-        `${i + 1}. **${t.paper.title}**${summaryLine}`,
-        `   - ${hotnessLine}`,
-        `   - Categories: ${t.paper.categories.join(", ")}`,
-        `   - Links: ${links.join(", ")} | Authors: ${t.paper.authors.slice(0, 3).join(", ")}${t.paper.authors.length > 3 ? " et al." : ""}`
-      ].join("\n");
-    });
-    trendingSection = `## Trending Papers
-
-> ${trendingDesc}
-
-${trendingLines.join("\n\n")}`;
-  }
   const sections = [
     frontmatter,
     "",
@@ -6087,12 +5952,10 @@ ${trendingLines.join("\n\n")}`;
     arxivDetailedSection
   ];
   sections.push("", allPapersTableSection);
-  if (trendingSection)
-    sections.push("", trendingSection);
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -6288,129 +6151,13 @@ ${JSON.stringify(papersForScoring)}`;
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
-  const trendingPapers = [];
-  if (((_l = settings.trending) == null ? void 0 : _l.enabled) && papers.length > 0) {
-    const rankedIds = new Set(rankedPapers.map((p) => p.id));
-    const unranked = papers.filter((p) => !rankedIds.has(p.id));
-    const trendingMode = (_m = settings.trending.mode) != null ? _m : "heuristic";
-    const topK = (_n = settings.trending.topK) != null ? _n : 5;
-    if (trendingMode === "heuristic") {
-      const scored = unranked.map((p) => {
-        const h = computeHotness(p);
-        return { paper: p, hotness: h.score, reasons: h.reasons };
-      });
-      scored.sort((a, b) => b.hotness - a.hotness);
-      trendingPapers.push(...scored.slice(0, topK));
-      log(`Step 3c TRENDING (heuristic): ${unranked.length} unranked \u2192 ${trendingPapers.length} trending`);
-    } else {
-      if (settings.llm.apiKey && unranked.length > 0) {
-        try {
-          const llm = buildLLMProvider(settings);
-          const papersForTrending = unranked.slice(0, 40).map((p) => ({
-            id: p.id,
-            title: p.title,
-            abstract: p.abstract.slice(0, 300)
-          }));
-          const trendingPrompt = `From the following papers (which did NOT match the user's interest keywords), identify the ${topK} most noteworthy or trending ones based purely on research quality, novelty, and potential impact suggested by the abstract.
-
-Return ONLY a valid JSON array (no markdown fence):
-[{"id":"arxiv:...","score":8,"summary":"2-3 sentence detailed summary of contribution and significance"},...]
-
-Papers:
-${JSON.stringify(papersForTrending)}`;
-          const result = await llm.generate({ prompt: trendingPrompt, temperature: 0.1, maxTokens: 2048 });
-          const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const scored = JSON.parse(jsonMatch[0]);
-            scored.sort((a, b) => b.score - a.score);
-            for (const s of scored.slice(0, topK)) {
-              const paper = unranked.find((p) => p.id === s.id);
-              if (paper) {
-                trendingPapers.push({ paper, hotness: s.score, reasons: [], llmSummary: s.summary });
-              }
-            }
-            log(`Step 3c TRENDING (llm): ${unranked.length} unranked \u2192 ${trendingPapers.length} trending`);
-          } else {
-            log(`Step 3c TRENDING (llm): could not parse JSON response`);
-          }
-        } catch (err) {
-          log(`Step 3c TRENDING LLM ERROR: ${String(err)} (non-fatal)`);
-        }
-      } else {
-        log(`Step 3c TRENDING (llm): skipped (${unranked.length === 0 ? "0 unranked" : "no API key"})`);
-      }
-    }
-  } else {
-    log(`Step 3c TRENDING: skipped (enabled=${(_o = settings.trending) == null ? void 0 : _o.enabled})`);
-  }
-  const allForDownload = [...rankedPapers, ...trendingPapers.map((t) => t.paper)];
-  if (allForDownload.length > 0) {
-    await downloadPapersForDay(app, allForDownload, settings, log);
-  }
-  const trendingModeForSummary = (_q = (_p = settings.trending) == null ? void 0 : _p.mode) != null ? _q : "heuristic";
-  if (trendingPapers.length > 0 && settings.llm.apiKey && trendingModeForSummary === "heuristic") {
-    try {
-      const llm = buildLLMProvider(settings);
-      const needsBatchSummary = [];
-      for (const t of trendingPapers) {
-        if (settings.llm.provider === "anthropic" && ((_r = settings.paperDownload) == null ? void 0 : _r.savePdf)) {
-          const pdfBase64 = await readPaperPdfAsBase64(app, settings.rootFolder, t.paper.id);
-          if (pdfBase64) {
-            try {
-              const result = await llm.generate({
-                prompt: `Write a 2-3 sentence summary of this paper's key contribution and significance.`,
-                pdfBase64,
-                temperature: 0.2,
-                maxTokens: 256
-              });
-              t.llmSummary = result.text.trim();
-              log(`Step 3e TRENDING SUMMARY (pdf): ${t.paper.id}`);
-            } catch (err) {
-              log(`Step 3e TRENDING SUMMARY PDF ERROR: ${t.paper.id}: ${String(err)}`);
-              needsBatchSummary.push(t);
-            }
-            continue;
-          }
-        }
-        needsBatchSummary.push(t);
-      }
-      if (needsBatchSummary.length > 0) {
-        const papersForSummary = needsBatchSummary.map((t) => ({
-          id: t.paper.id,
-          title: t.paper.title,
-          abstract: t.paper.abstract.slice(0, 400),
-          hotness_reasons: t.reasons
-        }));
-        const summaryPrompt = `Write a 2-3 sentence detailed summary for each paper focusing on the key contribution and why it's significant. These papers are flagged as trending based on external signals (revisions, cross-listing, recency, upvotes), not keyword match.
-
-Return ONLY a valid JSON array (no markdown fence):
-[{"id":"arxiv:...","summary":"detailed 2-3 sentence summary"},...]
-
-Papers:
-${JSON.stringify(papersForSummary)}`;
-        const result = await llm.generate({ prompt: summaryPrompt, temperature: 0.2, maxTokens: 1024 });
-        const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const summaries = JSON.parse(jsonMatch[0]);
-          const sumMap = new Map(summaries.map((s) => [s.id, s.summary]));
-          for (const t of needsBatchSummary) {
-            const s = sumMap.get(t.paper.id);
-            if (s)
-              t.llmSummary = s;
-          }
-          log(`Step 3e TRENDING SUMMARY (batch): generated ${summaries.length}/${needsBatchSummary.length} summaries`);
-        } else {
-          log(`Step 3e TRENDING SUMMARY: could not parse JSON`);
-        }
-      }
-    } catch (err) {
-      log(`Step 3e TRENDING SUMMARY ERROR: ${String(err)} (non-fatal)`);
-    }
+  if (rankedPapers.length > 0) {
+    await downloadPapersForDay(app, rankedPapers, settings, log);
   }
   let fulltextSection = "";
-  if (((_s = settings.deepRead) == null ? void 0 : _s.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_t = settings.deepRead.topN) != null ? _t : 5, rankedPapers.length);
-    const maxChars = (_u = settings.deepRead.maxCharsPerPaper) != null ? _u : 8e3;
+  if (((_l = settings.deepRead) == null ? void 0 : _l.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_m = settings.deepRead.topN) != null ? _m : 5, rankedPapers.length);
+    const maxChars = (_n = settings.deepRead.maxCharsPerPaper) != null ? _n : 8e3;
     const parts = [];
     for (let i = 0; i < topN; i++) {
       const paper = rankedPapers[i];
@@ -6436,7 +6183,7 @@ ${parts.join("\n\n---\n\n")}`;
     }
     log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
   } else {
-    log(`Step 3f FULLTEXT: skipped (enabled=${(_w = (_v = settings.deepRead) == null ? void 0 : _v.enabled) != null ? _w : false})`);
+    log(`Step 3f FULLTEXT: skipped (enabled=${(_p = (_o = settings.deepRead) == null ? void 0 : _o.enabled) != null ? _p : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F916} \u751F\u6210\u6458\u8981... (${settings.llm.model})`);
@@ -6498,7 +6245,7 @@ ${parts.join("\n\n---\n\n")}`;
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   progress(`[5/5] \u{1F4BE} \u5199\u5165\u6587\u4EF6...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
@@ -6644,7 +6391,6 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
-    this.settings.trending = Object.assign({}, DEFAULT_SETTINGS.trending, this.settings.trending);
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
     this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
     this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);

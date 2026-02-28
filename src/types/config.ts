@@ -67,13 +67,6 @@ export interface PaperDailySettings {
   // Backfill
   backfillMaxDays: number;
 
-  // Trending (zero-score papers with high hotness)
-  trending: {
-    enabled: boolean;
-    mode: "heuristic" | "llm"; // heuristic: signal-based scoring; llm: LLM scores abstracts
-    topK: number;              // how many trending papers to include
-  };
-
   // HuggingFace Papers source
   hfSource: {
     enabled: boolean;

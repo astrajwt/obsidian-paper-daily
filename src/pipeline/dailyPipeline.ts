@@ -9,7 +9,6 @@ import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
-import { computeHotness } from "../scoring/hotness";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
 import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
@@ -85,7 +84,6 @@ function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
   rankedPapers: Paper[],
-  trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[]; llmSummary?: string }>,
   aiDigest: string,
   activeSources: string[],
   error?: string
@@ -161,36 +159,9 @@ function buildDailyMarkdown(
     ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | | |"])
   ].join("\n");
 
-  // ── Trending Section ──────────────────────────────────────────
-  let trendingSection = "";
-  if (trendingPapers.length > 0) {
-    const trendingMode = settings.trending?.mode ?? "heuristic";
-    const trendingDesc = trendingMode === "llm"
-      ? "These papers were identified by LLM as noteworthy among papers not matched by interest keywords."
-      : "These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).";
-    const trendingLines = trendingPapers.map((t, i) => {
-      const links: string[] = [];
-      if (t.paper.links.html) links.push(`[arXiv](${t.paper.links.html})`);
-      if (settings.includePdfLink && t.paper.links.pdf) links.push(`[PDF](${t.paper.links.pdf})`);
-      if (t.paper.links.hf) links.push(`[HF](${t.paper.links.hf})`);
-      const summaryLine = t.llmSummary ? `\n   > ${t.llmSummary}` : "";
-      const hotnessLine = t.reasons.length > 0
-        ? `Hotness: ${t.hotness.toFixed(0)} — ${t.reasons.join(", ")}`
-        : `LLM score: ${t.hotness.toFixed(0)}/10`;
-      return [
-        `${i + 1}. **${t.paper.title}**${summaryLine}`,
-        `   - ${hotnessLine}`,
-        `   - Categories: ${t.paper.categories.join(", ")}`,
-        `   - Links: ${links.join(", ")} | Authors: ${t.paper.authors.slice(0, 3).join(", ")}${t.paper.authors.length > 3 ? " et al." : ""}`
-      ].join("\n");
-    });
-    trendingSection = `## Trending Papers\n\n> ${trendingDesc}\n\n${trendingLines.join("\n\n")}`;
-  }
-
   const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection,
     "", arxivDetailedSection];
   sections.push("", allPapersTableSection);
-  if (trendingSection) sections.push("", trendingSection);
   return sections.join("\n");
 }
 
@@ -429,137 +400,9 @@ ${JSON.stringify(papersForScoring)}`;
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
 
-  // ── Step 3c: Trending (papers not matched by keywords) ──────────
-  const trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[]; llmSummary?: string }> = [];
-  if (settings.trending?.enabled && papers.length > 0) {
-    const rankedIds = new Set(rankedPapers.map(p => p.id));
-    const unranked = papers.filter(p => !rankedIds.has(p.id));
-    const trendingMode = settings.trending.mode ?? "heuristic";
-    const topK = settings.trending.topK ?? 5;
-
-    if (trendingMode === "heuristic") {
-      const scored = unranked.map(p => {
-        const h = computeHotness(p);
-        return { paper: p, hotness: h.score, reasons: h.reasons };
-      });
-      scored.sort((a, b) => b.hotness - a.hotness);
-      trendingPapers.push(...scored.slice(0, topK));
-      log(`Step 3c TRENDING (heuristic): ${unranked.length} unranked → ${trendingPapers.length} trending`);
-    } else {
-      // LLM mode: ask LLM to score unranked papers by abstract quality and novelty
-      if (settings.llm.apiKey && unranked.length > 0) {
-        try {
-          const llm = buildLLMProvider(settings);
-          const papersForTrending = unranked.slice(0, 40).map(p => ({
-            id: p.id,
-            title: p.title,
-            abstract: p.abstract.slice(0, 300)
-          }));
-          const trendingPrompt = `From the following papers (which did NOT match the user's interest keywords), identify the ${topK} most noteworthy or trending ones based purely on research quality, novelty, and potential impact suggested by the abstract.
-
-Return ONLY a valid JSON array (no markdown fence):
-[{"id":"arxiv:...","score":8,"summary":"2-3 sentence detailed summary of contribution and significance"},...]
-
-Papers:
-${JSON.stringify(papersForTrending)}`;
-          const result = await llm.generate({ prompt: trendingPrompt, temperature: 0.1, maxTokens: 2048 });
-          const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const scored: Array<{ id: string; score: number; summary: string }> = JSON.parse(jsonMatch[0]);
-            scored.sort((a, b) => b.score - a.score);
-            for (const s of scored.slice(0, topK)) {
-              const paper = unranked.find(p => p.id === s.id);
-              if (paper) {
-                trendingPapers.push({ paper, hotness: s.score, reasons: [], llmSummary: s.summary });
-              }
-            }
-            log(`Step 3c TRENDING (llm): ${unranked.length} unranked → ${trendingPapers.length} trending`);
-          } else {
-            log(`Step 3c TRENDING (llm): could not parse JSON response`);
-          }
-        } catch (err) {
-          log(`Step 3c TRENDING LLM ERROR: ${String(err)} (non-fatal)`);
-        }
-      } else {
-        log(`Step 3c TRENDING (llm): skipped (${unranked.length === 0 ? "0 unranked" : "no API key"})`);
-      }
-    }
-  } else {
-    log(`Step 3c TRENDING: skipped (enabled=${settings.trending?.enabled})`);
-  }
-
-  // ── Step 3d: Download full text (ranked + trending) ───────────
-  const allForDownload = [...rankedPapers, ...trendingPapers.map(t => t.paper)];
-  if (allForDownload.length > 0) {
-    await downloadPapersForDay(app, allForDownload, settings, log);
-  }
-
-  // ── Step 3e: Trending summaries (heuristic mode only) ─────────
-  // LLM mode already generates summaries in Step 3c.
-  // For heuristic mode, do a single batch call. If provider is Anthropic and PDF is
-  // available for a paper, pass the PDF directly for a richer individual summary.
-  const trendingModeForSummary = settings.trending?.mode ?? "heuristic";
-  if (trendingPapers.length > 0 && settings.llm.apiKey && trendingModeForSummary === "heuristic") {
-    try {
-      const llm = buildLLMProvider(settings);
-
-      // Try PDF-based individual summaries for Anthropic; collect the rest for batch
-      const needsBatchSummary: typeof trendingPapers = [];
-      for (const t of trendingPapers) {
-        if (settings.llm.provider === "anthropic" && settings.paperDownload?.savePdf) {
-          const pdfBase64 = await readPaperPdfAsBase64(app, settings.rootFolder, t.paper.id);
-          if (pdfBase64) {
-            try {
-              const result = await llm.generate({
-                prompt: `Write a 2-3 sentence summary of this paper's key contribution and significance.`,
-                pdfBase64,
-                temperature: 0.2,
-                maxTokens: 256
-              });
-              t.llmSummary = result.text.trim();
-              log(`Step 3e TRENDING SUMMARY (pdf): ${t.paper.id}`);
-            } catch (err) {
-              log(`Step 3e TRENDING SUMMARY PDF ERROR: ${t.paper.id}: ${String(err)}`);
-              needsBatchSummary.push(t);
-            }
-            continue;
-          }
-        }
-        needsBatchSummary.push(t);
-      }
-
-      // Batch abstract-based summaries for remaining papers
-      if (needsBatchSummary.length > 0) {
-        const papersForSummary = needsBatchSummary.map(t => ({
-          id: t.paper.id,
-          title: t.paper.title,
-          abstract: t.paper.abstract.slice(0, 400),
-          hotness_reasons: t.reasons
-        }));
-        const summaryPrompt = `Write a 2-3 sentence detailed summary for each paper focusing on the key contribution and why it's significant. These papers are flagged as trending based on external signals (revisions, cross-listing, recency, upvotes), not keyword match.
-
-Return ONLY a valid JSON array (no markdown fence):
-[{"id":"arxiv:...","summary":"detailed 2-3 sentence summary"},...]
-
-Papers:
-${JSON.stringify(papersForSummary)}`;
-        const result = await llm.generate({ prompt: summaryPrompt, temperature: 0.2, maxTokens: 1024 });
-        const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const summaries: Array<{ id: string; summary: string }> = JSON.parse(jsonMatch[0]);
-          const sumMap = new Map(summaries.map(s => [s.id, s.summary]));
-          for (const t of needsBatchSummary) {
-            const s = sumMap.get(t.paper.id);
-            if (s) t.llmSummary = s;
-          }
-          log(`Step 3e TRENDING SUMMARY (batch): generated ${summaries.length}/${needsBatchSummary.length} summaries`);
-        } else {
-          log(`Step 3e TRENDING SUMMARY: could not parse JSON`);
-        }
-      }
-    } catch (err) {
-      log(`Step 3e TRENDING SUMMARY ERROR: ${String(err)} (non-fatal)`);
-    }
+  // ── Step 3d: Download full text (ranked papers) ───────────────
+  if (rankedPapers.length > 0) {
+    await downloadPapersForDay(app, rankedPapers, settings, log);
   }
 
   // ── Step 3f: Full-text fetch for top-N papers (Deep Read) ─────
@@ -647,7 +490,7 @@ ${JSON.stringify(papersForSummary)}`;
 
   progress(`[5/5] 💾 写入文件...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

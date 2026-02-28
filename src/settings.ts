@@ -1322,12 +1322,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   backfillMaxDays: 30,
 
-  trending: {
-    enabled: true,
-    mode: "heuristic" as "heuristic" | "llm",
-    topK: 5
-  },
-
   hfSource: {
     enabled: true,
     lookbackDays: 3,
@@ -1972,47 +1966,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
             }
           });
       });
-
-    // ── Trending ──────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "热度论文 / Trending Papers" });
-    containerEl.createEl("p", {
-      text: "将未命中任何关键词但热度较高的论文也纳入摘要。热度 = 版本修订次数 + 跨领域分类数 + 发布时间 + HF 点赞数 | Include high-hotness papers even if they don't match any keyword. Hotness = revision version + cross-listing + recency + HF upvotes.",
-      cls: "setting-item-description"
-    });
-
-    new Setting(containerEl)
-      .setName("开启热度模式 / Enable Trending Mode")
-      .setDesc("在摘要末尾附加热度论文板块 | Append a Trending section with papers not matched by keywords")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.trending.enabled)
-        .onChange(async (value) => {
-          this.plugin.settings.trending.enabled = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("热度检测模式 / Trending Detection Mode")
-      .setDesc("heuristic：基于版本修订 / 多分类 / 时效 / HF 赞数打分 | llm：大模型对摘要打分并生成详细摘要")
-      .addDropdown(drop => drop
-        .addOption("heuristic", "Heuristic（启发式）")
-        .addOption("llm", "LLM（大模型打分）")
-        .setValue(this.plugin.settings.trending.mode ?? "heuristic")
-        .onChange(async (value) => {
-          this.plugin.settings.trending.mode = value as "heuristic" | "llm";
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("热度论文数 Top-K / Trending Top-K")
-      .setDesc("每日最多展示的热度论文数 | Max number of trending papers to include per day")
-      .addSlider(slider => slider
-        .setLimits(1, 20, 1)
-        .setValue(this.plugin.settings.trending.topK)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.trending.topK = value;
-          await this.plugin.saveSettings();
-        }));
 
     // ── HuggingFace Papers ────────────────────────────────────────
     containerEl.createEl("h2", { text: "HuggingFace 论文源 / HuggingFace Papers" });
