@@ -5,8 +5,6 @@ export interface LLMInput {
   maxTokens?: number;
   /** Base64-encoded PDF content. Supported by Anthropic provider only. */
   pdfBase64?: string;
-  /** PDF URLs to attach as document blocks. Supported by Anthropic provider only; ignored elsewhere. */
-  pdfUrls?: string[];
 }
 
 export interface LLMUsage {
