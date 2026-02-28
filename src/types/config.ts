@@ -64,4 +64,9 @@ export interface PaperDailySettings {
     topK: number;       // how many trending papers to include
     minHotness: number; // minimum hotness score to qualify
   };
+
+  // HuggingFace Papers source
+  hfSource: {
+    enabled: boolean;
+  };
 }

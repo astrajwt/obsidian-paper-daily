@@ -1,4 +1,4 @@
-export type PaperSource = "arxiv" | "rss" | "custom";
+export type PaperSource = "arxiv" | "rss" | "custom" | "hf";
 
 export interface Paper {
   id: string;               // e.g. "arxiv:2501.12345v2"
@@ -10,6 +10,9 @@ export interface Paper {
   updated: string;          // ISO
   links: { html?: string; pdf?: string };
   source: PaperSource;
+
+  // HuggingFace enrichment
+  hfUpvotes?: number;
 
   // computed fields
   interestHits?: string[];

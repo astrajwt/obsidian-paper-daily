@@ -6,6 +6,7 @@ import { StateStore } from "../storage/stateStore";
 import { DedupStore } from "../storage/dedupStore";
 import { SnapshotStore } from "../storage/snapshotStore";
 import { ArxivSource } from "../sources/arxivSource";
+import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
 import { computeHotness } from "../scoring/hotness";
@@ -49,13 +50,14 @@ function buildDailyMarkdown(
   trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }>,
   aiDigest: string,
   relatedNotesMap: Map<string, string[]>,
+  activeSources: string[],
   error?: string
 ): string {
   const frontmatter = [
     "---",
     "type: paper-daily",
     `date: ${date}`,
-    "sources: [arxiv]",
+    `sources: [${activeSources.join(", ")}]`,
     `categories: [${settings.categories.join(", ")}]`,
     `keywords: [${settings.keywords.join(", ")}]`,
     `interestKeywords: [${settings.interestKeywords.join(", ")}]`,
@@ -86,8 +88,9 @@ function buildDailyMarkdown(
     if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
     const linksStr = linksArr.join(", ");
     const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+    const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
     return [
-      `${i + 1}. **${p.title}**`,
+      `${i + 1}. **${p.title}**${upvoteStr}`,
       `   - Directions: ${dirStr}`,
       `   - Interest hits: ${hitsStr}`,
       settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
@@ -105,12 +108,13 @@ function buildDailyMarkdown(
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
     const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ");
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ");
-    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${dirStr} | ${hitsStr} | ${links.join(" ")} |`;
+    const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
+    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
   });
   const allPapersSection = [
     "## All Papers (raw)",
-    "| Title | Updated | Directions | Interest Hits | Links |",
-    "|-------|---------|------------|---------------|-------|",
+    "| Title | Updated | Directions | Interest Hits | HF ↑ | Links |",
+    "|-------|---------|------------|---------------|------|-------|",
     ...allPapersRows
   ].join("\n");
 
@@ -175,8 +179,9 @@ export async function runDailyPipeline(
   let fetchError: string | undefined;
   let llmDigest = "";
   let llmError: string | undefined;
+  const activeSources: string[] = [];
 
-  // ── Step 1: Fetch ─────────────────────────────────────────────
+  // ── Step 1: Fetch arXiv ───────────────────────────────────────
   let fetchUrl = "";
   try {
     const source = new ArxivSource();
@@ -199,11 +204,57 @@ export async function runDailyPipeline(
     log(`Step 1 FETCH: got ${papers.length} papers`);
     if (papers.length > 0) {
       log(`Step 1 FETCH: first="${papers[0].title.slice(0, 80)}" published=${papers[0].published.slice(0, 10)}`);
+      activeSources.push("arxiv");
     }
   } catch (err) {
     fetchError = String(err);
     log(`Step 1 FETCH ERROR: ${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
+  }
+
+  // ── Step 1b: Fetch HuggingFace Papers ─────────────────────────
+  if (settings.hfSource?.enabled !== false) {
+    try {
+      const hfSource = new HFSource();
+      const hfPapers = await hfSource.fetchForDate(date);
+      log(`Step 1b HF FETCH: got ${hfPapers.length} papers for date=${date}`);
+
+      if (hfPapers.length > 0) {
+        activeSources.push("huggingface");
+
+        // Build lookup: base arXiv ID (no version) → HF upvotes
+        // Our arXiv IDs look like "arxiv:2502.12345v1", HF IDs like "arxiv:2502.12345"
+        const hfUpvoteMap = new Map<string, number>();
+        const hfById = new Map<string, Paper>();
+        for (const hfp of hfPapers) {
+          hfUpvoteMap.set(hfp.id, hfp.hfUpvotes ?? 0);
+          hfById.set(hfp.id, hfp);
+        }
+
+        // Enrich arXiv papers with upvotes
+        const enrichedIds = new Set<string>();
+        for (const p of papers) {
+          const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
+          if (hfUpvoteMap.has(baseId)) {
+            p.hfUpvotes = hfUpvoteMap.get(baseId);
+            enrichedIds.add(baseId);
+          }
+        }
+        log(`Step 1b HF FETCH: enriched ${enrichedIds.size} arXiv papers with upvotes`);
+
+        // Add HF-only papers (not found in arXiv results) to the pool
+        for (const hfp of hfPapers) {
+          if (!enrichedIds.has(hfp.id)) {
+            papers.push(hfp);
+          }
+        }
+        log(`Step 1b HF FETCH: added ${hfPapers.length - enrichedIds.size} HF-only papers to pool`);
+      }
+    } catch (err) {
+      log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
+    }
+  } else {
+    log(`Step 1b HF FETCH: skipped (disabled)`);
   }
 
   // ── Step 2: Dedup ─────────────────────────────────────────────
@@ -308,7 +359,7 @@ export async function runDailyPipeline(
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, relatedNotesMap, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, relatedNotesMap, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

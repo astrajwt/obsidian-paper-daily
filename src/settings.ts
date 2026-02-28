@@ -222,6 +222,10 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     enabled: true,
     topK: 5,
     minHotness: 2
+  },
+
+  hfSource: {
+    enabled: true
   }
 };
 
@@ -795,6 +799,23 @@ export class PaperDailySettingTab extends PluginSettingTab {
           } finally {
             btn.setButtonText("Rebuild Index").setDisabled(false);
           }
+        }));
+
+    // ── HuggingFace Papers ────────────────────────────────────────
+    containerEl.createEl("h2", { text: "HuggingFace Papers" });
+    containerEl.createEl("p", {
+      text: "Fetch today's featured papers from huggingface.co/papers. Papers are community-curated with upvote counts. Upvotes boost hotness scoring and papers not in your arXiv results are added as a bonus source.",
+      cls: "setting-item-description"
+    });
+
+    new Setting(containerEl)
+      .setName("Enable HuggingFace Source")
+      .setDesc("Fetch HF daily papers and merge upvotes into scoring")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.hfSource?.enabled ?? true)
+        .onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+          await this.plugin.saveSettings();
         }));
 
     // ── Backfill ──────────────────────────────────────────────────

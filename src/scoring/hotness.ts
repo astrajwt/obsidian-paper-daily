@@ -60,5 +60,18 @@ export function computeHotness(paper: Paper): HotnessScore {
     reasons.push("published <72h ago");
   }
 
+  // ── HuggingFace upvotes ───────────────────────────────────────
+  const upvotes = paper.hfUpvotes ?? 0;
+  if (upvotes >= 21) {
+    score += 3;
+    reasons.push(`${upvotes} HF upvotes`);
+  } else if (upvotes >= 6) {
+    score += 2;
+    reasons.push(`${upvotes} HF upvotes`);
+  } else if (upvotes >= 1) {
+    score += 1;
+    reasons.push(`${upvotes} HF upvotes`);
+  }
+
   return { score, reasons };
 }
