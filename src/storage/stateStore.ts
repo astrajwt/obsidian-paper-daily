@@ -9,8 +9,6 @@ export class StateStore {
     this.path = `${rootFolder}/cache/state.json`;
     this.state = {
       lastDailyRun: "",
-      lastWeeklyRun: "",
-      lastMonthlyRun: "",
       lastError: null
     };
   }
@@ -36,16 +34,6 @@ export class StateStore {
 
   async setLastDailyRun(iso: string): Promise<void> {
     this.state.lastDailyRun = iso;
-    await this.save();
-  }
-
-  async setLastWeeklyRun(iso: string): Promise<void> {
-    this.state.lastWeeklyRun = iso;
-    await this.save();
-  }
-
-  async setLastMonthlyRun(iso: string): Promise<void> {
-    this.state.lastMonthlyRun = iso;
     await this.save();
   }
 

@@ -7,8 +7,6 @@ import { DedupStore } from "./storage/dedupStore";
 import { SnapshotStore } from "./storage/snapshotStore";
 import { runDailyPipeline } from "./pipeline/dailyPipeline";
 import { runBackfillPipeline } from "./pipeline/backfillPipeline";
-import { runWeeklyPipeline } from "./pipeline/weeklyPipeline";
-import { runMonthlyPipeline } from "./pipeline/monthlyPipeline";
 import { Scheduler } from "./scheduler/scheduler";
 import { ArxivSource } from "./sources/arxivSource";
 import { VaultLinker } from "./linking/vaultLinker";
@@ -58,9 +56,8 @@ export default class PaperDailyPlugin extends Plugin {
     await this.stateStore.load();
     await this.dedupStore.load();
 
-    // Ensure root folder structure
     const root = this.settings.rootFolder;
-    for (const sub of ["inbox", "weekly", "monthly", "papers", "cache"]) {
+    for (const sub of ["inbox", "papers", "cache"]) {
       await writer.ensureFolder(`${root}/${sub}`);
     }
   }
@@ -71,7 +68,6 @@ export default class PaperDailyPlugin extends Plugin {
       this.settings.vaultLinking.excludeFolders,
       this.settings.vaultLinking.maxLinksPerPaper
     );
-    // Build index in background — don't block plugin load
     if (this.settings.vaultLinking.enabled) {
       this.linker.buildIndex().catch(err =>
         console.warn("[PaperDaily] Vault index build failed:", err)
@@ -92,11 +88,7 @@ export default class PaperDailyPlugin extends Plugin {
     this.scheduler = new Scheduler(
       () => this.settings,
       this.stateStore,
-      {
-        onDaily: () => this.runDaily(),
-        onWeekly: () => this.runWeekly(),
-        onMonthly: () => this.runMonthly()
-      }
+      { onDaily: () => this.runDaily() }
     );
     this.scheduler.start();
   }
@@ -121,34 +113,6 @@ export default class PaperDailyPlugin extends Plugin {
       name: "Backfill daily summaries for date range",
       callback: () => {
         new BackfillModal(this.app, this).open();
-      }
-    });
-
-    this.addCommand({
-      id: "run-weekly-now",
-      name: "Generate weekly report now",
-      callback: async () => {
-        new Notice("Paper Daily: Generating weekly report...");
-        try {
-          await this.runWeekly();
-          new Notice("Paper Daily: Weekly report complete.");
-        } catch (err) {
-          new Notice(`Paper Daily Error: ${String(err)}`);
-        }
-      }
-    });
-
-    this.addCommand({
-      id: "run-monthly-now",
-      name: "Generate monthly report now",
-      callback: async () => {
-        new Notice("Paper Daily: Generating monthly report...");
-        try {
-          await this.runMonthly();
-          new Notice("Paper Daily: Monthly report complete.");
-        } catch (err) {
-          new Notice(`Paper Daily Error: ${String(err)}`);
-        }
       }
     });
 
@@ -185,24 +149,6 @@ export default class PaperDailyPlugin extends Plugin {
       this.dedupStore,
       this.snapshotStore,
       { linker: this.settings.vaultLinking?.enabled ? this.linker : undefined }
-    );
-  }
-
-  async runWeekly(): Promise<void> {
-    await runWeeklyPipeline(
-      this.app,
-      this.settings,
-      this.stateStore,
-      this.snapshotStore
-    );
-  }
-
-  async runMonthly(): Promise<void> {
-    await runMonthlyPipeline(
-      this.app,
-      this.settings,
-      this.stateStore,
-      this.snapshotStore
     );
   }
 

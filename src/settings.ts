@@ -207,11 +207,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   includePdfLink: true,
 
   schedule: {
-    dailyTime: "08:30",
-    weeklyDay: 6,
-    weeklyTime: "18:00",
-    monthlyDay: 1,
-    monthlyTime: "09:00"
+    dailyTime: "08:30"
   },
 
   backfillMaxDays: 30,
@@ -479,12 +475,12 @@ export class PaperDailySettingTab extends PluginSettingTab {
         apiKeyInput = text.inputEl;
         text.inputEl.type = "password";
         text.inputEl.placeholder = PROVIDER_PRESETS[activePreset]?.keyPlaceholder ?? "sk-...";
-        text
-          .setValue(this.plugin.settings.llm.apiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.llm.apiKey = value;
-            await this.plugin.saveSettings();
-          });
+        text.inputEl.value = this.plugin.settings.llm.apiKey;
+        // Use native "input" event — Obsidian's onChange can be unreliable on password fields
+        text.inputEl.addEventListener("input", async () => {
+          this.plugin.settings.llm.apiKey = text.inputEl.value;
+          await this.plugin.saveSettings();
+        });
       });
 
     // ── Model dropdown ───────────────────────────────────────────
@@ -517,7 +513,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
     customModelInput.style.background = "var(--background-primary)";
     customModelInput.style.color = "var(--text-normal)";
     customModelInput.style.fontSize = "0.9em";
-    customModelInput.addEventListener("change", async () => {
+    customModelInput.addEventListener("input", async () => {
       this.plugin.settings.llm.model = customModelInput.value;
       await this.plugin.saveSettings();
     });
@@ -639,51 +635,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
-      .setName("Weekly Report Day")
-      .setDesc("Day of week for weekly report (0=Sun, 6=Sat)")
-      .addSlider(slider => slider
-        .setLimits(0, 6, 1)
-        .setValue(this.plugin.settings.schedule.weeklyDay)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.schedule.weeklyDay = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Weekly Report Time")
-      .setDesc("Time for weekly report (HH:MM)")
-      .addText(text => text
-        .setPlaceholder("18:00")
-        .setValue(this.plugin.settings.schedule.weeklyTime)
-        .onChange(async (value) => {
-          this.plugin.settings.schedule.weeklyTime = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Monthly Report Day")
-      .setDesc("Day of month for monthly report (1-28)")
-      .addSlider(slider => slider
-        .setLimits(1, 28, 1)
-        .setValue(this.plugin.settings.schedule.monthlyDay)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.schedule.monthlyDay = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("Monthly Report Time")
-      .setDesc("Time for monthly report (HH:MM)")
-      .addText(text => text
-        .setPlaceholder("09:00")
-        .setValue(this.plugin.settings.schedule.monthlyTime)
-        .onChange(async (value) => {
-          this.plugin.settings.schedule.monthlyTime = value;
-          await this.plugin.saveSettings();
-        }));
 
     // ── Test ─────────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Test" });

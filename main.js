@@ -222,11 +222,7 @@ var DEFAULT_SETTINGS = {
   includeAbstract: true,
   includePdfLink: true,
   schedule: {
-    dailyTime: "08:30",
-    weeklyDay: 6,
-    weeklyTime: "18:00",
-    monthlyDay: 1,
-    monthlyTime: "09:00"
+    dailyTime: "08:30"
   },
   backfillMaxDays: 30,
   vaultLinking: {
@@ -406,8 +402,9 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       apiKeyInput = text.inputEl;
       text.inputEl.type = "password";
       text.inputEl.placeholder = (_b = (_a2 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a2.keyPlaceholder) != null ? _b : "sk-...";
-      text.setValue(this.plugin.settings.llm.apiKey).onChange(async (value) => {
-        this.plugin.settings.llm.apiKey = value;
+      text.inputEl.value = this.plugin.settings.llm.apiKey;
+      text.inputEl.addEventListener("input", async () => {
+        this.plugin.settings.llm.apiKey = text.inputEl.value;
         await this.plugin.saveSettings();
       });
     });
@@ -435,7 +432,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     customModelInput.style.background = "var(--background-primary)";
     customModelInput.style.color = "var(--text-normal)";
     customModelInput.style.fontSize = "0.9em";
-    customModelInput.addEventListener("change", async () => {
+    customModelInput.addEventListener("input", async () => {
       this.plugin.settings.llm.model = customModelInput.value;
       await this.plugin.saveSettings();
     });
@@ -494,22 +491,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h2", { text: "Scheduling" });
     new import_obsidian.Setting(containerEl).setName("Daily Fetch Time").setDesc("Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
       this.plugin.settings.schedule.dailyTime = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("Weekly Report Day").setDesc("Day of week for weekly report (0=Sun, 6=Sat)").addSlider((slider) => slider.setLimits(0, 6, 1).setValue(this.plugin.settings.schedule.weeklyDay).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.schedule.weeklyDay = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("Weekly Report Time").setDesc("Time for weekly report (HH:MM)").addText((text) => text.setPlaceholder("18:00").setValue(this.plugin.settings.schedule.weeklyTime).onChange(async (value) => {
-      this.plugin.settings.schedule.weeklyTime = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("Monthly Report Day").setDesc("Day of month for monthly report (1-28)").addSlider((slider) => slider.setLimits(1, 28, 1).setValue(this.plugin.settings.schedule.monthlyDay).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.schedule.monthlyDay = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("Monthly Report Time").setDesc("Time for monthly report (HH:MM)").addText((text) => text.setPlaceholder("09:00").setValue(this.plugin.settings.schedule.monthlyTime).onChange(async (value) => {
-      this.plugin.settings.schedule.monthlyTime = value;
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("h2", { text: "Test" });
@@ -697,8 +678,6 @@ var StateStore = class {
     this.path = `${rootFolder}/cache/state.json`;
     this.state = {
       lastDailyRun: "",
-      lastWeeklyRun: "",
-      lastMonthlyRun: "",
       lastError: null
     };
   }
@@ -719,14 +698,6 @@ var StateStore = class {
   }
   async setLastDailyRun(iso) {
     this.state.lastDailyRun = iso;
-    await this.save();
-  }
-  async setLastWeeklyRun(iso) {
-    this.state.lastWeeklyRun = iso;
-    await this.save();
-  }
-  async setLastMonthlyRun(iso) {
-    this.state.lastMonthlyRun = iso;
     await this.save();
   }
   async setLastError(stage, message) {
@@ -4683,198 +4654,6 @@ async function runBackfillPipeline(app, settings, stateStore, dedupStore, snapsh
   return { processed, errors };
 }
 
-// src/pipeline/weeklyPipeline.ts
-function getISOWeek(d) {
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const dayOfYear = Math.floor((d.getTime() - jan1.getTime()) / 864e5);
-  const week = Math.ceil((dayOfYear + jan1.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-function buildLLMProvider2(settings) {
-  if (settings.llm.provider === "anthropic") {
-    return new AnthropicProvider(settings.llm.apiKey, settings.llm.model);
-  }
-  return new OpenAICompatibleProvider(settings.llm.baseUrl, settings.llm.apiKey, settings.llm.model);
-}
-function fillTemplate2(template, vars) {
-  let result = template;
-  for (const [k, v] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-  }
-  return result;
-}
-async function runWeeklyPipeline(app, settings, stateStore, snapshotStore) {
-  const writer = new VaultWriter(app);
-  const now = new Date();
-  const weekStr = getISOWeek(now);
-  const end = now.toISOString().slice(0, 10);
-  const startD = new Date(now);
-  startD.setDate(startD.getDate() - 6);
-  const start = startD.toISOString().slice(0, 10);
-  const snapshots = await snapshotStore.readSnapshotsForRange(start, end);
-  const allPapers = snapshots.flatMap((s) => s.papers);
-  const dirAgg = aggregateDirections(allPapers);
-  const sortedDirs = Object.entries(dirAgg).sort((a, b) => b[1] - a[1]).slice(0, settings.directionTopK);
-  const dirTrendsStr = sortedDirs.length > 0 ? sortedDirs.map(([n, s]) => `- ${n}: ${s.toFixed(1)}`).join("\n") : "No data";
-  let weeklyContent = "";
-  if (allPapers.length === 0) {
-    weeklyContent = `# Weekly Report \u2014 ${weekStr}
-
-_No papers collected this week._`;
-  } else if (!settings.llm.apiKey) {
-    weeklyContent = buildWeeklyMarkdownNoLLM(weekStr, allPapers, dirTrendsStr, settings);
-  } else {
-    try {
-      const llm = buildLLMProvider2(settings);
-      const topPapers = allPapers.slice(0, 20).map((p) => {
-        var _a2, _b;
-        return {
-          title: p.title,
-          categories: p.categories,
-          directions: (_a2 = p.topDirections) != null ? _a2 : [],
-          interestHits: (_b = p.interestHits) != null ? _b : [],
-          date: p.updated.slice(0, 10)
-        };
-      });
-      const prompt = fillTemplate2(settings.llm.weeklyPromptTemplate, {
-        week: weekStr,
-        papers_json: JSON.stringify(topPapers, null, 2),
-        directionTrends: dirTrendsStr,
-        language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
-      });
-      const result = await llm.generate({
-        prompt,
-        temperature: settings.llm.temperature,
-        maxTokens: settings.llm.maxTokens
-      });
-      weeklyContent = `# Weekly Report \u2014 ${weekStr}
-
-${result.text}`;
-    } catch (err) {
-      weeklyContent = buildWeeklyMarkdownNoLLM(weekStr, allPapers, dirTrendsStr, settings);
-      weeklyContent += `
-
-> **LLM Error**: ${String(err)}`;
-    }
-  }
-  const weeklyPath = `${settings.rootFolder}/weekly/${weekStr}.md`;
-  await writer.writeNote(weeklyPath, weeklyContent);
-  await stateStore.setLastWeeklyRun(now.toISOString());
-}
-function buildWeeklyMarkdownNoLLM(weekStr, papers, dirTrends, settings) {
-  const top10 = papers.slice(0, 10);
-  const paperList = top10.map((p, i) => {
-    var _a2;
-    const links = [];
-    if (p.links.html)
-      links.push(`[arXiv](${p.links.html})`);
-    return `${i + 1}. **${p.title}** \u2014 ${((_a2 = p.topDirections) != null ? _a2 : []).join(", ")} \u2014 ${links.join(", ")}`;
-  }).join("\n");
-  return [
-    `# Weekly Report \u2014 ${weekStr}`,
-    "",
-    "## Direction Trends",
-    dirTrends,
-    "",
-    `## Top Papers (${papers.length} total this week)`,
-    paperList || "_No papers_"
-  ].join("\n");
-}
-
-// src/pipeline/monthlyPipeline.ts
-function buildLLMProvider3(settings) {
-  if (settings.llm.provider === "anthropic") {
-    return new AnthropicProvider(settings.llm.apiKey, settings.llm.model);
-  }
-  return new OpenAICompatibleProvider(settings.llm.baseUrl, settings.llm.apiKey, settings.llm.model);
-}
-function fillTemplate3(template, vars) {
-  let result = template;
-  for (const [k, v] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-  }
-  return result;
-}
-async function runMonthlyPipeline(app, settings, stateStore, snapshotStore) {
-  const writer = new VaultWriter(app);
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const monthStr = `${year}-${month}`;
-  const start = `${monthStr}-01`;
-  const end = `${monthStr}-31`;
-  const snapshots = await snapshotStore.readSnapshotsForRange(start, end);
-  const allPapers = snapshots.flatMap((s) => s.papers);
-  const dirAgg = aggregateDirections(allPapers);
-  const sortedDirs = Object.entries(dirAgg).sort((a, b) => b[1] - a[1]).slice(0, settings.directionTopK);
-  const dirEvolutionStr = sortedDirs.length > 0 ? sortedDirs.map(([n, s]) => `- ${n}: ${s.toFixed(1)}`).join("\n") : "No data";
-  let monthlyContent = "";
-  if (allPapers.length === 0) {
-    monthlyContent = `# Monthly Report \u2014 ${monthStr}
-
-_No papers collected this month._`;
-  } else if (!settings.llm.apiKey) {
-    monthlyContent = buildMonthlyMarkdownNoLLM(monthStr, allPapers, dirEvolutionStr, settings);
-  } else {
-    try {
-      const llm = buildLLMProvider3(settings);
-      const topPapers = allPapers.slice(0, 30).map((p) => {
-        var _a2, _b;
-        return {
-          title: p.title,
-          categories: p.categories,
-          directions: (_a2 = p.topDirections) != null ? _a2 : [],
-          interestHits: (_b = p.interestHits) != null ? _b : [],
-          date: p.updated.slice(0, 10)
-        };
-      });
-      const prompt = fillTemplate3(settings.llm.monthlyPromptTemplate, {
-        month: monthStr,
-        papers_json: JSON.stringify(topPapers, null, 2),
-        directionEvolution: dirEvolutionStr,
-        language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
-      });
-      const result = await llm.generate({
-        prompt,
-        temperature: settings.llm.temperature,
-        maxTokens: settings.llm.maxTokens
-      });
-      monthlyContent = `# Monthly Report \u2014 ${monthStr}
-
-${result.text}`;
-    } catch (err) {
-      monthlyContent = buildMonthlyMarkdownNoLLM(monthStr, allPapers, dirEvolutionStr, settings);
-      monthlyContent += `
-
-> **LLM Error**: ${String(err)}`;
-    }
-  }
-  const monthlyPath = `${settings.rootFolder}/monthly/${monthStr}.md`;
-  await writer.writeNote(monthlyPath, monthlyContent);
-  await stateStore.setLastMonthlyRun(now.toISOString());
-}
-function buildMonthlyMarkdownNoLLM(monthStr, papers, dirEvolution, settings) {
-  const top10 = papers.slice(0, 10);
-  const paperList = top10.map((p, i) => {
-    var _a2;
-    const links = [];
-    if (p.links.html)
-      links.push(`[arXiv](${p.links.html})`);
-    return `${i + 1}. **${p.title}** \u2014 ${((_a2 = p.topDirections) != null ? _a2 : []).join(", ")} \u2014 ${links.join(", ")}`;
-  }).join("\n");
-  return [
-    `# Monthly Report \u2014 ${monthStr}`,
-    "",
-    `Total papers collected: ${papers.length}`,
-    "",
-    "## Direction Evolution",
-    dirEvolution,
-    "",
-    "## Monthly Highlights (Top 10)",
-    paperList || "_No papers_"
-  ].join("\n");
-}
-
 // src/scheduler/scheduler.ts
 function parseTime(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
@@ -4882,16 +4661,6 @@ function parseTime(hhmm) {
 }
 function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function isSameWeek(a, b) {
-  const getWeek = (d) => {
-    const jan1 = new Date(d.getFullYear(), 0, 1);
-    return Math.ceil(((d.getTime() - jan1.getTime()) / 864e5 + jan1.getDay() + 1) / 7);
-  };
-  return a.getFullYear() === b.getFullYear() && getWeek(a) === getWeek(b);
-}
-function isSameMonth(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
 var Scheduler = class {
   constructor(getSettings, stateStore, callbacks) {
@@ -4931,20 +4700,6 @@ var Scheduler = class {
       const lastRun = state.lastDailyRun ? new Date(state.lastDailyRun) : null;
       if (!lastRun || !isSameDay(now, lastRun)) {
         await this.callbacks.onDaily();
-      }
-    }
-    const weeklyTime = parseTime(settings.schedule.weeklyTime);
-    if (now.getDay() === settings.schedule.weeklyDay && now.getHours() === weeklyTime.hour && now.getMinutes() === weeklyTime.minute) {
-      const lastRun = state.lastWeeklyRun ? new Date(state.lastWeeklyRun) : null;
-      if (!lastRun || !isSameWeek(now, lastRun)) {
-        await this.callbacks.onWeekly();
-      }
-    }
-    const monthlyTime = parseTime(settings.schedule.monthlyTime);
-    if (now.getDate() === settings.schedule.monthlyDay && now.getHours() === monthlyTime.hour && now.getMinutes() === monthlyTime.minute) {
-      const lastRun = state.lastMonthlyRun ? new Date(state.lastMonthlyRun) : null;
-      if (!lastRun || !isSameMonth(now, lastRun)) {
-        await this.callbacks.onMonthly();
       }
     }
   }
@@ -5088,7 +4843,7 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     await this.stateStore.load();
     await this.dedupStore.load();
     const root = this.settings.rootFolder;
-    for (const sub of ["inbox", "weekly", "monthly", "papers", "cache"]) {
+    for (const sub of ["inbox", "papers", "cache"]) {
       await writer.ensureFolder(`${root}/${sub}`);
     }
   }
@@ -5116,11 +4871,7 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     this.scheduler = new Scheduler(
       () => this.settings,
       this.stateStore,
-      {
-        onDaily: () => this.runDaily(),
-        onWeekly: () => this.runWeekly(),
-        onMonthly: () => this.runMonthly()
-      }
+      { onDaily: () => this.runDaily() }
     );
     this.scheduler.start();
   }
@@ -5143,32 +4894,6 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
       name: "Backfill daily summaries for date range",
       callback: () => {
         new BackfillModal(this.app, this).open();
-      }
-    });
-    this.addCommand({
-      id: "run-weekly-now",
-      name: "Generate weekly report now",
-      callback: async () => {
-        new import_obsidian5.Notice("Paper Daily: Generating weekly report...");
-        try {
-          await this.runWeekly();
-          new import_obsidian5.Notice("Paper Daily: Weekly report complete.");
-        } catch (err) {
-          new import_obsidian5.Notice(`Paper Daily Error: ${String(err)}`);
-        }
-      }
-    });
-    this.addCommand({
-      id: "run-monthly-now",
-      name: "Generate monthly report now",
-      callback: async () => {
-        new import_obsidian5.Notice("Paper Daily: Generating monthly report...");
-        try {
-          await this.runMonthly();
-          new import_obsidian5.Notice("Paper Daily: Monthly report complete.");
-        } catch (err) {
-          new import_obsidian5.Notice(`Paper Daily Error: ${String(err)}`);
-        }
       }
     });
     this.addCommand({
@@ -5202,22 +4927,6 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
       this.dedupStore,
       this.snapshotStore,
       { linker: ((_a2 = this.settings.vaultLinking) == null ? void 0 : _a2.enabled) ? this.linker : void 0 }
-    );
-  }
-  async runWeekly() {
-    await runWeeklyPipeline(
-      this.app,
-      this.settings,
-      this.stateStore,
-      this.snapshotStore
-    );
-  }
-  async runMonthly() {
-    await runMonthlyPipeline(
-      this.app,
-      this.settings,
-      this.stateStore,
-      this.snapshotStore
     );
   }
   async runBackfill(startDate, endDate, onProgress) {

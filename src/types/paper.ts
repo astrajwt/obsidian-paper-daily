@@ -31,8 +31,6 @@ export interface FetchParams {
 
 export interface RunState {
   lastDailyRun: string;    // ISO or ""
-  lastWeeklyRun: string;
-  lastMonthlyRun: string;
   lastError: {
     time: string;
     stage: "fetch" | "llm" | "write" | "";

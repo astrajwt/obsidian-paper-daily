@@ -21,10 +21,6 @@ export interface LLMConfig {
 
 export interface ScheduleConfig {
   dailyTime: string;    // "HH:MM"
-  weeklyDay: number;    // 0=Sun, 6=Sat
-  weeklyTime: string;   // "HH:MM"
-  monthlyDay: number;   // 1-28
-  monthlyTime: string;  // "HH:MM"
 }
 
 export interface PaperDailySettings {
