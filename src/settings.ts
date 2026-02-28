@@ -759,7 +759,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
               if (result.error) {
                 setStatus(`✗ 错误 / Error: ${result.error}\n\nURL: ${result.url}`, "var(--color-red)");
               } else if (result.total === 0) {
-                setStatus(`⚠ 未返回论文 / 0 papers returned\n\nURL: ${result.url}\n\n可能原因 / Possible causes:\n- 未设置分类 / Categories not set\n- 网络问题 / Network issue\n- 已全部在去重缓存中 / All papers already in dedup cache`, "var(--color-orange)");
+                setStatus(`⚠ 未返回论文 / 0 papers returned\n\nURL: ${result.url}\n\n可能原因 / Possible causes:\n- 未设置分类 / Categories not set\n- 网络问题 / Network issue\n- 时间窗口内无新论文 / No new papers in the time window`, "var(--color-orange)");
               } else {
                 setStatus(`✓ 已获取 ${result.total} 篇论文 / ${result.total} papers fetched\n\n首篇 / First: "${result.firstTitle}"\n\nURL: ${result.url}`, "var(--color-green)");
               }
@@ -965,19 +965,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     refreshDlSub();
-
-    // ── Dedup Cache ───────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "去重缓存 / Dedup Cache" });
-    new Setting(containerEl)
-      .setName("清空去重缓存 / Clear Seen IDs")
-      .setDesc("清空后下次运行会重新拉取所有论文 | After clearing, the next run will re-fetch all papers within the time window")
-      .addButton(btn => btn
-        .setButtonText("清空 / Clear")
-        .setWarning()
-        .onClick(async () => {
-          await this.plugin.clearDedup();
-          new Notice("去重缓存已清空 / Dedup cache cleared.");
-        }));
 
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "历史回填 / Backfill" });
