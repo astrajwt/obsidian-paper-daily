@@ -105,53 +105,37 @@ Today: {{date}}
 Output language: {{language}}
 
 ## Context
-Papers below have been pre-ranked by three signals (in priority order):
-1. **HuggingFace community upvotes** \u2014 real-time signal of what the AI community finds impactful. Papers with hfUpvotes > 0 were featured on huggingface.co/papers.
-2. **Direction relevance score** \u2014 keyword match strength against configured research directions.
-3. **Interest keyword hits** \u2014 alignment with user-specified interest keywords.
+arXiv papers below have been pre-ranked by: HuggingFace upvotes \u2192 direction relevance \u2192 interest keyword weight.
 
 ## Today's top research directions (pre-computed):
 {{topDirections}}
 
-## Papers to analyze (JSON, pre-ranked):
+## arXiv papers to analyze (pre-ranked, with LLM scores already computed):
 {{papers_json}}
+
+## HuggingFace Daily Papers (community picks, sorted by upvotes):
+{{hf_papers_json}}
 
 ---
 
 Generate the daily digest with the following sections:
 
 ### \u4ECA\u65E5\u8981\u70B9 / Key Takeaways
-3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Be direct.
+5\u20138 punchy bullet points covering BOTH arXiv papers AND HF community picks:
+- For arXiv: what actually moved the needle today vs incremental noise
+- For HF: what the community is excited about, any surprises or recurring themes
+- Note any overlap: papers that appear in both arXiv results and HF daily
 
 ### \u65B9\u5411\u8109\u640F / Direction Pulse
-For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
-
-### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
-For **each paper** in the list, output exactly this structure:
-
-**[N]. {title}**
-- \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
-- \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
-- \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
-- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on?
-- \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, etc.
-- \u{1F517} {links}
-
-Value rating guide \u2014 be calibrated, not generous:
-\u2605\u2605\u2605\u2605\u2605  Breakthrough: likely to shift practice or become a citation anchor
-\u2605\u2605\u2605\u2605\u2606  Strong: clear improvement, solid evaluation, worth reading in full
-\u2605\u2605\u2605\u2606\u2606  Solid: incremental but honest; good for domain awareness
-\u2605\u2605\u2606\u2606\u2606  Weak: narrow scope, questionable baselines, or limited novelty
-\u2605\u2606\u2606\u2606\u2606  Skip: below standard, off-topic, or superseded
+For each active direction above, one sentence: what are today's papers pushing forward?
 
 ### \u4ECA\u65E5\u7ED3\u8BED / Closing
-2\u20133 sentences: what's the most important thing to keep an eye on from today's batch?
+2\u20133 sentences: the most important signal to watch from today's combined batch.
 
 ---
 Rules:
-- Do NOT hedge every sentence. State your assessment directly.
-- If hfUpvotes is high but direction relevance is low, note the discrepancy.
-- If a paper seems overhyped relative to its technical content, say so.
+- Be direct, not hedged. State assessments confidently.
+- If a paper is heavily upvoted on HF but low relevance to directions, flag the discrepancy.
 - Keep engineering perspective front and center.`;
 var DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
 
@@ -4938,37 +4922,6 @@ function buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendin
 > **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
 
 ${aiDigest}`;
-  const topN = Math.min(rankedPapers.length, settings.maxResultsPerDay);
-  const topPapers = rankedPapers.slice(0, topN);
-  const topPapersLines = topPapers.map((p, i) => {
-    var _a2, _b;
-    const dirStr = ((_a2 = p.topDirections) != null ? _a2 : []).join(", ") || "_none_";
-    const hitsStr = ((_b = p.interestHits) != null ? _b : []).join(", ") || "_none_";
-    const linksArr = [];
-    if (p.links.html)
-      linksArr.push(`[arXiv](${p.links.html})`);
-    if (settings.includePdfLink && p.links.pdf)
-      linksArr.push(`[PDF](${p.links.pdf})`);
-    if (p.links.hf)
-      linksArr.push(`[HF](${p.links.hf})`);
-    const linksStr = linksArr.join(", ");
-    const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-    const upvoteStr = p.hfUpvotes != null ? ` \u{1F917} ${p.hfUpvotes}` : "";
-    const llmStr = p.llmScore != null ? `
-   - LLM\u8BC4\u5206: ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
-    return [
-      `${i + 1}. **${p.title}**${upvoteStr}`,
-      `   - Directions: ${dirStr}`,
-      `   - Interest hits: ${hitsStr}`,
-      settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
-      `   - Links: ${linksStr}`,
-      `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}${llmStr}`
-    ].filter(Boolean).join("\n");
-  });
-  const topPapersSection = `## arXiv Papers (ranked)
-
-${topPapersLines.join("\n\n") || "_No papers_"}`;
   let hfSection = "";
   if (hfDailyPapers.length > 0) {
     const arxivBaseIds = new Set(
@@ -5001,7 +4954,7 @@ ${summaryLine}
 
 ${hfLines.join("\n\n")}`;
   }
-  const allPapersRows = rankedPapers.map((p) => {
+  const allPapersList = rankedPapers.map((p, i) => {
     var _a2, _b;
     const links = [];
     if (p.links.html)
@@ -5010,18 +4963,21 @@ ${hfLines.join("\n\n")}`;
       links.push(`[PDF](${p.links.pdf})`);
     if (p.links.hf)
       links.push(`[HF](${p.links.hf})`);
-    const dirStr = ((_a2 = p.topDirections) != null ? _a2 : []).slice(0, 2).join(", ");
-    const hitsStr = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ");
-    const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
-    const llmScore = p.llmScore != null ? String(p.llmScore) : "";
-    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${llmScore} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
+    const dirStr = ((_a2 = p.topDirections) != null ? _a2 : []).slice(0, 2).join(", ") || "_none_";
+    const hitsStr = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "_none_";
+    const upvoteStr = p.hfUpvotes != null ? ` \u{1F917} ${p.hfUpvotes}` : "";
+    const scoreStr = p.llmScore != null ? ` \u2B50 ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
+    const summaryLine = p.llmSummary ? `
+   > ${p.llmSummary}` : "";
+    return [
+      `${i + 1}. **${p.title}**${upvoteStr}${scoreStr}${summaryLine}`,
+      `   - ${links.join(" \xB7 ")} | Updated: ${p.updated.slice(0, 10)}`,
+      `   - Directions: ${dirStr} | Hits: ${hitsStr}`
+    ].join("\n");
   });
-  const allPapersSection = [
-    "## All Papers (raw)",
-    "| Title | Updated | LLM | Directions | Interest Hits | HF \u2191 | Links |",
-    "|-------|---------|-----|------------|---------------|------|-------|",
-    ...allPapersRows
-  ].join("\n");
+  const allPapersSection = `## All Papers
+
+${allPapersList.join("\n\n") || "_No papers_"}`;
   let trendingSection = "";
   if (trendingPapers.length > 0) {
     const trendingLines = trendingPapers.map((t, i) => {
@@ -5048,7 +5004,7 @@ ${trendingLines.join("\n\n")}`;
   const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
   if (hfSection)
     sections.push("", hfSection);
-  sections.push("", topPapersSection, "", allPapersSection);
+  sections.push("", allPapersSection);
   if (trendingSection)
     sections.push("", trendingSection);
   return sections.join("\n");
@@ -5188,7 +5144,7 @@ Scoring criteria:
 - Quality of evaluation / experiments
 
 Return ONLY a valid JSON array, no explanation, no markdown fence:
-[{"id":"arxiv:...","score":8,"reason":"one short phrase"},...]
+[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1\u20132 sentence plain-language summary"},...]
 
 Papers:
 ${JSON.stringify(papersForScoring)}`;
@@ -5202,6 +5158,8 @@ ${JSON.stringify(papersForScoring)}`;
           if (s) {
             paper.llmScore = s.score;
             paper.llmScoreReason = s.reason;
+            if (s.summary)
+              paper.llmSummary = s.summary;
           }
         }
         rankedPapers.sort((a, b) => {
@@ -5261,10 +5219,19 @@ ${JSON.stringify(papersForScoring)}`;
         };
       });
       const topDirsStr = formatTopDirections(rankedPapers, settings.directionTopK);
+      const hfForLLM = hfDailyPapers.slice(0, 15).map((p) => {
+        var _a3;
+        return {
+          title: p.title,
+          hfUpvotes: (_a3 = p.hfUpvotes) != null ? _a3 : 0,
+          ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
+        };
+      });
       const prompt = fillTemplate(settings.llm.dailyPromptTemplate, {
         date,
         topDirections: topDirsStr,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
+        hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });

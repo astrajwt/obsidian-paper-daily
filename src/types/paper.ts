@@ -21,6 +21,7 @@ export interface Paper {
   topDirections?: string[];
   llmScore?: number;
   llmScoreReason?: string;
+  llmSummary?: string;
 }
 
 export interface FetchParams {

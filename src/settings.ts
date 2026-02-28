@@ -83,53 +83,37 @@ Today: {{date}}
 Output language: {{language}}
 
 ## Context
-Papers below have been pre-ranked by three signals (in priority order):
-1. **HuggingFace community upvotes** — real-time signal of what the AI community finds impactful. Papers with hfUpvotes > 0 were featured on huggingface.co/papers.
-2. **Direction relevance score** — keyword match strength against configured research directions.
-3. **Interest keyword hits** — alignment with user-specified interest keywords.
+arXiv papers below have been pre-ranked by: HuggingFace upvotes → direction relevance → interest keyword weight.
 
 ## Today's top research directions (pre-computed):
 {{topDirections}}
 
-## Papers to analyze (JSON, pre-ranked):
+## arXiv papers to analyze (pre-ranked, with LLM scores already computed):
 {{papers_json}}
+
+## HuggingFace Daily Papers (community picks, sorted by upvotes):
+{{hf_papers_json}}
 
 ---
 
 Generate the daily digest with the following sections:
 
 ### 今日要点 / Key Takeaways
-3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Be direct.
+5–8 punchy bullet points covering BOTH arXiv papers AND HF community picks:
+- For arXiv: what actually moved the needle today vs incremental noise
+- For HF: what the community is excited about, any surprises or recurring themes
+- Note any overlap: papers that appear in both arXiv results and HF daily
 
 ### 方向脉搏 / Direction Pulse
-For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
-
-### 精选论文 / Curated Papers
-For **each paper** in the list, output exactly this structure:
-
-**[N]. {title}**
-- ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
-- 🧭 方向: {matched directions}  |  关键词: {interest hits}
-- 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
-- 🔧 工程启示: what can a practitioner/engineer take away or act on?
-- ⚠️ 局限性: honest weaknesses — scope, baselines, reproducibility, etc.
-- 🔗 {links}
-
-Value rating guide — be calibrated, not generous:
-★★★★★  Breakthrough: likely to shift practice or become a citation anchor
-★★★★☆  Strong: clear improvement, solid evaluation, worth reading in full
-★★★☆☆  Solid: incremental but honest; good for domain awareness
-★★☆☆☆  Weak: narrow scope, questionable baselines, or limited novelty
-★☆☆☆☆  Skip: below standard, off-topic, or superseded
+For each active direction above, one sentence: what are today's papers pushing forward?
 
 ### 今日结语 / Closing
-2–3 sentences: what's the most important thing to keep an eye on from today's batch?
+2–3 sentences: the most important signal to watch from today's combined batch.
 
 ---
 Rules:
-- Do NOT hedge every sentence. State your assessment directly.
-- If hfUpvotes is high but direction relevance is low, note the discrepancy.
-- If a paper seems overhyped relative to its technical content, say so.
+- Be direct, not hedged. State assessments confidently.
+- If a paper is heavily upvoted on HF but low relevance to directions, flag the discrepancy.
 - Keep engineering perspective front and center.`;
 
 export const DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.

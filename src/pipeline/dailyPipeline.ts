@@ -79,33 +79,6 @@ function buildDailyMarkdown(
     ? `## 今日要点（AI 总结）\n\n> **Error**: ${error}`
     : `## 今日要点（AI 总结）\n\n${aiDigest}`;
 
-  const topN = Math.min(rankedPapers.length, settings.maxResultsPerDay);
-  const topPapers = rankedPapers.slice(0, topN);
-  const topPapersLines = topPapers.map((p, i) => {
-    const dirStr = (p.topDirections ?? []).join(", ") || "_none_";
-    const hitsStr = (p.interestHits ?? []).join(", ") || "_none_";
-    const linksArr: string[] = [];
-    if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
-    if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
-    if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
-    const linksStr = linksArr.join(", ");
-    const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-    const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
-    const llmStr = p.llmScore != null
-      ? `\n   - LLM评分: ${p.llmScore}/10${p.llmScoreReason ? ` — ${p.llmScoreReason}` : ""}`
-      : "";
-    return [
-      `${i + 1}. **${p.title}**${upvoteStr}`,
-      `   - Directions: ${dirStr}`,
-      `   - Interest hits: ${hitsStr}`,
-      settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
-      `   - Links: ${linksStr}`,
-      `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}${llmStr}`,
-    ].filter(Boolean).join("\n");
-  });
-  const topPapersSection = `## arXiv Papers (ranked)\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
-
   // HuggingFace Daily Papers section
   let hfSection = "";
   if (hfDailyPapers.length > 0) {
@@ -137,23 +110,25 @@ function buildDailyMarkdown(
     hfSection = `## HuggingFace Daily Papers\n\n${summaryLine}\n\n${hfLines.join("\n\n")}`;
   }
 
-  const allPapersRows = rankedPapers.map(p => {
+  const allPapersList = rankedPapers.map((p, i) => {
     const links: string[] = [];
     if (p.links.html) links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
     if (p.links.hf) links.push(`[HF](${p.links.hf})`);
-    const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ");
-    const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ");
-    const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
-    const llmScore = p.llmScore != null ? String(p.llmScore) : "";
-    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${llmScore} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
+    const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ") || "_none_";
+    const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ") || "_none_";
+    const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
+    const scoreStr = p.llmScore != null
+      ? ` ⭐ ${p.llmScore}/10${p.llmScoreReason ? ` — ${p.llmScoreReason}` : ""}`
+      : "";
+    const summaryLine = p.llmSummary ? `\n   > ${p.llmSummary}` : "";
+    return [
+      `${i + 1}. **${p.title}**${upvoteStr}${scoreStr}${summaryLine}`,
+      `   - ${links.join(" · ")} | Updated: ${p.updated.slice(0, 10)}`,
+      `   - Directions: ${dirStr} | Hits: ${hitsStr}`,
+    ].join("\n");
   });
-  const allPapersSection = [
-    "## All Papers (raw)",
-    "| Title | Updated | LLM | Directions | Interest Hits | HF ↑ | Links |",
-    "|-------|---------|-----|------------|---------------|------|-------|",
-    ...allPapersRows
-  ].join("\n");
+  const allPapersSection = `## All Papers\n\n${allPapersList.join("\n\n") || "_No papers_"}`;
 
   // Trending section
   let trendingSection = "";
@@ -175,7 +150,7 @@ function buildDailyMarkdown(
 
   const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
   if (hfSection) sections.push("", hfSection);
-  sections.push("", topPapersSection, "", allPapersSection);
+  sections.push("", allPapersSection);
   if (trendingSection) sections.push("", trendingSection);
   return sections.join("\n");
 }
@@ -348,7 +323,7 @@ Scoring criteria:
 - Quality of evaluation / experiments
 
 Return ONLY a valid JSON array, no explanation, no markdown fence:
-[{"id":"arxiv:...","score":8,"reason":"one short phrase"},...]
+[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1–2 sentence plain-language summary"},...]
 
 Papers:
 ${JSON.stringify(papersForScoring)}`;
@@ -356,11 +331,15 @@ ${JSON.stringify(papersForScoring)}`;
       const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 2048 });
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const scores: Array<{ id: string; score: number; reason: string }> = JSON.parse(jsonMatch[0]);
+        const scores: Array<{ id: string; score: number; reason: string; summary?: string }> = JSON.parse(jsonMatch[0]);
         const scoreMap = new Map(scores.map(s => [s.id, s]));
         for (const paper of rankedPapers) {
           const s = scoreMap.get(paper.id);
-          if (s) { paper.llmScore = s.score; paper.llmScoreReason = s.reason; }
+          if (s) {
+            paper.llmScore = s.score;
+            paper.llmScoreReason = s.reason;
+            if (s.summary) paper.llmSummary = s.summary;
+          }
         }
         // Re-rank by LLM score; papers without a score fall to the end
         rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
@@ -419,10 +398,16 @@ ${JSON.stringify(papersForScoring)}`;
         links: p.links
       }));
       const topDirsStr = formatTopDirections(rankedPapers, settings.directionTopK);
+      const hfForLLM = hfDailyPapers.slice(0, 15).map(p => ({
+        title: p.title,
+        hfUpvotes: p.hfUpvotes ?? 0,
+        ...(p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {})
+      }));
       const prompt = fillTemplate(settings.llm.dailyPromptTemplate, {
         date,
         topDirections: topDirsStr,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
+        hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
