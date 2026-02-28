@@ -319,39 +319,39 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h1", { text: "Paper Daily Settings" });
-    containerEl.createEl("h2", { text: "arXiv Fetch" });
-    new import_obsidian.Setting(containerEl).setName("Categories").setDesc("Comma-separated arXiv categories (e.g. cs.AI,cs.LG,cs.CL)").addText((text) => text.setPlaceholder("cs.AI,cs.LG,cs.CL").setValue(this.plugin.settings.categories.join(",")).onChange(async (value) => {
+    containerEl.createEl("h1", { text: "Paper Daily \u8BBE\u7F6E / Settings" });
+    containerEl.createEl("h2", { text: "arXiv \u8BBA\u6587\u6293\u53D6 / Fetch" });
+    new import_obsidian.Setting(containerEl).setName("\u5206\u7C7B / Categories").setDesc("arXiv \u5206\u7C7B\uFF0C\u9017\u53F7\u5206\u9694 | Comma-separated arXiv categories (e.g. cs.AI,cs.LG,cs.CL)").addText((text) => text.setPlaceholder("cs.AI,cs.LG,cs.CL").setValue(this.plugin.settings.categories.join(",")).onChange(async (value) => {
       this.plugin.settings.categories = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Keywords").setDesc("Comma-separated query keywords (optional, combined with categories via AND)").addText((text) => text.setPlaceholder("reinforcement learning, agent").setValue(this.plugin.settings.keywords.join(",")).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u67E5\u8BE2\u5173\u952E\u8BCD / Keywords").setDesc("\u4E0E\u5206\u7C7B\u53D6 AND\uFF0C\u4E3A\u7A7A\u5219\u53EA\u6309\u5206\u7C7B\u67E5\u8BE2 | Combined with categories via AND; leave empty to fetch by category only").addText((text) => text.setPlaceholder("reinforcement learning, agent").setValue(this.plugin.settings.keywords.join(",")).onChange(async (value) => {
       this.plugin.settings.keywords = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Interest Keywords").setDesc("Keywords you care about most \u2014 used for ranking and highlighting in digests").addText((text) => text.setPlaceholder("rlhf, kv cache, agent").setValue(this.plugin.settings.interestKeywords.join(",")).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords").setDesc("\u4F60\u6700\u5173\u6CE8\u7684\u5173\u952E\u8BCD\uFF0C\u7528\u4E8E\u6392\u540D\u548C\u6458\u8981\u9AD8\u4EAE | Your highest-priority keywords \u2014 used for ranking and digest highlighting").addText((text) => text.setPlaceholder("rlhf, kv cache, agent").setValue(this.plugin.settings.interestKeywords.join(",")).onChange(async (value) => {
       this.plugin.settings.interestKeywords = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Max Results Per Day").setDesc("Maximum papers to include in daily digest (after ranking)").addSlider((slider) => slider.setLimits(5, 100, 5).setValue(this.plugin.settings.maxResultsPerDay).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6700\u5927\u7ED3\u679C\u6570 / Max Results Per Day").setDesc("\u6BCF\u65E5\u6458\u8981\u5305\u542B\u7684\u6700\u5927\u8BBA\u6587\u6570\uFF08\u6392\u540D\u540E\u622A\u53D6\uFF09| Max papers in daily digest after ranking").addSlider((slider) => slider.setLimits(5, 100, 5).setValue(this.plugin.settings.maxResultsPerDay).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.maxResultsPerDay = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Time Window (hours)").setDesc("Fetch papers from the past N hours (default 30 to catch overnight updates)").addSlider((slider) => slider.setLimits(12, 72, 6).setValue(this.plugin.settings.timeWindowHours).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u65F6\u95F4\u7A97\u53E3\uFF08\u5C0F\u65F6\uFF09/ Time Window (hours)").setDesc("\u6293\u53D6\u8FC7\u53BB N \u5C0F\u65F6\u5185\u7684\u8BBA\u6587 | Fetch papers published within the past N hours").addSlider((slider) => slider.setLimits(12, 72, 6).setValue(this.plugin.settings.timeWindowHours).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.timeWindowHours = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Sort By").setDesc("Sort arXiv results by submission date or last updated date").addDropdown((drop) => drop.addOption("submittedDate", "Submitted Date").addOption("lastUpdatedDate", "Last Updated Date").setValue(this.plugin.settings.sortBy).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6392\u5E8F\u65B9\u5F0F / Sort By").setDesc("\u6309\u63D0\u4EA4\u65E5\u671F\u6216\u6700\u540E\u66F4\u65B0\u65E5\u671F\u6392\u5E8F | Sort by submission date or last updated date").addDropdown((drop) => drop.addOption("submittedDate", "Submitted Date").addOption("lastUpdatedDate", "Last Updated Date").setValue(this.plugin.settings.sortBy).onChange(async (value) => {
       this.plugin.settings.sortBy = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h2", { text: "Directions / Themes" });
-    new import_obsidian.Setting(containerEl).setName("Direction Top-K").setDesc("Number of top directions to show in daily digest").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.directionTopK).setDynamicTooltip().onChange(async (value) => {
+    containerEl.createEl("h2", { text: "\u7814\u7A76\u65B9\u5411 / Directions & Themes" });
+    new import_obsidian.Setting(containerEl).setName("\u65B9\u5411\u663E\u793A\u6570 Top-K / Direction Top-K").setDesc("\u6BCF\u65E5\u6458\u8981\u4E2D\u5C55\u793A\u7684\u6700\u591A\u65B9\u5411\u6570 | Number of top directions shown in daily digest").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.directionTopK).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.directionTopK = value;
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("p", {
-      text: "Directions JSON (advanced) \u2014 edit directions config directly:",
+      text: "\u65B9\u5411 JSON\uFF08\u9AD8\u7EA7\uFF09\u2014 \u76F4\u63A5\u7F16\u8F91\u65B9\u5411\u914D\u7F6E | Directions JSON (advanced) \u2014 edit direction config directly:",
       cls: "setting-item-description"
     });
     const directionsTextArea = containerEl.createEl("textarea", {
@@ -362,17 +362,17 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     directionsTextArea.style.fontFamily = "monospace";
     directionsTextArea.style.fontSize = "12px";
     directionsTextArea.value = JSON.stringify(this.plugin.settings.directions, null, 2);
-    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("Save Directions").setCta().onClick(async () => {
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u4FDD\u5B58\u65B9\u5411\u914D\u7F6E / Save Directions").setCta().onClick(async () => {
       try {
         const parsed = JSON.parse(directionsTextArea.value);
         this.plugin.settings.directions = parsed;
         await this.plugin.saveSettings();
-        new import_obsidian.Notice("Directions saved.");
+        new import_obsidian.Notice("\u65B9\u5411\u914D\u7F6E\u5DF2\u4FDD\u5B58 / Directions saved.");
       } catch (e) {
-        new import_obsidian.Notice("Invalid JSON for directions.");
+        new import_obsidian.Notice("JSON \u683C\u5F0F\u9519\u8BEF / Invalid JSON for directions.");
       }
     }));
-    containerEl.createEl("h2", { text: "LLM Provider" });
+    containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
     presetWrap.style.display = "flex";
     presetWrap.style.flexWrap = "wrap";
@@ -465,14 +465,14 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       }
       btn.addEventListener("click", () => applyPreset(key));
     }
-    new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("API endpoint (auto-filled by preset; edit for custom deployments)").addText((text) => {
+    new import_obsidian.Setting(containerEl).setName("\u63A5\u53E3\u5730\u5740 / Base URL").setDesc("API \u7AEF\u70B9\uFF0C\u9009\u62E9\u9884\u8BBE\u540E\u81EA\u52A8\u586B\u5165 | API endpoint (auto-filled by preset; edit for custom deployments)").addText((text) => {
       baseUrlInput = text.inputEl;
       text.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.llm.baseUrl).onChange(async (value) => {
         this.plugin.settings.llm.baseUrl = value;
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Your API key for the selected provider").addText((text) => {
+    new import_obsidian.Setting(containerEl).setName("API \u5BC6\u94A5 / API Key").setDesc("\u6240\u9009\u670D\u52A1\u5546\u7684 API \u5BC6\u94A5 | Your API key for the selected provider").addText((text) => {
       var _a2, _b;
       apiKeyInput = text.inputEl;
       text.inputEl.type = "password";
@@ -483,7 +483,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    const modelSetting = new import_obsidian.Setting(containerEl).setName("Model").setDesc("Select a preset model or choose Other to type a custom name");
+    const modelSetting = new import_obsidian.Setting(containerEl).setName("\u6A21\u578B / Model").setDesc("\u4ECE\u9884\u8BBE\u4E2D\u9009\u62E9\uFF0C\u6216\u9009 Other \u624B\u52A8\u8F93\u5165 | Select a preset model or choose Other to type a custom name");
     modelSetting.controlEl.style.flexDirection = "column";
     modelSetting.controlEl.style.alignItems = "flex-start";
     modelSetting.controlEl.style.gap = "6px";
@@ -522,17 +522,17 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       }
     });
-    new import_obsidian.Setting(containerEl).setName("Temperature").setDesc("LLM temperature (0.0 - 1.0)").addSlider((slider) => slider.setLimits(0, 1, 0.05).setValue(this.plugin.settings.llm.temperature).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6E29\u5EA6 / Temperature").setDesc("\u6A21\u578B\u751F\u6210\u6E29\u5EA6\uFF080 = \u786E\u5B9A\u6027\uFF0C1 = \u6700\u5927\u968F\u673A\uFF09| LLM temperature (0.0 = deterministic, 1.0 = most random)").addSlider((slider) => slider.setLimits(0, 1, 0.05).setValue(this.plugin.settings.llm.temperature).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.llm.temperature = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Max Tokens").setDesc("Maximum tokens for LLM response").addSlider((slider) => slider.setLimits(512, 8192, 256).setValue(this.plugin.settings.llm.maxTokens).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6700\u5927 Token \u6570 / Max Tokens").setDesc("\u6A21\u578B\u5355\u6B21\u54CD\u5E94\u7684\u6700\u5927 token \u6570 | Maximum tokens for LLM response").addSlider((slider) => slider.setLimits(512, 8192, 256).setValue(this.plugin.settings.llm.maxTokens).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.llm.maxTokens = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "Daily Prompt Template" });
+    containerEl.createEl("h3", { text: "\u6BCF\u65E5\u6458\u8981 Prompt \u6A21\u677F / Daily Prompt Template" });
     containerEl.createEl("p", {
-      text: "Placeholders: {{date}}, {{topDirections}}, {{papers_json}}, {{language}}",
+      text: "\u5360\u4F4D\u7B26 / Placeholders: {{date}}, {{topDirections}}, {{papers_json}}, {{language}}",
       cls: "setting-item-description"
     });
     const dailyPromptTA = containerEl.createEl("textarea");
@@ -541,34 +541,34 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     dailyPromptTA.style.fontFamily = "monospace";
     dailyPromptTA.style.fontSize = "11px";
     dailyPromptTA.value = this.plugin.settings.llm.dailyPromptTemplate;
-    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("Save Daily Prompt").onClick(async () => {
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u4FDD\u5B58 Prompt / Save Daily Prompt").onClick(async () => {
       this.plugin.settings.llm.dailyPromptTemplate = dailyPromptTA.value;
       await this.plugin.saveSettings();
-      new import_obsidian.Notice("Daily prompt saved.");
+      new import_obsidian.Notice("\u6BCF\u65E5\u6458\u8981 Prompt \u5DF2\u4FDD\u5B58 / Daily prompt saved.");
     }));
-    containerEl.createEl("h2", { text: "Output" });
-    new import_obsidian.Setting(containerEl).setName("Root Folder").setDesc("Folder inside vault where all Paper Daily files are written").addText((text) => text.setPlaceholder("PaperDaily").setValue(this.plugin.settings.rootFolder).onChange(async (value) => {
+    containerEl.createEl("h2", { text: "\u8F93\u51FA\u683C\u5F0F / Output" });
+    new import_obsidian.Setting(containerEl).setName("\u6839\u76EE\u5F55 / Root Folder").setDesc("Vault \u5185\u6240\u6709 Paper Daily \u6587\u4EF6\u7684\u5B58\u653E\u76EE\u5F55 | Folder inside vault where all Paper Daily files are written").addText((text) => text.setPlaceholder("PaperDaily").setValue(this.plugin.settings.rootFolder).onChange(async (value) => {
       this.plugin.settings.rootFolder = value || "PaperDaily";
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Language").setDesc("Output language for AI-generated content").addDropdown((drop) => drop.addOption("zh", "\u4E2D\u6587 (Chinese)").addOption("en", "English").setValue(this.plugin.settings.language).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u8F93\u51FA\u8BED\u8A00 / Language").setDesc("AI \u751F\u6210\u5185\u5BB9\u7684\u8BED\u8A00 | Output language for AI-generated content").addDropdown((drop) => drop.addOption("zh", "\u4E2D\u6587 (Chinese)").addOption("en", "English").setValue(this.plugin.settings.language).onChange(async (value) => {
       this.plugin.settings.language = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Include Abstract").setDesc("Include paper abstracts in the raw papers list").addToggle((toggle) => toggle.setValue(this.plugin.settings.includeAbstract).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u5305\u542B\u6458\u8981 / Include Abstract").setDesc("\u5728\u539F\u59CB\u8BBA\u6587\u5217\u8868\u4E2D\u663E\u793A\u6458\u8981 | Include paper abstracts in the raw papers list").addToggle((toggle) => toggle.setValue(this.plugin.settings.includeAbstract).onChange(async (value) => {
       this.plugin.settings.includeAbstract = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Include PDF Links").setDesc("Include PDF links in output markdown").addToggle((toggle) => toggle.setValue(this.plugin.settings.includePdfLink).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u5305\u542B PDF \u94FE\u63A5 / Include PDF Links").setDesc("\u5728\u8F93\u51FA Markdown \u4E2D\u5305\u542B PDF \u94FE\u63A5 | Include PDF links in output markdown").addToggle((toggle) => toggle.setValue(this.plugin.settings.includePdfLink).onChange(async (value) => {
       this.plugin.settings.includePdfLink = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h2", { text: "Scheduling" });
-    new import_obsidian.Setting(containerEl).setName("Daily Fetch Time").setDesc("Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
+    containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
+    new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
       this.plugin.settings.schedule.dailyTime = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h2", { text: "Test" });
+    containerEl.createEl("h2", { text: "\u6D4B\u8BD5 / Test" });
     const testStatusEl = containerEl.createEl("pre", { text: "" });
     testStatusEl.style.color = "var(--text-muted)";
     testStatusEl.style.fontSize = "0.82em";
@@ -584,102 +584,102 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       testStatusEl.style.color = color;
       testStatusEl.setText(text);
     };
-    new import_obsidian.Setting(containerEl).setName("Test arXiv Fetch").setDesc("Check that arXiv is reachable and your categories return results (no LLM call, no file written)").addButton((btn) => {
-      btn.setButtonText("\u{1F50D} Test Fetch").onClick(async () => {
+    new import_obsidian.Setting(containerEl).setName("\u6D4B\u8BD5 arXiv \u6293\u53D6 / Test arXiv Fetch").setDesc("\u68C0\u67E5 arXiv \u53EF\u8BBF\u95EE\u6027\u5E76\u9A8C\u8BC1\u5206\u7C7B\u6709\u7ED3\u679C\uFF08\u4E0D\u8C03\u7528 LLM\uFF0C\u4E0D\u5199\u6587\u4EF6\uFF09| Check arXiv reachability and category results (no LLM call, no file written)").addButton((btn) => {
+      btn.setButtonText("\u{1F50D} \u6D4B\u8BD5\u6293\u53D6 / Test Fetch").onClick(async () => {
         btn.setButtonText("Fetching...").setDisabled(true);
-        setStatus("Querying arXiv...");
+        setStatus("\u6B63\u5728\u67E5\u8BE2 arXiv... / Querying arXiv...");
         try {
           const result = await this.plugin.testFetch();
           if (result.error) {
-            setStatus(`\u2717 Error: ${result.error}
+            setStatus(`\u2717 \u9519\u8BEF / Error: ${result.error}
 
 URL: ${result.url}`, "var(--color-red)");
           } else if (result.total === 0) {
-            setStatus(`\u26A0 0 papers returned
+            setStatus(`\u26A0 \u672A\u8FD4\u56DE\u8BBA\u6587 / 0 papers returned
 
 URL: ${result.url}
 
-Possible causes:
-- Categories not set (check arXiv Fetch settings)
-- Network issue
-- All papers already in dedup cache`, "var(--color-orange)");
+\u53EF\u80FD\u539F\u56E0 / Possible causes:
+- \u672A\u8BBE\u7F6E\u5206\u7C7B / Categories not set
+- \u7F51\u7EDC\u95EE\u9898 / Network issue
+- \u5DF2\u5168\u90E8\u5728\u53BB\u91CD\u7F13\u5B58\u4E2D / All papers already in dedup cache`, "var(--color-orange)");
           } else {
-            setStatus(`\u2713 ${result.total} papers fetched
+            setStatus(`\u2713 \u5DF2\u83B7\u53D6 ${result.total} \u7BC7\u8BBA\u6587 / ${result.total} papers fetched
 
-First: "${result.firstTitle}"
+\u9996\u7BC7 / First: "${result.firstTitle}"
 
 URL: ${result.url}`, "var(--color-green)");
           }
         } catch (err) {
           setStatus(`\u2717 ${String(err)}`, "var(--color-red)");
         } finally {
-          btn.setButtonText("\u{1F50D} Test Fetch").setDisabled(false);
+          btn.setButtonText("\u{1F50D} \u6D4B\u8BD5\u6293\u53D6 / Test Fetch").setDisabled(false);
         }
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Run Daily Report Now").setDesc("Full pipeline: fetch + AI digest + write to inbox/. Verify your API key and settings are correct first.").addButton((btn) => {
-      btn.setButtonText("\u25B6 Run Daily Now").setCta().onClick(async () => {
+    new import_obsidian.Setting(containerEl).setName("\u7ACB\u5373\u8FD0\u884C\u6BCF\u65E5\u62A5\u544A / Run Daily Report Now").setDesc("\u5B8C\u6574\u6D41\u7A0B\uFF1A\u6293\u53D6 + AI \u6458\u8981 + \u5199\u5165 inbox/\uFF08\u8BF7\u5148\u786E\u8BA4 API Key \u548C\u914D\u7F6E\u6B63\u786E\uFF09| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.").addButton((btn) => {
+      btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setCta().onClick(async () => {
         btn.setButtonText("Running...").setDisabled(true);
-        setStatus("Fetching papers and generating digest...");
+        setStatus("\u6B63\u5728\u6293\u53D6\u8BBA\u6587\u5E76\u751F\u6210\u6458\u8981... / Fetching papers and generating digest...");
         try {
           await this.plugin.runDaily();
-          setStatus("\u2713 Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
+          setStatus("\u2713 \u5B8C\u6210\uFF01\u8BF7\u67E5\u770B PaperDaily/inbox/ \u4E2D\u4ECA\u5929\u7684\u6587\u4EF6 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
         } catch (err) {
           setStatus(`\u2717 Error: ${String(err)}`, "var(--color-red)");
         } finally {
-          btn.setButtonText("\u25B6 Run Daily Now").setDisabled(false);
+          btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setDisabled(false);
         }
       });
     });
-    containerEl.createEl("h2", { text: "Trending Papers" });
+    containerEl.createEl("h2", { text: "\u70ED\u5EA6\u8BBA\u6587 / Trending Papers" });
     containerEl.createEl("p", {
-      text: "Include high-hotness papers even if they don't match any interest keyword or direction. Hotness = version number + cross-listing breadth + recency.",
+      text: "\u5C06\u672A\u547D\u4E2D\u4EFB\u4F55\u5173\u952E\u8BCD\u4F46\u70ED\u5EA6\u8F83\u9AD8\u7684\u8BBA\u6587\u4E5F\u7EB3\u5165\u6458\u8981\u3002\u70ED\u5EA6 = \u7248\u672C\u4FEE\u8BA2\u6B21\u6570 + \u8DE8\u9886\u57DF\u5206\u7C7B\u6570 + \u53D1\u5E03\u65F6\u95F4 + HF \u70B9\u8D5E\u6570 | Include high-hotness papers even if they don't match any keyword. Hotness = revision version + cross-listing + recency + HF upvotes.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Enable Trending Mode").setDesc("Append a Trending section with zero-keyword-match papers that score high on hotness").addToggle((toggle) => toggle.setValue(this.plugin.settings.trending.enabled).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u70ED\u5EA6\u6A21\u5F0F / Enable Trending Mode").setDesc("\u5728\u6458\u8981\u672B\u5C3E\u9644\u52A0\u70ED\u5EA6\u8BBA\u6587\u677F\u5757 | Append a Trending section with zero-keyword-match papers that score high on hotness").addToggle((toggle) => toggle.setValue(this.plugin.settings.trending.enabled).onChange(async (value) => {
       this.plugin.settings.trending.enabled = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Trending Top-K").setDesc("Max number of trending papers to include per day").addSlider((slider) => slider.setLimits(1, 20, 1).setValue(this.plugin.settings.trending.topK).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u70ED\u5EA6\u8BBA\u6587\u6570 Top-K / Trending Top-K").setDesc("\u6BCF\u65E5\u6700\u591A\u5C55\u793A\u7684\u70ED\u5EA6\u8BBA\u6587\u6570 | Max number of trending papers to include per day").addSlider((slider) => slider.setLimits(1, 20, 1).setValue(this.plugin.settings.trending.topK).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.trending.topK = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Minimum Hotness Score").setDesc("Papers below this score are ignored (max possible is 9: v4+ revised + 4 categories + <24h)").addSlider((slider) => slider.setLimits(1, 9, 1).setValue(this.plugin.settings.trending.minHotness).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6700\u4F4E\u70ED\u5EA6\u5206 / Minimum Hotness Score").setDesc("\u4F4E\u4E8E\u6B64\u5206\u6570\u7684\u8BBA\u6587\u5C06\u88AB\u5FFD\u7565\uFF08\u6700\u9AD8 12 \u5206\uFF1Av4+\u4FEE\u8BA2 + 4\u5206\u7C7B + <24h + 21\u4E2AHF\u8D5E\uFF09| Papers below this score are ignored (max 12: v4+ + 4 categories + <24h + 21 HF upvotes)").addSlider((slider) => slider.setLimits(1, 9, 1).setValue(this.plugin.settings.trending.minHotness).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.trending.minHotness = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h2", { text: "Vault Linking" });
+    containerEl.createEl("h2", { text: "\u7B14\u8BB0\u5173\u8054 / Vault Linking" });
     containerEl.createEl("p", {
-      text: "Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
+      text: "\u81EA\u52A8\u5728 Vault \u4E2D\u67E5\u627E\u76F8\u5173\u7B14\u8BB0\uFF0C\u5E76\u5728\u6BCF\u65E5\u6458\u8981\u7684\u8BBA\u6587\u6761\u76EE\u4E2D\u6DFB\u52A0 [[wikilinks]] | Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Enable Vault Linking").setDesc("Scan vault notes and link related ones to each paper").addToggle((toggle) => toggle.setValue(this.plugin.settings.vaultLinking.enabled).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u7B14\u8BB0\u5173\u8054 / Enable Vault Linking").setDesc("\u626B\u63CF Vault \u7B14\u8BB0\u5E76\u5173\u8054\u5230\u6BCF\u7BC7\u8BBA\u6587 | Scan vault notes and link related ones to each paper").addToggle((toggle) => toggle.setValue(this.plugin.settings.vaultLinking.enabled).onChange(async (value) => {
       this.plugin.settings.vaultLinking.enabled = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Exclude Folders").setDesc("Comma-separated folder names to skip when building the index").addText((text) => text.setPlaceholder("PaperDaily,Clippings,Readwise").setValue(this.plugin.settings.vaultLinking.excludeFolders.join(",")).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6392\u9664\u76EE\u5F55 / Exclude Folders").setDesc("\u6784\u5EFA\u7D22\u5F15\u65F6\u8DF3\u8FC7\u7684\u76EE\u5F55\uFF0C\u9017\u53F7\u5206\u9694 | Comma-separated folder names to skip when building the index").addText((text) => text.setPlaceholder("PaperDaily,Clippings,Readwise").setValue(this.plugin.settings.vaultLinking.excludeFolders.join(",")).onChange(async (value) => {
       this.plugin.settings.vaultLinking.excludeFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Max Links Per Paper").setDesc("Maximum number of related notes shown per paper").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6BCF\u7BC7\u6700\u591A\u5173\u8054\u6570 / Max Links Per Paper").setDesc("\u6BCF\u7BC7\u8BBA\u6587\u6700\u591A\u663E\u793A\u7684\u5173\u8054\u7B14\u8BB0\u6570 | Maximum number of related notes shown per paper").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.vaultLinking.maxLinksPerPaper = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Rebuild Note Index").setDesc("Re-scan vault to update the note index (run after adding new notes)").addButton((btn) => btn.setButtonText("Rebuild Index").onClick(async () => {
-      btn.setButtonText("Scanning...").setDisabled(true);
+    new import_obsidian.Setting(containerEl).setName("\u91CD\u5EFA\u7B14\u8BB0\u7D22\u5F15 / Rebuild Note Index").setDesc("\u91CD\u65B0\u626B\u63CF Vault \u4EE5\u66F4\u65B0\u7D22\u5F15\uFF08\u6DFB\u52A0\u65B0\u7B14\u8BB0\u540E\u8FD0\u884C\uFF09| Re-scan vault to update the note index (run after adding new notes)").addButton((btn) => btn.setButtonText("\u{1F504} \u91CD\u5EFA\u7D22\u5F15 / Rebuild Index").onClick(async () => {
+      btn.setButtonText("\u626B\u63CF\u4E2D... / Scanning...").setDisabled(true);
       try {
         await this.plugin.rebuildLinkingIndex();
-        new import_obsidian.Notice("Vault index rebuilt.");
+        new import_obsidian.Notice("Vault \u7D22\u5F15\u5DF2\u91CD\u5EFA / Vault index rebuilt.");
       } finally {
-        btn.setButtonText("Rebuild Index").setDisabled(false);
+        btn.setButtonText("\u{1F504} \u91CD\u5EFA\u7D22\u5F15 / Rebuild Index").setDisabled(false);
       }
     }));
-    containerEl.createEl("h2", { text: "HuggingFace Papers" });
+    containerEl.createEl("h2", { text: "HuggingFace \u8BBA\u6587\u6E90 / HuggingFace Papers" });
     containerEl.createEl("p", {
-      text: "Fetch today's featured papers from huggingface.co/papers. Papers are community-curated with upvote counts. Upvotes boost hotness scoring and papers not in your arXiv results are added as a bonus source.",
+      text: "\u4ECE huggingface.co/papers \u6293\u53D6\u6BCF\u65E5\u7CBE\u9009\u8BBA\u6587\u3002HF \u70B9\u8D5E\u6570\u4F5C\u4E3A\u6392\u540D\u9996\u8981\u4FE1\u53F7\uFF0C\u672A\u88AB arXiv \u5173\u952E\u8BCD\u8986\u76D6\u7684\u793E\u533A\u7CBE\u9009\u8BBA\u6587\u4E5F\u4F1A\u81EA\u52A8\u8865\u5145\u8FDB\u6765 | Fetch daily featured papers from huggingface.co/papers. HF upvotes are the primary ranking signal; community picks outside your arXiv filters are added automatically.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Enable HuggingFace Source").setDesc("Fetch HF daily papers and merge upvotes into scoring").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F HuggingFace \u6E90 / Enable HuggingFace Source").setDesc("\u6293\u53D6 HF \u6BCF\u65E5\u8BBA\u6587\u5E76\u5C06\u70B9\u8D5E\u6570\u5408\u5E76\u5230\u6392\u540D\u4E2D | Fetch HF daily papers and merge upvotes into scoring").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.hfSource) == null ? void 0 : _a2.enabled) != null ? _b : true).onChange(async (value) => {
         this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
@@ -687,20 +687,20 @@ URL: ${result.url}`, "var(--color-green)");
       });
     });
     const rssHeader = containerEl.createEl("h2");
-    rssHeader.appendText("RSS Sources ");
+    rssHeader.appendText("RSS \u8BA2\u9605\u6E90 / RSS Sources ");
     rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
     containerEl.createEl("p", {
-      text: "Subscribe to custom RSS/Atom feeds (e.g. semantic scholar alerts, journal feeds). Feed parsing is not yet active \u2014 configure URLs now and they will be fetched in a future update.",
+      text: "\u8BA2\u9605\u81EA\u5B9A\u4E49 RSS/Atom \u6E90\uFF08\u5982 Semantic Scholar \u63D0\u9192\u3001\u671F\u520A\u8BA2\u9605\u7B49\uFF09\u3002Feed \u89E3\u6790\u529F\u80FD\u5C1A\u672A\u6FC0\u6D3B\uFF0C\u53EF\u63D0\u524D\u914D\u7F6E URL\uFF0C\u540E\u7EED\u7248\u672C\u5C06\u652F\u6301 | Subscribe to custom RSS/Atom feeds. Feed parsing is not yet active \u2014 configure URLs now and they will be fetched in a future update.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Enable RSS source").setDesc("(Beta) Toggle on to include RSS feeds when available").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F RSS \u6E90 / Enable RSS source").setDesc("\uFF08Beta\uFF09\u5F00\u542F\u540E\u5C06\u5728\u53EF\u7528\u65F6\u5305\u542B RSS \u8BA2\u9605\u5185\u5BB9 | (Beta) Toggle on to include RSS feeds when available").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.rssSource) == null ? void 0 : _a2.enabled) != null ? _b : false).setDisabled(true).onChange(async (value) => {
         this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Feed URLs").setDesc("One RSS/Atom URL per line. Will be parsed when beta feature activates.").addTextArea((area) => {
+    new import_obsidian.Setting(containerEl).setName("\u8BA2\u9605\u5730\u5740 / Feed URLs").setDesc("\u6BCF\u884C\u4E00\u4E2A RSS/Atom URL\uFF0CBeta \u529F\u80FD\u6FC0\u6D3B\u540E\u5C06\u81EA\u52A8\u89E3\u6790 | One RSS/Atom URL per line. Will be parsed when beta feature activates.").addTextArea((area) => {
       var _a2, _b;
       area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
       area.setValue(((_b = (_a2 = this.plugin.settings.rssSource) == null ? void 0 : _a2.feeds) != null ? _b : []).join("\n"));
@@ -711,37 +711,56 @@ URL: ${result.url}`, "var(--color-green)");
         await this.plugin.saveSettings();
       });
     });
-    containerEl.createEl("h2", { text: "Paper Download" });
+    containerEl.createEl("h2", { text: "\u5168\u6587\u4E0B\u8F7D / Paper Download" });
     containerEl.createEl("p", {
-      text: "Download the full text of top-ranked papers. HTML is converted to Markdown and saved under papers/html/. PDFs are saved under papers/pdf/. Already-downloaded files are skipped.",
+      text: "\u4E0B\u8F7D\u6392\u540D\u9760\u524D\u7684\u8BBA\u6587\u5168\u6587\u3002HTML \u8F6C\u6362\u4E3A Markdown \u5B58\u81F3 papers/html/\uFF0CPDF \u5B58\u81F3 papers/pdf/\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download full text of top-ranked papers. HTML is converted to Markdown (papers/html/); PDFs are saved as-is (papers/pdf/). Already-downloaded files are skipped.",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Save HTML as Markdown").setDesc("Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 HTML \u4E3A Markdown / Save HTML as Markdown").setDesc("\u6293\u53D6 arXiv HTML \u7248\u672C\u5E76\u5B58\u4E3A .md \u6587\u4EF6\uFF08\u9700 arXiv \u63D0\u4F9B HTML \u7248\u672C\uFF0C2023\u5E74\u540E\u8BBA\u6587\u57FA\u672C\u652F\u6301\uFF09| Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.saveHtml) != null ? _b : false).onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, saveHtml: value };
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Save PDF").setDesc("Download the PDF and save it in the vault (viewable in Obsidian)").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D PDF \u5E76\u5B58\u5165 Vault\uFF08Obsidian \u53EF\u76F4\u63A5\u9884\u89C8\uFF09| Download the PDF and save it in the vault (viewable in Obsidian)").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.savePdf) != null ? _b : false).onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Max papers to download per day").setDesc("Limit downloads to top-N ranked papers to avoid long wait times").addSlider((slider) => {
+    new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6700\u591A\u4E0B\u8F7D\u6570 / Max papers to download per day").setDesc("\u9650\u5236\u4E0B\u8F7D\u6570\u91CF\u4EE5\u907F\u514D\u7B49\u5F85\u65F6\u95F4\u8FC7\u957F | Limit downloads to top-N ranked papers to avoid long wait times").addSlider((slider) => {
       var _a2, _b;
       return slider.setLimits(1, 30, 1).setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.maxPapers) != null ? _b : 5).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, maxPapers: value };
         await this.plugin.saveSettings();
       });
     });
-    containerEl.createEl("h2", { text: "Backfill" });
-    new import_obsidian.Setting(containerEl).setName("Max Backfill Days").setDesc("Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
+    containerEl.createEl("h2", { text: "\u5386\u53F2\u56DE\u586B / Backfill" });
+    new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
       await this.plugin.saveSettings();
     }));
+    containerEl.createEl("hr");
+    const contactDiv = containerEl.createDiv({ cls: "paper-daily-contact" });
+    contactDiv.style.textAlign = "center";
+    contactDiv.style.padding = "20px 0 12px";
+    contactDiv.style.color = "var(--text-muted)";
+    contactDiv.style.fontSize = "0.88em";
+    contactDiv.style.lineHeight = "1.8";
+    contactDiv.createEl("p", {
+      text: "\u{1F916} Paper Daily \u2014 Built for the AI research community"
+    }).style.marginBottom = "4px";
+    const emailLine = contactDiv.createEl("p");
+    emailLine.style.marginBottom = "0";
+    emailLine.appendText("\u{1F4EC} \u8054\u7CFB\u4F5C\u8005 / Contact me: ");
+    const emailLink = emailLine.createEl("a", {
+      text: "astra.jwt@gmail.com",
+      href: "mailto:astra.jwt@gmail.com"
+    });
+    emailLink.style.color = "var(--interactive-accent)";
+    emailLink.style.textDecoration = "none";
   }
 };
 

@@ -315,14 +315,14 @@ export class PaperDailySettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h1", { text: "Paper Daily Settings" });
+    containerEl.createEl("h1", { text: "Paper Daily 设置 / Settings" });
 
     // ── arXiv Fetch ──────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "arXiv Fetch" });
+    containerEl.createEl("h2", { text: "arXiv 论文抓取 / Fetch" });
 
     new Setting(containerEl)
-      .setName("Categories")
-      .setDesc("Comma-separated arXiv categories (e.g. cs.AI,cs.LG,cs.CL)")
+      .setName("分类 / Categories")
+      .setDesc("arXiv 分类，逗号分隔 | Comma-separated arXiv categories (e.g. cs.AI,cs.LG,cs.CL)")
       .addText(text => text
         .setPlaceholder("cs.AI,cs.LG,cs.CL")
         .setValue(this.plugin.settings.categories.join(","))
@@ -332,8 +332,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Keywords")
-      .setDesc("Comma-separated query keywords (optional, combined with categories via AND)")
+      .setName("查询关键词 / Keywords")
+      .setDesc("与分类取 AND，为空则只按分类查询 | Combined with categories via AND; leave empty to fetch by category only")
       .addText(text => text
         .setPlaceholder("reinforcement learning, agent")
         .setValue(this.plugin.settings.keywords.join(","))
@@ -343,8 +343,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Interest Keywords")
-      .setDesc("Keywords you care about most — used for ranking and highlighting in digests")
+      .setName("兴趣关键词 / Interest Keywords")
+      .setDesc("你最关注的关键词，用于排名和摘要高亮 | Your highest-priority keywords — used for ranking and digest highlighting")
       .addText(text => text
         .setPlaceholder("rlhf, kv cache, agent")
         .setValue(this.plugin.settings.interestKeywords.join(","))
@@ -354,8 +354,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Max Results Per Day")
-      .setDesc("Maximum papers to include in daily digest (after ranking)")
+      .setName("每日最大结果数 / Max Results Per Day")
+      .setDesc("每日摘要包含的最大论文数（排名后截取）| Max papers in daily digest after ranking")
       .addSlider(slider => slider
         .setLimits(5, 100, 5)
         .setValue(this.plugin.settings.maxResultsPerDay)
@@ -366,8 +366,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Time Window (hours)")
-      .setDesc("Fetch papers from the past N hours (default 30 to catch overnight updates)")
+      .setName("时间窗口（小时）/ Time Window (hours)")
+      .setDesc("抓取过去 N 小时内的论文 | Fetch papers published within the past N hours")
       .addSlider(slider => slider
         .setLimits(12, 72, 6)
         .setValue(this.plugin.settings.timeWindowHours)
@@ -378,8 +378,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Sort By")
-      .setDesc("Sort arXiv results by submission date or last updated date")
+      .setName("排序方式 / Sort By")
+      .setDesc("按提交日期或最后更新日期排序 | Sort by submission date or last updated date")
       .addDropdown(drop => drop
         .addOption("submittedDate", "Submitted Date")
         .addOption("lastUpdatedDate", "Last Updated Date")
@@ -390,11 +390,11 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     // ── Directions ───────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Directions / Themes" });
+    containerEl.createEl("h2", { text: "研究方向 / Directions & Themes" });
 
     new Setting(containerEl)
-      .setName("Direction Top-K")
-      .setDesc("Number of top directions to show in daily digest")
+      .setName("方向显示数 Top-K / Direction Top-K")
+      .setDesc("每日摘要中展示的最多方向数 | Number of top directions shown in daily digest")
       .addSlider(slider => slider
         .setLimits(1, 10, 1)
         .setValue(this.plugin.settings.directionTopK)
@@ -405,7 +405,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     containerEl.createEl("p", {
-      text: "Directions JSON (advanced) — edit directions config directly:",
+      text: "方向 JSON（高级）— 直接编辑方向配置 | Directions JSON (advanced) — edit direction config directly:",
       cls: "setting-item-description"
     });
 
@@ -420,21 +420,21 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .addButton(btn => btn
-        .setButtonText("Save Directions")
+        .setButtonText("保存方向配置 / Save Directions")
         .setCta()
         .onClick(async () => {
           try {
             const parsed: DirectionConfig[] = JSON.parse(directionsTextArea.value);
             this.plugin.settings.directions = parsed;
             await this.plugin.saveSettings();
-            new Notice("Directions saved.");
+            new Notice("方向配置已保存 / Directions saved.");
           } catch (e) {
-            new Notice("Invalid JSON for directions.");
+            new Notice("JSON 格式错误 / Invalid JSON for directions.");
           }
         }));
 
     // ── LLM ──────────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "LLM Provider" });
+    containerEl.createEl("h2", { text: "模型配置 / LLM Provider" });
 
     // ── Preset buttons ───────────────────────────────────────────
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
@@ -532,8 +532,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     // ── Base URL ─────────────────────────────────────────────────
     new Setting(containerEl)
-      .setName("Base URL")
-      .setDesc("API endpoint (auto-filled by preset; edit for custom deployments)")
+      .setName("接口地址 / Base URL")
+      .setDesc("API 端点，选择预设后自动填入 | API endpoint (auto-filled by preset; edit for custom deployments)")
       .addText(text => {
         baseUrlInput = text.inputEl;
         text
@@ -547,8 +547,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     // ── API Key ──────────────────────────────────────────────────
     new Setting(containerEl)
-      .setName("API Key")
-      .setDesc("Your API key for the selected provider")
+      .setName("API 密钥 / API Key")
+      .setDesc("所选服务商的 API 密钥 | Your API key for the selected provider")
       .addText(text => {
         apiKeyInput = text.inputEl;
         text.inputEl.type = "password";
@@ -563,8 +563,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     // ── Model dropdown ───────────────────────────────────────────
     const modelSetting = new Setting(containerEl)
-      .setName("Model")
-      .setDesc("Select a preset model or choose Other to type a custom name");
+      .setName("模型 / Model")
+      .setDesc("从预设中选择，或选 Other 手动输入 | Select a preset model or choose Other to type a custom name");
 
     modelSetting.controlEl.style.flexDirection = "column";
     modelSetting.controlEl.style.alignItems = "flex-start";
@@ -611,8 +611,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     // ── Temperature + Max Tokens ─────────────────────────────────
     new Setting(containerEl)
-      .setName("Temperature")
-      .setDesc("LLM temperature (0.0 - 1.0)")
+      .setName("温度 / Temperature")
+      .setDesc("模型生成温度（0 = 确定性，1 = 最大随机）| LLM temperature (0.0 = deterministic, 1.0 = most random)")
       .addSlider(slider => slider
         .setLimits(0, 1, 0.05)
         .setValue(this.plugin.settings.llm.temperature)
@@ -623,8 +623,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Max Tokens")
-      .setDesc("Maximum tokens for LLM response")
+      .setName("最大 Token 数 / Max Tokens")
+      .setDesc("模型单次响应的最大 token 数 | Maximum tokens for LLM response")
       .addSlider(slider => slider
         .setLimits(512, 8192, 256)
         .setValue(this.plugin.settings.llm.maxTokens)
@@ -635,9 +635,9 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     // ── Prompt Templates ─────────────────────────────────────────
-    containerEl.createEl("h3", { text: "Daily Prompt Template" });
+    containerEl.createEl("h3", { text: "每日摘要 Prompt 模板 / Daily Prompt Template" });
     containerEl.createEl("p", {
-      text: "Placeholders: {{date}}, {{topDirections}}, {{papers_json}}, {{language}}",
+      text: "占位符 / Placeholders: {{date}}, {{topDirections}}, {{papers_json}}, {{language}}",
       cls: "setting-item-description"
     });
     const dailyPromptTA = containerEl.createEl("textarea");
@@ -647,18 +647,18 @@ export class PaperDailySettingTab extends PluginSettingTab {
     dailyPromptTA.style.fontSize = "11px";
     dailyPromptTA.value = this.plugin.settings.llm.dailyPromptTemplate;
     new Setting(containerEl)
-      .addButton(btn => btn.setButtonText("Save Daily Prompt").onClick(async () => {
+      .addButton(btn => btn.setButtonText("保存 Prompt / Save Daily Prompt").onClick(async () => {
         this.plugin.settings.llm.dailyPromptTemplate = dailyPromptTA.value;
         await this.plugin.saveSettings();
-        new Notice("Daily prompt saved.");
+        new Notice("每日摘要 Prompt 已保存 / Daily prompt saved.");
       }));
 
     // ── Output ───────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Output" });
+    containerEl.createEl("h2", { text: "输出格式 / Output" });
 
     new Setting(containerEl)
-      .setName("Root Folder")
-      .setDesc("Folder inside vault where all Paper Daily files are written")
+      .setName("根目录 / Root Folder")
+      .setDesc("Vault 内所有 Paper Daily 文件的存放目录 | Folder inside vault where all Paper Daily files are written")
       .addText(text => text
         .setPlaceholder("PaperDaily")
         .setValue(this.plugin.settings.rootFolder)
@@ -668,8 +668,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Language")
-      .setDesc("Output language for AI-generated content")
+      .setName("输出语言 / Language")
+      .setDesc("AI 生成内容的语言 | Output language for AI-generated content")
       .addDropdown(drop => drop
         .addOption("zh", "中文 (Chinese)")
         .addOption("en", "English")
@@ -680,8 +680,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Include Abstract")
-      .setDesc("Include paper abstracts in the raw papers list")
+      .setName("包含摘要 / Include Abstract")
+      .setDesc("在原始论文列表中显示摘要 | Include paper abstracts in the raw papers list")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.includeAbstract)
         .onChange(async (value) => {
@@ -690,8 +690,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Include PDF Links")
-      .setDesc("Include PDF links in output markdown")
+      .setName("包含 PDF 链接 / Include PDF Links")
+      .setDesc("在输出 Markdown 中包含 PDF 链接 | Include PDF links in output markdown")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.includePdfLink)
         .onChange(async (value) => {
@@ -700,11 +700,11 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     // ── Scheduling ────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Scheduling" });
+    containerEl.createEl("h2", { text: "定时任务 / Scheduling" });
 
     new Setting(containerEl)
-      .setName("Daily Fetch Time")
-      .setDesc("Time to run daily fetch (HH:MM, 24-hour)")
+      .setName("每日抓取时间 / Daily Fetch Time")
+      .setDesc("每天自动运行的时间（24 小时制 HH:MM）| Time to run daily fetch (HH:MM, 24-hour)")
       .addText(text => text
         .setPlaceholder("08:30")
         .setValue(this.plugin.settings.schedule.dailyTime)
@@ -715,7 +715,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
 
     // ── Test ─────────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Test" });
+    containerEl.createEl("h2", { text: "测试 / Test" });
 
     const testStatusEl = containerEl.createEl("pre", { text: "" });
     testStatusEl.style.color = "var(--text-muted)";
@@ -735,60 +735,60 @@ export class PaperDailySettingTab extends PluginSettingTab {
     };
 
     new Setting(containerEl)
-      .setName("Test arXiv Fetch")
-      .setDesc("Check that arXiv is reachable and your categories return results (no LLM call, no file written)")
+      .setName("测试 arXiv 抓取 / Test arXiv Fetch")
+      .setDesc("检查 arXiv 可访问性并验证分类有结果（不调用 LLM，不写文件）| Check arXiv reachability and category results (no LLM call, no file written)")
       .addButton(btn => {
-        btn.setButtonText("🔍 Test Fetch")
+        btn.setButtonText("🔍 测试抓取 / Test Fetch")
           .onClick(async () => {
             btn.setButtonText("Fetching...").setDisabled(true);
-            setStatus("Querying arXiv...");
+            setStatus("正在查询 arXiv... / Querying arXiv...");
             try {
               const result = await this.plugin.testFetch();
               if (result.error) {
-                setStatus(`✗ Error: ${result.error}\n\nURL: ${result.url}`, "var(--color-red)");
+                setStatus(`✗ 错误 / Error: ${result.error}\n\nURL: ${result.url}`, "var(--color-red)");
               } else if (result.total === 0) {
-                setStatus(`⚠ 0 papers returned\n\nURL: ${result.url}\n\nPossible causes:\n- Categories not set (check arXiv Fetch settings)\n- Network issue\n- All papers already in dedup cache`, "var(--color-orange)");
+                setStatus(`⚠ 未返回论文 / 0 papers returned\n\nURL: ${result.url}\n\n可能原因 / Possible causes:\n- 未设置分类 / Categories not set\n- 网络问题 / Network issue\n- 已全部在去重缓存中 / All papers already in dedup cache`, "var(--color-orange)");
               } else {
-                setStatus(`✓ ${result.total} papers fetched\n\nFirst: "${result.firstTitle}"\n\nURL: ${result.url}`, "var(--color-green)");
+                setStatus(`✓ 已获取 ${result.total} 篇论文 / ${result.total} papers fetched\n\n首篇 / First: "${result.firstTitle}"\n\nURL: ${result.url}`, "var(--color-green)");
               }
             } catch (err) {
               setStatus(`✗ ${String(err)}`, "var(--color-red)");
             } finally {
-              btn.setButtonText("🔍 Test Fetch").setDisabled(false);
+              btn.setButtonText("🔍 测试抓取 / Test Fetch").setDisabled(false);
             }
           });
       });
 
     new Setting(containerEl)
-      .setName("Run Daily Report Now")
-      .setDesc("Full pipeline: fetch + AI digest + write to inbox/. Verify your API key and settings are correct first.")
+      .setName("立即运行每日报告 / Run Daily Report Now")
+      .setDesc("完整流程：抓取 + AI 摘要 + 写入 inbox/（请先确认 API Key 和配置正确）| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.")
       .addButton(btn => {
-        btn.setButtonText("▶ Run Daily Now")
+        btn.setButtonText("▶ 立即运行 / Run Daily Now")
           .setCta()
           .onClick(async () => {
             btn.setButtonText("Running...").setDisabled(true);
-            setStatus("Fetching papers and generating digest...");
+            setStatus("正在抓取论文并生成摘要... / Fetching papers and generating digest...");
             try {
               await this.plugin.runDaily();
-              setStatus("✓ Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
+              setStatus("✓ 完成！请查看 PaperDaily/inbox/ 中今天的文件 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
             } catch (err) {
               setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");
             } finally {
-              btn.setButtonText("▶ Run Daily Now").setDisabled(false);
+              btn.setButtonText("▶ 立即运行 / Run Daily Now").setDisabled(false);
             }
           });
       });
 
     // ── Trending ──────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Trending Papers" });
+    containerEl.createEl("h2", { text: "热度论文 / Trending Papers" });
     containerEl.createEl("p", {
-      text: "Include high-hotness papers even if they don't match any interest keyword or direction. Hotness = version number + cross-listing breadth + recency.",
+      text: "将未命中任何关键词但热度较高的论文也纳入摘要。热度 = 版本修订次数 + 跨领域分类数 + 发布时间 + HF 点赞数 | Include high-hotness papers even if they don't match any keyword. Hotness = revision version + cross-listing + recency + HF upvotes.",
       cls: "setting-item-description"
     });
 
     new Setting(containerEl)
-      .setName("Enable Trending Mode")
-      .setDesc("Append a Trending section with zero-keyword-match papers that score high on hotness")
+      .setName("开启热度模式 / Enable Trending Mode")
+      .setDesc("在摘要末尾附加热度论文板块 | Append a Trending section with zero-keyword-match papers that score high on hotness")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.trending.enabled)
         .onChange(async (value) => {
@@ -797,8 +797,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Trending Top-K")
-      .setDesc("Max number of trending papers to include per day")
+      .setName("热度论文数 Top-K / Trending Top-K")
+      .setDesc("每日最多展示的热度论文数 | Max number of trending papers to include per day")
       .addSlider(slider => slider
         .setLimits(1, 20, 1)
         .setValue(this.plugin.settings.trending.topK)
@@ -809,8 +809,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Minimum Hotness Score")
-      .setDesc("Papers below this score are ignored (max possible is 9: v4+ revised + 4 categories + <24h)")
+      .setName("最低热度分 / Minimum Hotness Score")
+      .setDesc("低于此分数的论文将被忽略（最高 12 分：v4+修订 + 4分类 + <24h + 21个HF赞）| Papers below this score are ignored (max 12: v4+ + 4 categories + <24h + 21 HF upvotes)")
       .addSlider(slider => slider
         .setLimits(1, 9, 1)
         .setValue(this.plugin.settings.trending.minHotness)
@@ -821,15 +821,15 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     // ── Vault Linking ─────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Vault Linking" });
+    containerEl.createEl("h2", { text: "笔记关联 / Vault Linking" });
     containerEl.createEl("p", {
-      text: "Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
+      text: "自动在 Vault 中查找相关笔记，并在每日摘要的论文条目中添加 [[wikilinks]] | Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
       cls: "setting-item-description"
     });
 
     new Setting(containerEl)
-      .setName("Enable Vault Linking")
-      .setDesc("Scan vault notes and link related ones to each paper")
+      .setName("开启笔记关联 / Enable Vault Linking")
+      .setDesc("扫描 Vault 笔记并关联到每篇论文 | Scan vault notes and link related ones to each paper")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.vaultLinking.enabled)
         .onChange(async (value) => {
@@ -838,8 +838,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Exclude Folders")
-      .setDesc("Comma-separated folder names to skip when building the index")
+      .setName("排除目录 / Exclude Folders")
+      .setDesc("构建索引时跳过的目录，逗号分隔 | Comma-separated folder names to skip when building the index")
       .addText(text => text
         .setPlaceholder("PaperDaily,Clippings,Readwise")
         .setValue(this.plugin.settings.vaultLinking.excludeFolders.join(","))
@@ -849,8 +849,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Max Links Per Paper")
-      .setDesc("Maximum number of related notes shown per paper")
+      .setName("每篇最多关联数 / Max Links Per Paper")
+      .setDesc("每篇论文最多显示的关联笔记数 | Maximum number of related notes shown per paper")
       .addSlider(slider => slider
         .setLimits(1, 10, 1)
         .setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper)
@@ -861,30 +861,30 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Rebuild Note Index")
-      .setDesc("Re-scan vault to update the note index (run after adding new notes)")
+      .setName("重建笔记索引 / Rebuild Note Index")
+      .setDesc("重新扫描 Vault 以更新索引（添加新笔记后运行）| Re-scan vault to update the note index (run after adding new notes)")
       .addButton(btn => btn
-        .setButtonText("Rebuild Index")
+        .setButtonText("🔄 重建索引 / Rebuild Index")
         .onClick(async () => {
-          btn.setButtonText("Scanning...").setDisabled(true);
+          btn.setButtonText("扫描中... / Scanning...").setDisabled(true);
           try {
             await this.plugin.rebuildLinkingIndex();
-            new Notice("Vault index rebuilt.");
+            new Notice("Vault 索引已重建 / Vault index rebuilt.");
           } finally {
-            btn.setButtonText("Rebuild Index").setDisabled(false);
+            btn.setButtonText("🔄 重建索引 / Rebuild Index").setDisabled(false);
           }
         }));
 
     // ── HuggingFace Papers ────────────────────────────────────────
-    containerEl.createEl("h2", { text: "HuggingFace Papers" });
+    containerEl.createEl("h2", { text: "HuggingFace 论文源 / HuggingFace Papers" });
     containerEl.createEl("p", {
-      text: "Fetch today's featured papers from huggingface.co/papers. Papers are community-curated with upvote counts. Upvotes boost hotness scoring and papers not in your arXiv results are added as a bonus source.",
+      text: "从 huggingface.co/papers 抓取每日精选论文。HF 点赞数作为排名首要信号，未被 arXiv 关键词覆盖的社区精选论文也会自动补充进来 | Fetch daily featured papers from huggingface.co/papers. HF upvotes are the primary ranking signal; community picks outside your arXiv filters are added automatically.",
       cls: "setting-item-description"
     });
 
     new Setting(containerEl)
-      .setName("Enable HuggingFace Source")
-      .setDesc("Fetch HF daily papers and merge upvotes into scoring")
+      .setName("开启 HuggingFace 源 / Enable HuggingFace Source")
+      .setDesc("抓取 HF 每日论文并将点赞数合并到排名中 | Fetch HF daily papers and merge upvotes into scoring")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.hfSource?.enabled ?? true)
         .onChange(async (value) => {
@@ -894,17 +894,17 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     // ── RSS Sources [beta] ────────────────────────────────────────
     const rssHeader = containerEl.createEl("h2");
-    rssHeader.appendText("RSS Sources ");
+    rssHeader.appendText("RSS 订阅源 / RSS Sources ");
     rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
 
     containerEl.createEl("p", {
-      text: "Subscribe to custom RSS/Atom feeds (e.g. semantic scholar alerts, journal feeds). Feed parsing is not yet active — configure URLs now and they will be fetched in a future update.",
+      text: "订阅自定义 RSS/Atom 源（如 Semantic Scholar 提醒、期刊订阅等）。Feed 解析功能尚未激活，可提前配置 URL，后续版本将支持 | Subscribe to custom RSS/Atom feeds. Feed parsing is not yet active — configure URLs now and they will be fetched in a future update.",
       cls: "setting-item-description"
     });
 
     new Setting(containerEl)
-      .setName("Enable RSS source")
-      .setDesc("(Beta) Toggle on to include RSS feeds when available")
+      .setName("开启 RSS 源 / Enable RSS source")
+      .setDesc("（Beta）开启后将在可用时包含 RSS 订阅内容 | (Beta) Toggle on to include RSS feeds when available")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.rssSource?.enabled ?? false)
         .setDisabled(true)   // grayed out until implemented
@@ -914,8 +914,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Feed URLs")
-      .setDesc("One RSS/Atom URL per line. Will be parsed when beta feature activates.")
+      .setName("订阅地址 / Feed URLs")
+      .setDesc("每行一个 RSS/Atom URL，Beta 功能激活后将自动解析 | One RSS/Atom URL per line. Will be parsed when beta feature activates.")
       .addTextArea(area => {
         area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
         area.setValue((this.plugin.settings.rssSource?.feeds ?? []).join("\n"));
@@ -931,15 +931,15 @@ export class PaperDailySettingTab extends PluginSettingTab {
       });
 
     // ── Paper Download ────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Paper Download" });
+    containerEl.createEl("h2", { text: "全文下载 / Paper Download" });
     containerEl.createEl("p", {
-      text: "Download the full text of top-ranked papers. HTML is converted to Markdown and saved under papers/html/. PDFs are saved under papers/pdf/. Already-downloaded files are skipped.",
+      text: "下载排名靠前的论文全文。HTML 转换为 Markdown 存至 papers/html/，PDF 存至 papers/pdf/，已下载的文件自动跳过 | Download full text of top-ranked papers. HTML is converted to Markdown (papers/html/); PDFs are saved as-is (papers/pdf/). Already-downloaded files are skipped.",
       cls: "setting-item-description"
     });
 
     new Setting(containerEl)
-      .setName("Save HTML as Markdown")
-      .setDesc("Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)")
+      .setName("保存 HTML 为 Markdown / Save HTML as Markdown")
+      .setDesc("抓取 arXiv HTML 版本并存为 .md 文件（需 arXiv 提供 HTML 版本，2023年后论文基本支持）| Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.paperDownload?.saveHtml ?? false)
         .onChange(async (value) => {
@@ -948,8 +948,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Save PDF")
-      .setDesc("Download the PDF and save it in the vault (viewable in Obsidian)")
+      .setName("保存 PDF / Save PDF")
+      .setDesc("下载 PDF 并存入 Vault（Obsidian 可直接预览）| Download the PDF and save it in the vault (viewable in Obsidian)")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
         .onChange(async (value) => {
@@ -958,8 +958,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("Max papers to download per day")
-      .setDesc("Limit downloads to top-N ranked papers to avoid long wait times")
+      .setName("每日最多下载数 / Max papers to download per day")
+      .setDesc("限制下载数量以避免等待时间过长 | Limit downloads to top-N ranked papers to avoid long wait times")
       .addSlider(slider => slider
         .setLimits(1, 30, 1)
         .setValue(this.plugin.settings.paperDownload?.maxPapers ?? 5)
@@ -970,11 +970,11 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     // ── Backfill ──────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "Backfill" });
+    containerEl.createEl("h2", { text: "历史回填 / Backfill" });
 
     new Setting(containerEl)
-      .setName("Max Backfill Days")
-      .setDesc("Maximum number of days allowed in a backfill range (guardrail)")
+      .setName("最大回填天数 / Max Backfill Days")
+      .setDesc("单次回填允许的最大天数范围（安全上限）| Maximum number of days allowed in a backfill range (guardrail)")
       .addSlider(slider => slider
         .setLimits(1, 90, 1)
         .setValue(this.plugin.settings.backfillMaxDays)
@@ -983,5 +983,28 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.backfillMaxDays = value;
           await this.plugin.saveSettings();
         }));
+
+    // ── Contact ───────────────────────────────────────────────────
+    containerEl.createEl("hr");
+    const contactDiv = containerEl.createDiv({ cls: "paper-daily-contact" });
+    contactDiv.style.textAlign = "center";
+    contactDiv.style.padding = "20px 0 12px";
+    contactDiv.style.color = "var(--text-muted)";
+    contactDiv.style.fontSize = "0.88em";
+    contactDiv.style.lineHeight = "1.8";
+
+    contactDiv.createEl("p", {
+      text: "🤖 Paper Daily — Built for the AI research community",
+    }).style.marginBottom = "4px";
+
+    const emailLine = contactDiv.createEl("p");
+    emailLine.style.marginBottom = "0";
+    emailLine.appendText("📬 联系作者 / Contact me: ");
+    const emailLink = emailLine.createEl("a", {
+      text: "astra.jwt@gmail.com",
+      href: "mailto:astra.jwt@gmail.com"
+    });
+    emailLink.style.color = "var(--interactive-accent)";
+    emailLink.style.textDecoration = "none";
   }
 }
