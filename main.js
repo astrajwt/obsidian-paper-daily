@@ -1045,22 +1045,41 @@ var ArxivSource = class {
   async fetch(params) {
     const maxResults = params.maxResults * 3;
     const url = this.buildUrl(params, maxResults);
-    const response = await (0, import_obsidian3.requestUrl)({ url, method: "GET" });
-    const xmlText = response.text;
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "application/xml");
-    const parseError = doc.querySelector("parsererror");
-    if (parseError) {
-      throw new Error(`arXiv XML parse error: ${parseError.textContent}`);
+    const delays = [5e3, 15e3, 3e4];
+    let lastErr;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      if (attempt > 0) {
+        const wait = delays[attempt - 1];
+        console.log(`[PaperDaily] arXiv 429, retrying in ${wait / 1e3}s (attempt ${attempt}/${delays.length})...`);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+      try {
+        const response = await (0, import_obsidian3.requestUrl)({ url, method: "GET" });
+        const xmlText = response.text;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "application/xml");
+        const parseError = doc.querySelector("parsererror");
+        if (parseError) {
+          throw new Error(`arXiv XML parse error: ${parseError.textContent}`);
+        }
+        const entries = Array.from(doc.querySelectorAll("entry"));
+        const papers = [];
+        for (const entry of entries) {
+          const paper = this.parseAtomEntry(entry);
+          if (paper)
+            papers.push(paper);
+        }
+        return papers;
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("429") && attempt < delays.length) {
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
     }
-    const entries = Array.from(doc.querySelectorAll("entry"));
-    const papers = [];
-    for (const entry of entries) {
-      const paper = this.parseAtomEntry(entry);
-      if (paper)
-        papers.push(paper);
-    }
-    return papers;
+    throw lastErr;
   }
 };
 

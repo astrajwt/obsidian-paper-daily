@@ -98,28 +98,44 @@ export class ArxivSource implements PaperSource {
     const maxResults = params.maxResults * 3;
     const url = this.buildUrl(params, maxResults);
 
-    const response = await requestUrl({ url, method: "GET" });
-    const xmlText = response.text;
+    // Retry with exponential backoff on 429 (arXiv rate limit)
+    const delays = [5000, 15000, 30000];
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      if (attempt > 0) {
+        const wait = delays[attempt - 1];
+        console.log(`[PaperDaily] arXiv 429, retrying in ${wait / 1000}s (attempt ${attempt}/${delays.length})...`);
+        await new Promise(r => setTimeout(r, wait));
+      }
+      try {
+        const response = await requestUrl({ url, method: "GET" });
+        const xmlText = response.text;
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "application/xml");
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "application/xml");
 
-    const parseError = doc.querySelector("parsererror");
-    if (parseError) {
-      throw new Error(`arXiv XML parse error: ${parseError.textContent}`);
+        const parseError = doc.querySelector("parsererror");
+        if (parseError) {
+          throw new Error(`arXiv XML parse error: ${parseError.textContent}`);
+        }
+
+        const entries = Array.from(doc.querySelectorAll("entry"));
+        const papers: Paper[] = [];
+        for (const entry of entries) {
+          const paper = this.parseAtomEntry(entry);
+          if (paper) papers.push(paper);
+        }
+
+        return papers;
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("429") && attempt < delays.length) {
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
     }
-
-    const entries = Array.from(doc.querySelectorAll("entry"));
-    const papers: Paper[] = [];
-    for (const entry of entries) {
-      const paper = this.parseAtomEntry(entry);
-      if (paper) papers.push(paper);
-    }
-
-    // arXiv API already returns results sorted by submittedDate descending.
-    // Time-window filtering is unreliable because arXiv only announces papers
-    // on weekdays and has variable processing delays. Just return all fetched
-    // papers and let the ranking + dedup layer handle freshness.
-    return papers;
+    throw lastErr;
   }
 }
