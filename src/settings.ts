@@ -292,7 +292,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   paperDownload: {
     enabled: false,
-    saveHtml: false,
     savePdf: false,
     maxPapers: 5
   }
@@ -912,7 +911,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
     // ── Paper Download ────────────────────────────────────────────
     containerEl.createEl("h2", { text: "全文下载 / Paper Download" });
     containerEl.createEl("p", {
-      text: "下载排名靠前的论文全文。HTML 转换为 Markdown 存至 papers/html/，PDF 存至 papers/pdf/，已下载的文件自动跳过 | Download full text of top-ranked papers. HTML is converted to Markdown (papers/html/); PDFs are saved as-is (papers/pdf/). Already-downloaded files are skipped.",
+      text: "下载排名靠前的论文 PDF，存至 papers/pdf/，已下载的文件自动跳过 | Download PDF of top-ranked papers (papers/pdf/). Already-downloaded files are skipped.",
       cls: "setting-item-description"
     });
 
@@ -923,23 +922,13 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("开启全文下载 / Enable Paper Download")
-      .setDesc("开启后可选择下载 HTML 或 PDF | When enabled, choose to download HTML and/or PDF")
+      .setDesc("开启后可下载 PDF | When enabled, download PDF")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.paperDownload?.enabled ?? false)
         .onChange(async (value) => {
           this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, enabled: value };
           await this.plugin.saveSettings();
           refreshDlSub();
-        }));
-
-    new Setting(dlSubContainer)
-      .setName("保存 HTML 为 Markdown / Save HTML as Markdown")
-      .setDesc("抓取 arXiv HTML 版本并存为 .md 文件（需 arXiv 提供 HTML 版本，2023年后论文基本支持）| Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.paperDownload?.saveHtml ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, saveHtml: value };
-          await this.plugin.saveSettings();
         }));
 
     new Setting(dlSubContainer)

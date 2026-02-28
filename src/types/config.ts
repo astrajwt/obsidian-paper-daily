@@ -79,7 +79,6 @@ export interface PaperDailySettings {
   // Paper full-text download
   paperDownload: {
     enabled: boolean;    // master toggle
-    saveHtml: boolean;   // download HTML version and save as .md
     savePdf: boolean;    // download PDF and save as .pdf
     maxPapers: number;   // max papers to download per day
   };

@@ -302,7 +302,6 @@ var DEFAULT_SETTINGS = {
   },
   paperDownload: {
     enabled: false,
-    saveHtml: false,
     savePdf: false,
     maxPapers: 5
   }
@@ -712,7 +711,7 @@ URL: ${result.url}`, "var(--color-green)");
     });
     containerEl.createEl("h2", { text: "\u5168\u6587\u4E0B\u8F7D / Paper Download" });
     containerEl.createEl("p", {
-      text: "\u4E0B\u8F7D\u6392\u540D\u9760\u524D\u7684\u8BBA\u6587\u5168\u6587\u3002HTML \u8F6C\u6362\u4E3A Markdown \u5B58\u81F3 papers/html/\uFF0CPDF \u5B58\u81F3 papers/pdf/\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download full text of top-ranked papers. HTML is converted to Markdown (papers/html/); PDFs are saved as-is (papers/pdf/). Already-downloaded files are skipped.",
+      text: "\u4E0B\u8F7D\u6392\u540D\u9760\u524D\u7684\u8BBA\u6587 PDF\uFF0C\u5B58\u81F3 papers/pdf/\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download PDF of top-ranked papers (papers/pdf/). Already-downloaded files are skipped.",
       cls: "setting-item-description"
     });
     const dlSubContainer = containerEl.createDiv();
@@ -720,19 +719,12 @@ URL: ${result.url}`, "var(--color-green)");
       var _a2;
       dlSubContainer.style.display = ((_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.enabled) ? "" : "none";
     };
-    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u5168\u6587\u4E0B\u8F7D / Enable Paper Download").setDesc("\u5F00\u542F\u540E\u53EF\u9009\u62E9\u4E0B\u8F7D HTML \u6216 PDF | When enabled, choose to download HTML and/or PDF").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u5168\u6587\u4E0B\u8F7D / Enable Paper Download").setDesc("\u5F00\u542F\u540E\u53EF\u4E0B\u8F7D PDF | When enabled, download PDF").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.enabled) != null ? _b : false).onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, enabled: value };
         await this.plugin.saveSettings();
         refreshDlSub();
-      });
-    });
-    new import_obsidian.Setting(dlSubContainer).setName("\u4FDD\u5B58 HTML \u4E3A Markdown / Save HTML as Markdown").setDesc("\u6293\u53D6 arXiv HTML \u7248\u672C\u5E76\u5B58\u4E3A .md \u6587\u4EF6\uFF08\u9700 arXiv \u63D0\u4F9B HTML \u7248\u672C\uFF0C2023\u5E74\u540E\u8BBA\u6587\u57FA\u672C\u652F\u6301\uFF09| Fetch the arXiv HTML version and save as a .md file (requires HTML version to exist on arXiv)").addToggle((toggle) => {
-      var _a2, _b;
-      return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.saveHtml) != null ? _b : false).onChange(async (value) => {
-        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, saveHtml: value };
-        await this.plugin.saveSettings();
       });
     });
     new import_obsidian.Setting(dlSubContainer).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D PDF \u5E76\u5B58\u5165 Vault\uFF08Obsidian \u53EF\u76F4\u63A5\u9884\u89C8\uFF09| Download the PDF and save it in the vault (viewable in Obsidian)").addToggle((toggle) => {
@@ -1373,164 +1365,6 @@ function getArxivId(paperId) {
 function safeFilename(id) {
   return id.replace(/[/\\:*?"<>|]/g, "_");
 }
-function convertNode(node, out) {
-  var _a2, _b, _c, _d, _e;
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = (_a2 = node.textContent) != null ? _a2 : "";
-    if (text)
-      out.push(text);
-    return;
-  }
-  if (node.nodeType !== Node.ELEMENT_NODE)
-    return;
-  const el = node;
-  const tag = el.tagName.toLowerCase();
-  if (["script", "style", "nav", "noscript", "button", "svg", "img"].includes(tag))
-    return;
-  if (el.classList.contains("ltx_navigation") || el.classList.contains("ltx_page_header") || el.classList.contains("ltx_page_footer"))
-    return;
-  if (tag === "math") {
-    const alttext = (_c = (_b = el.getAttribute("alttext")) != null ? _b : el.textContent) != null ? _c : "";
-    const isBlock = el.getAttribute("display") === "block";
-    out.push(isBlock ? `
-
-$$${alttext}$$
-
-` : `$${alttext}$`);
-    return;
-  }
-  const children = () => {
-    const buf = [];
-    Array.from(el.childNodes).forEach((child) => convertNode(child, buf));
-    return buf.join("");
-  };
-  const headings = {
-    h1: "#",
-    h2: "##",
-    h3: "###",
-    h4: "####",
-    h5: "#####",
-    h6: "######"
-  };
-  if (headings[tag]) {
-    out.push(`
-
-${headings[tag]} ${children().trim()}
-
-`);
-    return;
-  }
-  switch (tag) {
-    case "p":
-      out.push(`
-
-${children().trim()}
-
-`);
-      return;
-    case "br":
-      out.push("\n");
-      return;
-    case "li":
-      out.push(`
-- ${children().trim()}`);
-      return;
-    case "ul":
-    case "ol":
-      out.push(`
-${children()}
-`);
-      return;
-    case "code":
-      out.push(`\`${children()}\``);
-      return;
-    case "pre":
-      out.push(`
-
-\`\`\`
-${children()}
-\`\`\`
-
-`);
-      return;
-    case "strong":
-    case "b":
-      out.push(`**${children()}**`);
-      return;
-    case "em":
-    case "i":
-      out.push(`*${children()}*`);
-      return;
-    case "blockquote":
-      out.push(`
-
-> ${children().trim().replace(/\n/g, "\n> ")}
-
-`);
-      return;
-    case "hr":
-      out.push("\n\n---\n\n");
-      return;
-    case "figure": {
-      const cap = el.querySelector("figcaption");
-      if (cap)
-        out.push(`
-
-> *${(_d = cap.textContent) == null ? void 0 : _d.trim()}*
-
-`);
-      return;
-    }
-    case "a": {
-      const href = (_e = el.getAttribute("href")) != null ? _e : "";
-      const text = children().trim();
-      out.push(href && !href.startsWith("#") ? `[${text}](${href})` : text);
-      return;
-    }
-    case "table": {
-      out.push("\n\n");
-      Array.from(el.querySelectorAll("tr")).forEach((row) => {
-        const cells = Array.from(row.querySelectorAll("th, td")).map((c) => {
-          var _a3, _b2;
-          return (_b2 = (_a3 = c.textContent) == null ? void 0 : _a3.trim()) != null ? _b2 : "";
-        });
-        out.push(`| ${cells.join(" | ")} |
-`);
-      });
-      out.push("\n");
-      return;
-    }
-    default:
-      Array.from(el.childNodes).forEach((child) => convertNode(child, out));
-  }
-}
-function htmlToMarkdown(html, paper) {
-  var _a2, _b, _c, _d, _e;
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const root = (_c = (_b = (_a2 = doc.querySelector("article")) != null ? _a2 : doc.querySelector(".ltx_document")) != null ? _b : doc.querySelector("main")) != null ? _c : doc.body;
-  const buf = [];
-  Array.from(root.childNodes).forEach((child) => convertNode(child, buf));
-  const body = buf.join("").replace(/\n{3,}/g, "\n\n").trim();
-  const arxivId = getArxivId(paper.id);
-  const escapedTitle = paper.title.replace(/"/g, '\\"');
-  const frontmatter = [
-    "---",
-    `title: "${escapedTitle}"`,
-    `arxiv: ${arxivId}`,
-    `authors: [${paper.authors.slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
-    `published: ${paper.published.slice(0, 10)}`,
-    `categories: [${paper.categories.join(", ")}]`,
-    `links:`,
-    `  html: ${(_d = paper.links.html) != null ? _d : ""}`,
-    `  pdf: ${(_e = paper.links.pdf) != null ? _e : ""}`,
-    "source: arxiv-html",
-    "---"
-  ].join("\n");
-  return `${frontmatter}
-
-${body}`;
-}
 async function ensureFolder(app, folderPath) {
   if (!folderPath)
     return;
@@ -1545,31 +1379,9 @@ async function ensureFolder(app, folderPath) {
   } catch (e) {
   }
 }
-async function downloadOne(app, paper, rootFolder, saveHtml, savePdf, log) {
+async function downloadOne(app, paper, rootFolder, savePdf, log) {
   const arxivId = getArxivId(paper.id);
   const filename = safeFilename(arxivId);
-  if (saveHtml) {
-    const mdPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/html/${filename}.md`);
-    if (app.vault.getAbstractFileByPath(mdPath)) {
-      log(`HTML skip (exists): ${filename}`);
-    } else {
-      try {
-        const url = `https://arxiv.org/html/${arxivId}`;
-        const resp = await (0, import_obsidian5.requestUrl)({ url, method: "GET" });
-        if (resp.status === 200) {
-          const md = htmlToMarkdown(resp.text, paper);
-          await ensureFolder(app, `${rootFolder}/papers/html`);
-          await app.vault.create(mdPath, md);
-          log(`HTML saved: ${filename}.md (${md.length} chars)`);
-        } else {
-          log(`HTML skip (HTTP ${resp.status}): ${filename}`);
-        }
-      } catch (err) {
-        log(`HTML error: ${filename}: ${String(err)}`);
-      }
-      await sleep(1200);
-    }
-  }
   if (savePdf && paper.links.pdf) {
     const pdfPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/pdf/${filename}.pdf`);
     if (app.vault.getAbstractFileByPath(pdfPath)) {
@@ -1596,12 +1408,12 @@ async function downloadPapersForDay(app, papers, settings, log) {
   const cfg = settings.paperDownload;
   if (!(cfg == null ? void 0 : cfg.enabled))
     return;
-  if (!cfg.saveHtml && !cfg.savePdf)
+  if (!cfg.savePdf)
     return;
   const topN = papers.slice(0, (_a2 = cfg.maxPapers) != null ? _a2 : 5);
-  log(`Step DOWNLOAD: ${topN.length} papers (saveHtml=${cfg.saveHtml} savePdf=${cfg.savePdf})`);
+  log(`Step DOWNLOAD: ${topN.length} papers (savePdf=${cfg.savePdf})`);
   for (const paper of topN) {
-    await downloadOne(app, paper, settings.rootFolder, !!cfg.saveHtml, !!cfg.savePdf, log);
+    await downloadOne(app, paper, settings.rootFolder, !!cfg.savePdf, log);
   }
   log(`Step DOWNLOAD: done`);
 }
