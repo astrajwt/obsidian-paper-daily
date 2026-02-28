@@ -220,6 +220,12 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     enabled: true,
     excludeFolders: ["PaperDaily", "Clippings", "Readwise", "templates"],
     maxLinksPerPaper: 3
+  },
+
+  trending: {
+    enabled: true,
+    topK: 5,
+    minHotness: 2
   }
 };
 
@@ -743,6 +749,47 @@ export class PaperDailySettingTab extends PluginSettingTab {
             }
           });
       });
+
+    // ── Trending ──────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "Trending Papers" });
+    containerEl.createEl("p", {
+      text: "Include high-hotness papers even if they don't match any interest keyword or direction. Hotness = version number + cross-listing breadth + recency.",
+      cls: "setting-item-description"
+    });
+
+    new Setting(containerEl)
+      .setName("Enable Trending Mode")
+      .setDesc("Append a Trending section with zero-keyword-match papers that score high on hotness")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.trending.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.trending.enabled = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Trending Top-K")
+      .setDesc("Max number of trending papers to include per day")
+      .addSlider(slider => slider
+        .setLimits(1, 20, 1)
+        .setValue(this.plugin.settings.trending.topK)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.trending.topK = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Minimum Hotness Score")
+      .setDesc("Papers below this score are ignored (max possible is 9: v4+ revised + 4 categories + <24h)")
+      .addSlider(slider => slider
+        .setLimits(1, 9, 1)
+        .setValue(this.plugin.settings.trending.minHotness)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.trending.minHotness = value;
+          await this.plugin.saveSettings();
+        }));
 
     // ── Vault Linking ─────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Vault Linking" });

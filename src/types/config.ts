@@ -58,7 +58,14 @@ export interface PaperDailySettings {
   // Vault linking
   vaultLinking: {
     enabled: boolean;
-    excludeFolders: string[];   // folders to skip when building index
-    maxLinksPerPaper: number;   // max related notes shown per paper
+    excludeFolders: string[];
+    maxLinksPerPaper: number;
+  };
+
+  // Trending (zero-score papers with high hotness)
+  trending: {
+    enabled: boolean;
+    topK: number;       // how many trending papers to include
+    minHotness: number; // minimum hotness score to qualify
   };
 }

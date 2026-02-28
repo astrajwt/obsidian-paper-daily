@@ -233,6 +233,11 @@ var DEFAULT_SETTINGS = {
     enabled: true,
     excludeFolders: ["PaperDaily", "Clippings", "Readwise", "templates"],
     maxLinksPerPaper: 3
+  },
+  trending: {
+    enabled: true,
+    topK: 5,
+    minHotness: 2
   }
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
@@ -570,6 +575,23 @@ URL: ${result.url}`, "var(--color-green)");
         }
       });
     });
+    containerEl.createEl("h2", { text: "Trending Papers" });
+    containerEl.createEl("p", {
+      text: "Include high-hotness papers even if they don't match any interest keyword or direction. Hotness = version number + cross-listing breadth + recency.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian.Setting(containerEl).setName("Enable Trending Mode").setDesc("Append a Trending section with zero-keyword-match papers that score high on hotness").addToggle((toggle) => toggle.setValue(this.plugin.settings.trending.enabled).onChange(async (value) => {
+      this.plugin.settings.trending.enabled = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("Trending Top-K").setDesc("Max number of trending papers to include per day").addSlider((slider) => slider.setLimits(1, 20, 1).setValue(this.plugin.settings.trending.topK).setDynamicTooltip().onChange(async (value) => {
+      this.plugin.settings.trending.topK = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("Minimum Hotness Score").setDesc("Papers below this score are ignored (max possible is 9: v4+ revised + 4 categories + <24h)").addSlider((slider) => slider.setLimits(1, 9, 1).setValue(this.plugin.settings.trending.minHotness).setDynamicTooltip().onChange(async (value) => {
+      this.plugin.settings.trending.minHotness = value;
+      await this.plugin.saveSettings();
+    }));
     containerEl.createEl("h2", { text: "Vault Linking" });
     containerEl.createEl("p", {
       text: "Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
@@ -1006,6 +1028,57 @@ function rankPapers(papers, interestKeywords, directions, directionTopK) {
     return dateB - dateA;
   });
   return scored.map(({ _rankScore: _r, ...paper }) => paper);
+}
+
+// src/scoring/hotness.ts
+function extractVersion(paperId) {
+  const m = paperId.match(/v(\d+)$/i);
+  return m ? parseInt(m[1], 10) : 1;
+}
+function hoursSincePublished(paper) {
+  const dateStr = paper.published || paper.updated;
+  if (!dateStr)
+    return 9999;
+  const d = new Date(dateStr);
+  return (Date.now() - d.getTime()) / (1e3 * 3600);
+}
+function computeHotness(paper) {
+  let score = 0;
+  const reasons = [];
+  const version = extractVersion(paper.id);
+  if (version >= 4) {
+    score += 3;
+    reasons.push(`v${version} (heavily revised)`);
+  } else if (version === 3) {
+    score += 2;
+    reasons.push(`v${version} (revised twice)`);
+  } else if (version === 2) {
+    score += 1;
+    reasons.push(`v${version} (revised once)`);
+  }
+  const uniqueCats = new Set(paper.categories).size;
+  if (uniqueCats >= 4) {
+    score += 3;
+    reasons.push(`${uniqueCats} categories (broad impact)`);
+  } else if (uniqueCats === 3) {
+    score += 2;
+    reasons.push(`${uniqueCats} categories`);
+  } else if (uniqueCats === 2) {
+    score += 1;
+    reasons.push(`${uniqueCats} categories`);
+  }
+  const hours = hoursSincePublished(paper);
+  if (hours <= 24) {
+    score += 3;
+    reasons.push("published <24h ago");
+  } else if (hours <= 48) {
+    score += 2;
+    reasons.push("published <48h ago");
+  } else if (hours <= 72) {
+    score += 1;
+    reasons.push("published <72h ago");
+  }
+  return { score, reasons };
 }
 
 // src/llm/openaiCompatible.ts
@@ -4304,7 +4377,7 @@ function formatTopDirections(papers, topK) {
     return "No directions detected.";
   return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
 }
-function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, relatedNotesMap, error) {
+function buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, aiDigest, relatedNotesMap, error) {
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4368,10 +4441,36 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
     "|-------|---------|------------|---------------|-------|",
     ...allPapersRows
   ].join("\n");
-  return [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection].join("\n");
+  let trendingSection = "";
+  if (trendingPapers.length > 0) {
+    const trendingLines = trendingPapers.map((t, i) => {
+      const links = [];
+      if (t.paper.links.html)
+        links.push(`[arXiv](${t.paper.links.html})`);
+      if (settings.includePdfLink && t.paper.links.pdf)
+        links.push(`[PDF](${t.paper.links.pdf})`);
+      const notes = relatedNotesMap.get(t.paper.id);
+      return [
+        `${i + 1}. **${t.paper.title}**`,
+        `   - Hotness: ${t.hotness.toFixed(1)} \u2014 ${t.reasons.join(", ")}`,
+        `   - Categories: ${t.paper.categories.join(", ")}`,
+        notes ? `   - Related Notes: ${notes.join(" ")}` : "",
+        `   - Links: ${links.join(", ")} | Authors: ${t.paper.authors.slice(0, 3).join(", ")}${t.paper.authors.length > 3 ? " et al." : ""}`
+      ].filter(Boolean).join("\n");
+    });
+    trendingSection = `## Trending Papers (no keyword match)
+
+> These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).
+
+${trendingLines.join("\n\n")}`;
+  }
+  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection];
+  if (trendingSection)
+    sections.push("", trendingSection);
+  return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4439,6 +4538,32 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   } else {
     log(`Step 3b LINKING: skipped (enabled=${(_e = settings.vaultLinking) == null ? void 0 : _e.enabled} linker=${!!options.linker})`);
   }
+  const trendingPapers = [];
+  if (((_f = settings.trending) == null ? void 0 : _f.enabled) && papers.length > 0) {
+    const rankedIds = new Set(rankedPapers.map((p) => p.id));
+    const unranked = papers.filter((p) => !rankedIds.has(p.id));
+    const scored = unranked.map((p) => {
+      const h = computeHotness(p);
+      return { paper: p, hotness: h.score, reasons: h.reasons };
+    }).filter((t) => {
+      var _a3;
+      return t.hotness >= ((_a3 = settings.trending.minHotness) != null ? _a3 : 2);
+    });
+    scored.sort((a, b) => b.hotness - a.hotness);
+    const topTrending = scored.slice(0, (_g = settings.trending.topK) != null ? _g : 5);
+    trendingPapers.push(...topTrending);
+    if (options.linker && ((_h = settings.vaultLinking) == null ? void 0 : _h.enabled)) {
+      for (const t of trendingPapers) {
+        const matches = options.linker.findRelated(t.paper);
+        if (matches.length > 0) {
+          relatedNotesMap.set(t.paper.id, matches.map((m) => `[[${m.displayName}]]`));
+        }
+      }
+    }
+    log(`Step 3c TRENDING: ${unranked.length} unranked papers \u2192 ${trendingPapers.length} trending (minHotness=${settings.trending.minHotness})`);
+  } else {
+    log(`Step 3c TRENDING: skipped (enabled=${(_i = settings.trending) == null ? void 0 : _i.enabled})`);
+  }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
@@ -4483,7 +4608,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, relatedNotesMap, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, relatedNotesMap, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
@@ -4950,6 +5075,7 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
     this.settings.vaultLinking = Object.assign({}, DEFAULT_SETTINGS.vaultLinking, this.settings.vaultLinking);
+    this.settings.trending = Object.assign({}, DEFAULT_SETTINGS.trending, this.settings.trending);
   }
   async saveSettings() {
     await this.saveData(this.settings);

@@ -42,6 +42,7 @@ export default class PaperDailyPlugin extends Plugin {
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
     this.settings.vaultLinking = Object.assign({}, DEFAULT_SETTINGS.vaultLinking, this.settings.vaultLinking);
+    this.settings.trending = Object.assign({}, DEFAULT_SETTINGS.trending, this.settings.trending);
   }
 
   async saveSettings(): Promise<void> {

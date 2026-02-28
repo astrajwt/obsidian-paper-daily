@@ -8,6 +8,7 @@ import { SnapshotStore } from "../storage/snapshotStore";
 import { ArxivSource } from "../sources/arxivSource";
 import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
+import { computeHotness } from "../scoring/hotness";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -45,6 +46,7 @@ function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
   rankedPapers: Paper[],
+  trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }>,
   aiDigest: string,
   relatedNotesMap: Map<string, string[]>,
   error?: string
@@ -112,7 +114,28 @@ function buildDailyMarkdown(
     ...allPapersRows
   ].join("\n");
 
-  return [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection].join("\n");
+  // Trending section
+  let trendingSection = "";
+  if (trendingPapers.length > 0) {
+    const trendingLines = trendingPapers.map((t, i) => {
+      const links: string[] = [];
+      if (t.paper.links.html) links.push(`[arXiv](${t.paper.links.html})`);
+      if (settings.includePdfLink && t.paper.links.pdf) links.push(`[PDF](${t.paper.links.pdf})`);
+      const notes = relatedNotesMap.get(t.paper.id);
+      return [
+        `${i + 1}. **${t.paper.title}**`,
+        `   - Hotness: ${t.hotness.toFixed(1)} — ${t.reasons.join(", ")}`,
+        `   - Categories: ${t.paper.categories.join(", ")}`,
+        notes ? `   - Related Notes: ${notes.join(" ")}` : "",
+        `   - Links: ${links.join(", ")} | Authors: ${t.paper.authors.slice(0, 3).join(", ")}${t.paper.authors.length > 3 ? " et al." : ""}`
+      ].filter(Boolean).join("\n");
+    });
+    trendingSection = `## Trending Papers (no keyword match)\n\n> These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).\n\n${trendingLines.join("\n\n")}`;
+  }
+
+  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection];
+  if (trendingSection) sections.push("", trendingSection);
+  return sections.join("\n");
 }
 
 export interface DailyPipelineOptions {
@@ -212,6 +235,34 @@ export async function runDailyPipeline(
     log(`Step 3b LINKING: skipped (enabled=${settings.vaultLinking?.enabled} linker=${!!options.linker})`);
   }
 
+  // ── Step 3c: Trending (zero-score papers with high hotness) ───
+  const trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }> = [];
+  if (settings.trending?.enabled && papers.length > 0) {
+    // "zero-score" = not in the ranked list (direction+interest score was 0)
+    const rankedIds = new Set(rankedPapers.map(p => p.id));
+    const unranked = papers.filter(p => !rankedIds.has(p.id));
+    const scored = unranked.map(p => {
+      const h = computeHotness(p);
+      return { paper: p, hotness: h.score, reasons: h.reasons };
+    }).filter(t => t.hotness >= (settings.trending.minHotness ?? 2));
+    scored.sort((a, b) => b.hotness - a.hotness);
+    const topTrending = scored.slice(0, settings.trending.topK ?? 5);
+    trendingPapers.push(...topTrending);
+
+    // Also link trending papers
+    if (options.linker && settings.vaultLinking?.enabled) {
+      for (const t of trendingPapers) {
+        const matches = options.linker.findRelated(t.paper);
+        if (matches.length > 0) {
+          relatedNotesMap.set(t.paper.id, matches.map(m => `[[${m.displayName}]]`));
+        }
+      }
+    }
+    log(`Step 3c TRENDING: ${unranked.length} unranked papers → ${trendingPapers.length} trending (minHotness=${settings.trending.minHotness})`);
+  } else {
+    log(`Step 3c TRENDING: skipped (enabled=${settings.trending?.enabled})`);
+  }
+
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
@@ -257,7 +308,7 @@ export async function runDailyPipeline(
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, relatedNotesMap, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, trendingPapers, llmDigest, relatedNotesMap, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
