@@ -88,7 +88,7 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes → direction re
 ## Today's top research directions (pre-computed):
 {{topDirections}}
 
-## arXiv papers to analyze (pre-ranked, with LLM scores already computed):
+## arXiv papers to analyze (pre-ranked):
 {{papers_json}}
 
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
@@ -99,22 +99,43 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes → direction re
 Generate the daily digest with the following sections:
 
 ### 今日要点 / Key Takeaways
-5–8 punchy bullet points covering BOTH arXiv papers AND HF community picks:
-- For arXiv: what actually moved the needle today vs incremental noise
-- For HF: what the community is excited about, any surprises or recurring themes
-- Note any overlap: papers that appear in both arXiv results and HF daily
+3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
 ### 方向脉搏 / Direction Pulse
-For each active direction above, one sentence: what are today's papers pushing forward?
+For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
+
+### 精选论文 / Curated Papers
+For **each paper** in the arXiv list, output exactly this structure:
+
+**[N]. {title}**
+- 🤗 HF 活跃度: {hfUpvotes} upvotes — {brief interpretation: e.g. "社区高度关注" / "小众但相关" / "未上榜"}
+- ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
+- 🧭 方向: {matched directions}  |  关键词: {interest hits}
+- 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
+- 🔧 工程启示: what can a practitioner/engineer take away or act on? Be concrete.
+- ⚠️ 局限性: honest weaknesses — scope, baselines, reproducibility, generalization, etc.
+- 🔗 {links from the paper data}
+
+Value rating guide — be calibrated, not generous:
+★★★★★  Breakthrough: likely to shift practice or become a citation anchor
+★★★★☆  Strong: clear improvement, solid evaluation, worth reading in full
+★★★☆☆  Solid: incremental but honest; good for domain awareness
+★★☆☆☆  Weak: narrow scope, questionable baselines, or limited novelty
+★☆☆☆☆  Skip: below standard, off-topic, or superseded
+
+### HF 社区信号 / HF Community Signal
+From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
 ### 今日结语 / Closing
-2–3 sentences: the most important signal to watch from today's combined batch.
+2–3 sentences: the most important thing to keep an eye on from today's batch.
 
 ---
 Rules:
-- Be direct, not hedged. State assessments confidently.
-- If a paper is heavily upvoted on HF but low relevance to directions, flag the discrepancy.
-- Keep engineering perspective front and center.`;
+- Do NOT hedge every sentence. State your assessment directly.
+- If hfUpvotes is high but direction relevance is low, note the discrepancy.
+- If a paper seems overhyped relative to its technical content, say so.
+- Keep engineering perspective front and center.
+- 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".`;
 
 export const DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
 
@@ -769,31 +790,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
       testStatusEl.style.color = color;
       testStatusEl.setText(text);
     };
-
-    new Setting(containerEl)
-      .setName("测试 arXiv 抓取 / Test arXiv Fetch")
-      .setDesc("检查 arXiv 可访问性并验证分类有结果（不调用 LLM，不写文件）| Check arXiv reachability and category results (no LLM call, no file written)")
-      .addButton(btn => {
-        btn.setButtonText("🔍 测试抓取 / Test Fetch")
-          .onClick(async () => {
-            btn.setButtonText("Fetching...").setDisabled(true);
-            setStatus("正在查询 arXiv... / Querying arXiv...");
-            try {
-              const result = await this.plugin.testFetch();
-              if (result.error) {
-                setStatus(`✗ 错误 / Error: ${result.error}\n\nURL: ${result.url}`, "var(--color-red)");
-              } else if (result.total === 0) {
-                setStatus(`⚠ 未返回论文 / 0 papers returned\n\nURL: ${result.url}\n\n可能原因 / Possible causes:\n- 未设置分类 / Categories not set\n- 网络问题 / Network issue\n- 已全部在去重缓存中 / All papers already in dedup cache`, "var(--color-orange)");
-              } else {
-                setStatus(`✓ 已获取 ${result.total} 篇论文 / ${result.total} papers fetched\n\n首篇 / First: "${result.firstTitle}"\n\nURL: ${result.url}`, "var(--color-green)");
-              }
-            } catch (err) {
-              setStatus(`✗ ${String(err)}`, "var(--color-red)");
-            } finally {
-              btn.setButtonText("🔍 测试抓取 / Test Fetch").setDisabled(false);
-            }
-          });
-      });
 
     new Setting(containerEl)
       .setName("立即运行每日报告 / Run Daily Report Now")

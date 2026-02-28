@@ -110,7 +110,7 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes \u2192 direction
 ## Today's top research directions (pre-computed):
 {{topDirections}}
 
-## arXiv papers to analyze (pre-ranked, with LLM scores already computed):
+## arXiv papers to analyze (pre-ranked):
 {{papers_json}}
 
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
@@ -121,22 +121,43 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes \u2192 direction
 Generate the daily digest with the following sections:
 
 ### \u4ECA\u65E5\u8981\u70B9 / Key Takeaways
-5\u20138 punchy bullet points covering BOTH arXiv papers AND HF community picks:
-- For arXiv: what actually moved the needle today vs incremental noise
-- For HF: what the community is excited about, any surprises or recurring themes
-- Note any overlap: papers that appear in both arXiv results and HF daily
+3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
 ### \u65B9\u5411\u8109\u640F / Direction Pulse
-For each active direction above, one sentence: what are today's papers pushing forward?
+For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
+
+### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
+For **each paper** in the arXiv list, output exactly this structure:
+
+**[N]. {title}**
+- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {brief interpretation: e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173" / "\u672A\u4E0A\u699C"}
+- \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
+- \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
+- \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
+- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on? Be concrete.
+- \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, generalization, etc.
+- \u{1F517} {links from the paper data}
+
+Value rating guide \u2014 be calibrated, not generous:
+\u2605\u2605\u2605\u2605\u2605  Breakthrough: likely to shift practice or become a citation anchor
+\u2605\u2605\u2605\u2605\u2606  Strong: clear improvement, solid evaluation, worth reading in full
+\u2605\u2605\u2605\u2606\u2606  Solid: incremental but honest; good for domain awareness
+\u2605\u2605\u2606\u2606\u2606  Weak: narrow scope, questionable baselines, or limited novelty
+\u2605\u2606\u2606\u2606\u2606  Skip: below standard, off-topic, or superseded
+
+### HF \u793E\u533A\u4FE1\u53F7 / HF Community Signal
+From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
 ### \u4ECA\u65E5\u7ED3\u8BED / Closing
-2\u20133 sentences: the most important signal to watch from today's combined batch.
+2\u20133 sentences: the most important thing to keep an eye on from today's batch.
 
 ---
 Rules:
-- Be direct, not hedged. State assessments confidently.
-- If a paper is heavily upvoted on HF but low relevance to directions, flag the discrepancy.
-- Keep engineering perspective front and center.`;
+- Do NOT hedge every sentence. State your assessment directly.
+- If hfUpvotes is high but direction relevance is low, note the discrepancy.
+- If a paper seems overhyped relative to its technical content, say so.
+- Keep engineering perspective front and center.
+- \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".`;
 var DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
 
 Week: {{week}}
@@ -608,39 +629,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       testStatusEl.style.color = color;
       testStatusEl.setText(text);
     };
-    new import_obsidian.Setting(containerEl).setName("\u6D4B\u8BD5 arXiv \u6293\u53D6 / Test arXiv Fetch").setDesc("\u68C0\u67E5 arXiv \u53EF\u8BBF\u95EE\u6027\u5E76\u9A8C\u8BC1\u5206\u7C7B\u6709\u7ED3\u679C\uFF08\u4E0D\u8C03\u7528 LLM\uFF0C\u4E0D\u5199\u6587\u4EF6\uFF09| Check arXiv reachability and category results (no LLM call, no file written)").addButton((btn) => {
-      btn.setButtonText("\u{1F50D} \u6D4B\u8BD5\u6293\u53D6 / Test Fetch").onClick(async () => {
-        btn.setButtonText("Fetching...").setDisabled(true);
-        setStatus("\u6B63\u5728\u67E5\u8BE2 arXiv... / Querying arXiv...");
-        try {
-          const result = await this.plugin.testFetch();
-          if (result.error) {
-            setStatus(`\u2717 \u9519\u8BEF / Error: ${result.error}
-
-URL: ${result.url}`, "var(--color-red)");
-          } else if (result.total === 0) {
-            setStatus(`\u26A0 \u672A\u8FD4\u56DE\u8BBA\u6587 / 0 papers returned
-
-URL: ${result.url}
-
-\u53EF\u80FD\u539F\u56E0 / Possible causes:
-- \u672A\u8BBE\u7F6E\u5206\u7C7B / Categories not set
-- \u7F51\u7EDC\u95EE\u9898 / Network issue
-- \u5DF2\u5168\u90E8\u5728\u53BB\u91CD\u7F13\u5B58\u4E2D / All papers already in dedup cache`, "var(--color-orange)");
-          } else {
-            setStatus(`\u2713 \u5DF2\u83B7\u53D6 ${result.total} \u7BC7\u8BBA\u6587 / ${result.total} papers fetched
-
-\u9996\u7BC7 / First: "${result.firstTitle}"
-
-URL: ${result.url}`, "var(--color-green)");
-          }
-        } catch (err) {
-          setStatus(`\u2717 ${String(err)}`, "var(--color-red)");
-        } finally {
-          btn.setButtonText("\u{1F50D} \u6D4B\u8BD5\u6293\u53D6 / Test Fetch").setDisabled(false);
-        }
-      });
-    });
     new import_obsidian.Setting(containerEl).setName("\u7ACB\u5373\u8FD0\u884C\u6BCF\u65E5\u62A5\u544A / Run Daily Report Now").setDesc("\u5B8C\u6574\u6D41\u7A0B\uFF1A\u6293\u53D6 + AI \u6458\u8981 + \u5199\u5165 inbox/\uFF08\u8BF7\u5148\u786E\u8BA4 API Key \u548C\u914D\u7F6E\u6B63\u786E\uFF09| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.").addButton((btn) => {
       btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setCta().onClick(async () => {
         btn.setButtonText("Running...").setDisabled(true);
