@@ -66,6 +66,8 @@ export interface PaperDailySettings {
   // HuggingFace Papers source
   hfSource: {
     enabled: boolean;
+    lookbackDays: number;  // if today has no papers, try up to N previous days
+    dedup: boolean;        // skip HF papers already seen on a previous day
   };
 
   // RSS source [beta]

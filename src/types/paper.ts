@@ -13,6 +13,7 @@ export interface Paper {
 
   // HuggingFace enrichment
   hfUpvotes?: number;
+  hfStreak?: number;   // consecutive days on HF daily (tracked across runs)
 
   // computed fields
   interestHits?: string[];

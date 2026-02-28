@@ -296,7 +296,9 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   },
 
   hfSource: {
-    enabled: true
+    enabled: true,
+    lookbackDays: 3,
+    dedup: false
   },
 
   rssSource: {
@@ -860,6 +862,28 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.hfSource?.enabled ?? true)
         .onChange(async (value) => {
           this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("回溯天数 / Lookback Days")
+      .setDesc("今日无数据时（如周末）往前查找最近几天的 HF 精选 | If today has no HF papers (e.g. weekend), look back up to N days")
+      .addSlider(slider => slider
+        .setLimits(0, 7, 1)
+        .setValue(this.plugin.settings.hfSource?.lookbackDays ?? 3)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("跳过已出现过的 HF 精选 / Dedup HF Papers")
+      .setDesc("开启后，曾在 HF 精选中出现过的论文不再重复展示；arXiv 有新版本的论文不受影响 | Skip HF papers already shown on a previous day; arXiv updates are unaffected")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.hfSource?.dedup ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, dedup: value };
           await this.plugin.saveSettings();
         }));
 

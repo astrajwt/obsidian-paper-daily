@@ -14,6 +14,7 @@ import { downloadPapersForDay } from "../storage/paperDownloader";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
+import type { HFTrackStore } from "../storage/hfTrackStore";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -125,8 +126,9 @@ function buildDailyMarkdown(
       if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
       const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
       const arxivBadge = arxivBaseIds.has(p.id) ? " 📄 今日 arXiv 收录" : "";
+      const streakBadge = (p.hfStreak ?? 1) > 1 ? ` 🔥 霸榜${p.hfStreak}天` : "";
       return [
-        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}`,
+        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}${streakBadge}`,
         `   - Links: ${linksArr.join(", ")}`,
         `   - Authors: ${authorsStr}`,
         `   - Published: ${p.published.slice(0, 10)}`,
@@ -183,6 +185,7 @@ export interface DailyPipelineOptions {
   windowStart?: Date;
   windowEnd?: Date;
   skipDedup?: boolean;
+  hfTrackStore?: HFTrackStore;
 }
 
 export async function runDailyPipeline(
@@ -252,14 +255,39 @@ export async function runDailyPipeline(
   if (settings.hfSource?.enabled !== false) {
     try {
       const hfSource = new HFSource();
-      hfDailyPapers = await hfSource.fetchForDate(date);
-      log(`Step 1b HF FETCH: got ${hfDailyPapers.length} papers for date=${date}`);
+      const lookback = settings.hfSource?.lookbackDays ?? 3;
+      let hfFetchDate = date;
+
+      // Try today first; if empty (e.g. weekend/holiday), look back up to lookbackDays
+      for (let d = 0; d <= lookback; d++) {
+        const tryDate = d === 0 ? date
+          : getISODate(new Date(new Date(date + "T12:00:00Z").getTime() - d * 86400000));
+        const fetched = await hfSource.fetchForDate(tryDate);
+        if (fetched.length > 0) {
+          hfDailyPapers = fetched;
+          hfFetchDate = tryDate;
+          break;
+        }
+      }
+      log(`Step 1b HF FETCH: got ${hfDailyPapers.length} papers (date=${hfFetchDate}${hfFetchDate !== date ? `, lookback from ${date}` : ""})`);
 
       if (hfDailyPapers.length > 0) {
         activeSources.push("huggingface");
 
+        // Track appearances + compute streak; apply dedup if configured
+        if (options.hfTrackStore) {
+          for (const p of hfDailyPapers) {
+            p.hfStreak = options.hfTrackStore.track(p.id, p.title, hfFetchDate);
+          }
+          await options.hfTrackStore.save();
+          if (settings.hfSource?.dedup) {
+            const before = hfDailyPapers.length;
+            hfDailyPapers = hfDailyPapers.filter(p => !options.hfTrackStore!.seenBefore(p.id, hfFetchDate));
+            log(`Step 1b HF DEDUP: ${before} → ${hfDailyPapers.length} papers (removed ${before - hfDailyPapers.length} previously seen)`);
+          }
+        }
+
         // Enrich arXiv papers that also appear on HF with upvotes + HF link.
-        // HF-only papers are NOT merged into the arXiv list — they are displayed separately.
         const hfByBaseId = new Map<string, Paper>();
         for (const hfp of hfDailyPapers) {
           hfByBaseId.set(hfp.id, hfp);

@@ -5,6 +5,7 @@ import { VaultWriter } from "./storage/vaultWriter";
 import { StateStore } from "./storage/stateStore";
 import { DedupStore } from "./storage/dedupStore";
 import { SnapshotStore } from "./storage/snapshotStore";
+import { HFTrackStore } from "./storage/hfTrackStore";
 import { runDailyPipeline } from "./pipeline/dailyPipeline";
 import { runBackfillPipeline } from "./pipeline/backfillPipeline";
 import { Scheduler } from "./scheduler/scheduler";
@@ -16,6 +17,7 @@ export default class PaperDailyPlugin extends Plugin {
   private stateStore!: StateStore;
   private dedupStore!: DedupStore;
   private snapshotStore!: SnapshotStore;
+  private hfTrackStore!: HFTrackStore;
   private scheduler!: Scheduler;
 
   async onload(): Promise<void> {
@@ -58,9 +60,11 @@ export default class PaperDailyPlugin extends Plugin {
     this.stateStore = new StateStore(writer, this.settings.rootFolder);
     this.dedupStore = new DedupStore(writer, this.settings.rootFolder);
     this.snapshotStore = new SnapshotStore(writer, this.settings.rootFolder);
+    this.hfTrackStore = new HFTrackStore(writer, this.settings.rootFolder);
 
     await this.stateStore.load();
     await this.dedupStore.load();
+    await this.hfTrackStore.load();
 
     const root = this.settings.rootFolder;
     for (const sub of ["inbox", "papers", "cache"]) {
@@ -131,7 +135,8 @@ export default class PaperDailyPlugin extends Plugin {
       this.settings,
       this.stateStore,
       this.dedupStore,
-      this.snapshotStore
+      this.snapshotStore,
+      { hfTrackStore: this.hfTrackStore }
     );
   }
 

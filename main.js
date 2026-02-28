@@ -308,7 +308,9 @@ var DEFAULT_SETTINGS = {
     minHotness: 2
   },
   hfSource: {
-    enabled: true
+    enabled: true,
+    lookbackDays: 3,
+    dedup: false
   },
   rssSource: {
     enabled: false,
@@ -685,6 +687,20 @@ URL: ${result.url}`, "var(--color-green)");
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u56DE\u6EAF\u5929\u6570 / Lookback Days").setDesc("\u4ECA\u65E5\u65E0\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\u5F80\u524D\u67E5\u627E\u6700\u8FD1\u51E0\u5929\u7684 HF \u7CBE\u9009 | If today has no HF papers (e.g. weekend), look back up to N days").addSlider((slider) => {
+      var _a2, _b;
+      return slider.setLimits(0, 7, 1).setValue((_b = (_a2 = this.plugin.settings.hfSource) == null ? void 0 : _a2.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("\u8DF3\u8FC7\u5DF2\u51FA\u73B0\u8FC7\u7684 HF \u7CBE\u9009 / Dedup HF Papers").setDesc("\u5F00\u542F\u540E\uFF0C\u66FE\u5728 HF \u7CBE\u9009\u4E2D\u51FA\u73B0\u8FC7\u7684\u8BBA\u6587\u4E0D\u518D\u91CD\u590D\u5C55\u793A\uFF1BarXiv \u6709\u65B0\u7248\u672C\u7684\u8BBA\u6587\u4E0D\u53D7\u5F71\u54CD | Skip HF papers already shown on a previous day; arXiv updates are unaffected").addToggle((toggle) => {
+      var _a2, _b;
+      return toggle.setValue((_b = (_a2 = this.plugin.settings.hfSource) == null ? void 0 : _a2.dedup) != null ? _b : false).onChange(async (value) => {
+        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, dedup: value };
+        await this.plugin.saveSettings();
+      });
+    });
     const rssHeader = containerEl.createEl("h2");
     rssHeader.appendText("RSS \u8BA2\u9605\u6E90 / RSS Sources ");
     rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
@@ -988,6 +1004,49 @@ var SnapshotStore = class {
         results.push(snap);
     }
     return results;
+  }
+};
+
+// src/storage/hfTrackStore.ts
+var HFTrackStore = class {
+  constructor(writer, rootFolder) {
+    this.writer = writer;
+    this.map = {};
+    this.path = `${rootFolder}/cache/hf_track.json`;
+  }
+  async load() {
+    const content = await this.writer.readNote(this.path);
+    if (content) {
+      try {
+        this.map = JSON.parse(content);
+      } catch (e) {
+        this.map = {};
+      }
+    }
+  }
+  async save() {
+    await this.writer.writeNote(this.path, JSON.stringify(this.map, null, 2));
+  }
+  // Record that a paper appeared on HF on this date. Returns updated count.
+  track(id, title, date) {
+    const existing = this.map[id];
+    if (existing) {
+      if (existing.lastSeen === date)
+        return existing.count;
+      existing.lastSeen = date;
+      existing.count += 1;
+      return existing.count;
+    }
+    this.map[id] = { title, firstSeen: date, lastSeen: date, count: 1 };
+    return 1;
+  }
+  getEntry(id) {
+    return this.map[id];
+  }
+  // Was this paper seen before this date?
+  seenBefore(id, date) {
+    const e = this.map[id];
+    return !!e && e.firstSeen < date;
   }
 };
 
@@ -4918,7 +4977,7 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
     const alsoInArxivCount = hfDailyPapers.filter((p) => arxivBaseIds.has(p.id)).length;
     const summaryLine = alsoInArxivCount > 0 ? `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5176\u4E2D ${alsoInArxivCount} \u7BC7\u540C\u65F6\u51FA\u73B0\u5728\u4ECA\u65E5 arXiv \u68C0\u7D22\u7ED3\u679C\u4E2D\u3002` : `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5747\u4E0D\u5728\u4ECA\u65E5 arXiv \u5173\u952E\u8BCD\u68C0\u7D22\u8303\u56F4\u5185\u3002`;
     const hfLines = hfDailyPapers.map((p, i) => {
-      var _a2;
+      var _a2, _b;
       const linksArr = [];
       if (p.links.hf)
         linksArr.push(`[HF](${p.links.hf})`);
@@ -4928,8 +4987,9 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
         linksArr.push(`[PDF](${p.links.pdf})`);
       const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
       const arxivBadge = arxivBaseIds.has(p.id) ? " \u{1F4C4} \u4ECA\u65E5 arXiv \u6536\u5F55" : "";
+      const streakBadge = ((_a2 = p.hfStreak) != null ? _a2 : 1) > 1 ? ` \u{1F525} \u9738\u699C${p.hfStreak}\u5929` : "";
       return [
-        `${i + 1}. **${p.title}** \u{1F917} ${(_a2 = p.hfUpvotes) != null ? _a2 : 0}${arxivBadge}`,
+        `${i + 1}. **${p.title}** \u{1F917} ${(_b = p.hfUpvotes) != null ? _b : 0}${arxivBadge}${streakBadge}`,
         `   - Links: ${linksArr.join(", ")}`,
         `   - Authors: ${authorsStr}`,
         `   - Published: ${p.published.slice(0, 10)}`
@@ -4994,7 +5054,7 @@ ${trendingLines.join("\n\n")}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5047,10 +5107,31 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   if (((_d = settings.hfSource) == null ? void 0 : _d.enabled) !== false) {
     try {
       const hfSource = new HFSource();
-      hfDailyPapers = await hfSource.fetchForDate(date);
-      log(`Step 1b HF FETCH: got ${hfDailyPapers.length} papers for date=${date}`);
+      const lookback = (_f = (_e = settings.hfSource) == null ? void 0 : _e.lookbackDays) != null ? _f : 3;
+      let hfFetchDate = date;
+      for (let d = 0; d <= lookback; d++) {
+        const tryDate = d === 0 ? date : getISODate(new Date(new Date(date + "T12:00:00Z").getTime() - d * 864e5));
+        const fetched = await hfSource.fetchForDate(tryDate);
+        if (fetched.length > 0) {
+          hfDailyPapers = fetched;
+          hfFetchDate = tryDate;
+          break;
+        }
+      }
+      log(`Step 1b HF FETCH: got ${hfDailyPapers.length} papers (date=${hfFetchDate}${hfFetchDate !== date ? `, lookback from ${date}` : ""})`);
       if (hfDailyPapers.length > 0) {
         activeSources.push("huggingface");
+        if (options.hfTrackStore) {
+          for (const p of hfDailyPapers) {
+            p.hfStreak = options.hfTrackStore.track(p.id, p.title, hfFetchDate);
+          }
+          await options.hfTrackStore.save();
+          if ((_g = settings.hfSource) == null ? void 0 : _g.dedup) {
+            const before = hfDailyPapers.length;
+            hfDailyPapers = hfDailyPapers.filter((p) => !options.hfTrackStore.seenBefore(p.id, hfFetchDate));
+            log(`Step 1b HF DEDUP: ${before} \u2192 ${hfDailyPapers.length} papers (removed ${before - hfDailyPapers.length} previously seen)`);
+          }
+        }
         const hfByBaseId = /* @__PURE__ */ new Map();
         for (const hfp of hfDailyPapers) {
           hfByBaseId.set(hfp.id, hfp);
@@ -5060,7 +5141,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
           if (hfMatch) {
-            p.hfUpvotes = (_e = hfMatch.hfUpvotes) != null ? _e : 0;
+            p.hfUpvotes = (_h = hfMatch.hfUpvotes) != null ? _h : 0;
             if (hfMatch.links.hf)
               p.links = { ...p.links, hf: hfMatch.links.hf };
             enrichedCount++;
@@ -5138,7 +5219,7 @@ ${JSON.stringify(papersForScoring)}`;
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
   const trendingPapers = [];
-  if (((_f = settings.trending) == null ? void 0 : _f.enabled) && papers.length > 0) {
+  if (((_i = settings.trending) == null ? void 0 : _i.enabled) && papers.length > 0) {
     const rankedIds = new Set(rankedPapers.map((p) => p.id));
     const unranked = papers.filter((p) => !rankedIds.has(p.id));
     const scored = unranked.map((p) => {
@@ -5149,11 +5230,11 @@ ${JSON.stringify(papersForScoring)}`;
       return t.hotness >= ((_a3 = settings.trending.minHotness) != null ? _a3 : 2);
     });
     scored.sort((a, b) => b.hotness - a.hotness);
-    const topTrending = scored.slice(0, (_g = settings.trending.topK) != null ? _g : 5);
+    const topTrending = scored.slice(0, (_j = settings.trending.topK) != null ? _j : 5);
     trendingPapers.push(...topTrending);
     log(`Step 3c TRENDING: ${unranked.length} unranked papers \u2192 ${trendingPapers.length} trending (minHotness=${settings.trending.minHotness})`);
   } else {
-    log(`Step 3c TRENDING: skipped (enabled=${(_h = settings.trending) == null ? void 0 : _h.enabled})`);
+    log(`Step 3c TRENDING: skipped (enabled=${(_k = settings.trending) == null ? void 0 : _k.enabled})`);
   }
   if (rankedPapers.length > 0) {
     await downloadPapersForDay(app, rankedPapers, settings, log);
@@ -5364,8 +5445,10 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     this.stateStore = new StateStore(writer, this.settings.rootFolder);
     this.dedupStore = new DedupStore(writer, this.settings.rootFolder);
     this.snapshotStore = new SnapshotStore(writer, this.settings.rootFolder);
+    this.hfTrackStore = new HFTrackStore(writer, this.settings.rootFolder);
     await this.stateStore.load();
     await this.dedupStore.load();
+    await this.hfTrackStore.load();
     const root = this.settings.rootFolder;
     for (const sub of ["inbox", "papers", "cache"]) {
       await writer.ensureFolder(`${root}/${sub}`);
@@ -5428,7 +5511,8 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       this.settings,
       this.stateStore,
       this.dedupStore,
-      this.snapshotStore
+      this.snapshotStore,
+      { hfTrackStore: this.hfTrackStore }
     );
   }
   async clearDedup() {
