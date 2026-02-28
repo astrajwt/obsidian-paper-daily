@@ -472,6 +472,40 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // ── Test ─────────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "Test" });
+
+    const testStatusEl = containerEl.createEl("p", {
+      text: "",
+      cls: "paper-daily-test-status"
+    });
+    testStatusEl.style.color = "var(--text-muted)";
+    testStatusEl.style.fontSize = "0.9em";
+    testStatusEl.style.minHeight = "1.4em";
+
+    new Setting(containerEl)
+      .setName("Run Daily Report Now")
+      .setDesc("Immediately trigger a full daily fetch + AI digest and write to inbox/. Use this to verify your API key and settings are working correctly.")
+      .addButton(btn => {
+        btn.setButtonText("▶ Run Daily Now")
+          .setCta()
+          .onClick(async () => {
+            btn.setButtonText("Running...").setDisabled(true);
+            testStatusEl.style.color = "var(--text-muted)";
+            testStatusEl.setText("Fetching papers and generating digest...");
+            try {
+              await this.plugin.runDaily();
+              testStatusEl.style.color = "var(--color-green)";
+              testStatusEl.setText("✓ Done! Check PaperDaily/inbox/ for today's file.");
+            } catch (err) {
+              testStatusEl.style.color = "var(--color-red)";
+              testStatusEl.setText(`✗ Error: ${String(err)}`);
+            } finally {
+              btn.setButtonText("▶ Run Daily Now").setDisabled(false);
+            }
+          });
+      });
+
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Backfill" });
 

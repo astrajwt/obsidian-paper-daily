@@ -306,6 +306,31 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.schedule.monthlyTime = value;
       await this.plugin.saveSettings();
     }));
+    containerEl.createEl("h2", { text: "Test" });
+    const testStatusEl = containerEl.createEl("p", {
+      text: "",
+      cls: "paper-daily-test-status"
+    });
+    testStatusEl.style.color = "var(--text-muted)";
+    testStatusEl.style.fontSize = "0.9em";
+    testStatusEl.style.minHeight = "1.4em";
+    new import_obsidian.Setting(containerEl).setName("Run Daily Report Now").setDesc("Immediately trigger a full daily fetch + AI digest and write to inbox/. Use this to verify your API key and settings are working correctly.").addButton((btn) => {
+      btn.setButtonText("\u25B6 Run Daily Now").setCta().onClick(async () => {
+        btn.setButtonText("Running...").setDisabled(true);
+        testStatusEl.style.color = "var(--text-muted)";
+        testStatusEl.setText("Fetching papers and generating digest...");
+        try {
+          await this.plugin.runDaily();
+          testStatusEl.style.color = "var(--color-green)";
+          testStatusEl.setText("\u2713 Done! Check PaperDaily/inbox/ for today's file.");
+        } catch (err) {
+          testStatusEl.style.color = "var(--color-red)";
+          testStatusEl.setText(`\u2717 Error: ${String(err)}`);
+        } finally {
+          btn.setButtonText("\u25B6 Run Daily Now").setDisabled(false);
+        }
+      });
+    });
     containerEl.createEl("h2", { text: "Backfill" });
     new import_obsidian.Setting(containerEl).setName("Max Backfill Days").setDesc("Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
