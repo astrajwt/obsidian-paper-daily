@@ -676,31 +676,62 @@ export class PaperDailySettingTab extends PluginSettingTab {
     // ── Test ─────────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Test" });
 
-    const testStatusEl = containerEl.createEl("p", {
-      text: "",
-      cls: "paper-daily-test-status"
-    });
+    const testStatusEl = containerEl.createEl("pre", { text: "" });
     testStatusEl.style.color = "var(--text-muted)";
-    testStatusEl.style.fontSize = "0.9em";
-    testStatusEl.style.minHeight = "1.4em";
+    testStatusEl.style.fontSize = "0.82em";
+    testStatusEl.style.whiteSpace = "pre-wrap";
+    testStatusEl.style.wordBreak = "break-all";
+    testStatusEl.style.background = "var(--background-secondary)";
+    testStatusEl.style.padding = "8px 10px";
+    testStatusEl.style.borderRadius = "6px";
+    testStatusEl.style.minHeight = "1.8em";
+    testStatusEl.style.display = "none";
+
+    const setStatus = (text: string, color = "var(--text-muted)") => {
+      testStatusEl.style.display = "";
+      testStatusEl.style.color = color;
+      testStatusEl.setText(text);
+    };
+
+    new Setting(containerEl)
+      .setName("Test arXiv Fetch")
+      .setDesc("Check that arXiv is reachable and your categories return results (no LLM call, no file written)")
+      .addButton(btn => {
+        btn.setButtonText("🔍 Test Fetch")
+          .onClick(async () => {
+            btn.setButtonText("Fetching...").setDisabled(true);
+            setStatus("Querying arXiv...");
+            try {
+              const result = await this.plugin.testFetch();
+              if (result.error) {
+                setStatus(`✗ Error: ${result.error}\n\nURL: ${result.url}`, "var(--color-red)");
+              } else if (result.total === 0) {
+                setStatus(`⚠ 0 papers returned\n\nURL: ${result.url}\n\nPossible causes:\n- Categories not set (check arXiv Fetch settings)\n- Network issue\n- All papers already in dedup cache`, "var(--color-orange)");
+              } else {
+                setStatus(`✓ ${result.total} papers fetched\n\nFirst: "${result.firstTitle}"\n\nURL: ${result.url}`, "var(--color-green)");
+              }
+            } catch (err) {
+              setStatus(`✗ ${String(err)}`, "var(--color-red)");
+            } finally {
+              btn.setButtonText("🔍 Test Fetch").setDisabled(false);
+            }
+          });
+      });
 
     new Setting(containerEl)
       .setName("Run Daily Report Now")
-      .setDesc("Immediately trigger a full daily fetch + AI digest and write to inbox/. Use this to verify your API key and settings are working correctly.")
+      .setDesc("Full pipeline: fetch + AI digest + write to inbox/. Verify your API key and settings are correct first.")
       .addButton(btn => {
         btn.setButtonText("▶ Run Daily Now")
           .setCta()
           .onClick(async () => {
             btn.setButtonText("Running...").setDisabled(true);
-            testStatusEl.style.color = "var(--text-muted)";
-            testStatusEl.setText("Fetching papers and generating digest...");
+            setStatus("Fetching papers and generating digest...");
             try {
               await this.plugin.runDaily();
-              testStatusEl.style.color = "var(--color-green)";
-              testStatusEl.setText("✓ Done! Check PaperDaily/inbox/ for today's file.");
+              setStatus("✓ Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
             } catch (err) {
-              testStatusEl.style.color = "var(--color-red)";
-              testStatusEl.setText(`✗ Error: ${String(err)}`);
+              setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");
             } finally {
               btn.setButtonText("▶ Run Daily Now").setDisabled(false);
             }

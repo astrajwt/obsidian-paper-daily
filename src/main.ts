@@ -8,6 +8,7 @@ import { SnapshotStore } from "./storage/snapshotStore";
 import { runDailyPipeline } from "./pipeline/dailyPipeline";
 import { runBackfillPipeline } from "./pipeline/backfillPipeline";
 import { runWeeklyPipeline } from "./pipeline/weeklyPipeline";
+import { ArxivSource } from "./sources/arxivSource";
 import { runMonthlyPipeline } from "./pipeline/monthlyPipeline";
 import { Scheduler } from "./scheduler/scheduler";
 
@@ -197,6 +198,30 @@ export default class PaperDailyPlugin extends Plugin {
       onProgress(`Done. ${result.processed.length} succeeded, ${errCount} failed: ${Object.keys(result.errors).join(", ")}`);
     } else {
       onProgress(`Done. ${result.processed.length} days processed.`);
+    }
+  }
+
+  async testFetch(): Promise<{ url: string; total: number; firstTitle: string; error?: string }> {
+    const source = new ArxivSource();
+    const now = new Date();
+    const params = {
+      categories: this.settings.categories,
+      keywords: this.settings.keywords,
+      maxResults: this.settings.maxResultsPerDay,
+      sortBy: this.settings.sortBy,
+      windowStart: new Date(now.getTime() - 72 * 3600 * 1000),
+      windowEnd: now
+    };
+    const url = source.buildUrl(params, params.maxResults * 3);
+    try {
+      const papers = await source.fetch(params);
+      return {
+        url,
+        total: papers.length,
+        firstTitle: papers[0]?.title ?? "(none)"
+      };
+    } catch (err) {
+      return { url, total: 0, firstTitle: "", error: String(err) };
     }
   }
 }

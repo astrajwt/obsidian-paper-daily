@@ -503,25 +503,63 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("h2", { text: "Test" });
-    const testStatusEl = containerEl.createEl("p", {
-      text: "",
-      cls: "paper-daily-test-status"
-    });
+    const testStatusEl = containerEl.createEl("pre", { text: "" });
     testStatusEl.style.color = "var(--text-muted)";
-    testStatusEl.style.fontSize = "0.9em";
-    testStatusEl.style.minHeight = "1.4em";
-    new import_obsidian.Setting(containerEl).setName("Run Daily Report Now").setDesc("Immediately trigger a full daily fetch + AI digest and write to inbox/. Use this to verify your API key and settings are working correctly.").addButton((btn) => {
+    testStatusEl.style.fontSize = "0.82em";
+    testStatusEl.style.whiteSpace = "pre-wrap";
+    testStatusEl.style.wordBreak = "break-all";
+    testStatusEl.style.background = "var(--background-secondary)";
+    testStatusEl.style.padding = "8px 10px";
+    testStatusEl.style.borderRadius = "6px";
+    testStatusEl.style.minHeight = "1.8em";
+    testStatusEl.style.display = "none";
+    const setStatus = (text, color = "var(--text-muted)") => {
+      testStatusEl.style.display = "";
+      testStatusEl.style.color = color;
+      testStatusEl.setText(text);
+    };
+    new import_obsidian.Setting(containerEl).setName("Test arXiv Fetch").setDesc("Check that arXiv is reachable and your categories return results (no LLM call, no file written)").addButton((btn) => {
+      btn.setButtonText("\u{1F50D} Test Fetch").onClick(async () => {
+        btn.setButtonText("Fetching...").setDisabled(true);
+        setStatus("Querying arXiv...");
+        try {
+          const result = await this.plugin.testFetch();
+          if (result.error) {
+            setStatus(`\u2717 Error: ${result.error}
+
+URL: ${result.url}`, "var(--color-red)");
+          } else if (result.total === 0) {
+            setStatus(`\u26A0 0 papers returned
+
+URL: ${result.url}
+
+Possible causes:
+- Categories not set (check arXiv Fetch settings)
+- Network issue
+- All papers already in dedup cache`, "var(--color-orange)");
+          } else {
+            setStatus(`\u2713 ${result.total} papers fetched
+
+First: "${result.firstTitle}"
+
+URL: ${result.url}`, "var(--color-green)");
+          }
+        } catch (err) {
+          setStatus(`\u2717 ${String(err)}`, "var(--color-red)");
+        } finally {
+          btn.setButtonText("\u{1F50D} Test Fetch").setDisabled(false);
+        }
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("Run Daily Report Now").setDesc("Full pipeline: fetch + AI digest + write to inbox/. Verify your API key and settings are correct first.").addButton((btn) => {
       btn.setButtonText("\u25B6 Run Daily Now").setCta().onClick(async () => {
         btn.setButtonText("Running...").setDisabled(true);
-        testStatusEl.style.color = "var(--text-muted)";
-        testStatusEl.setText("Fetching papers and generating digest...");
+        setStatus("Fetching papers and generating digest...");
         try {
           await this.plugin.runDaily();
-          testStatusEl.style.color = "var(--color-green)";
-          testStatusEl.setText("\u2713 Done! Check PaperDaily/inbox/ for today's file.");
+          setStatus("\u2713 Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
         } catch (err) {
-          testStatusEl.style.color = "var(--color-red)";
-          testStatusEl.setText(`\u2717 Error: ${String(err)}`);
+          setStatus(`\u2717 Error: ${String(err)}`, "var(--color-red)");
         } finally {
           btn.setButtonText("\u25B6 Run Daily Now").setDisabled(false);
         }
@@ -4877,6 +4915,30 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
       onProgress(`Done. ${result.processed.length} succeeded, ${errCount} failed: ${Object.keys(result.errors).join(", ")}`);
     } else {
       onProgress(`Done. ${result.processed.length} days processed.`);
+    }
+  }
+  async testFetch() {
+    var _a2, _b;
+    const source = new ArxivSource();
+    const now = new Date();
+    const params = {
+      categories: this.settings.categories,
+      keywords: this.settings.keywords,
+      maxResults: this.settings.maxResultsPerDay,
+      sortBy: this.settings.sortBy,
+      windowStart: new Date(now.getTime() - 72 * 3600 * 1e3),
+      windowEnd: now
+    };
+    const url = source.buildUrl(params, params.maxResults * 3);
+    try {
+      const papers = await source.fetch(params);
+      return {
+        url,
+        total: papers.length,
+        firstTitle: (_b = (_a2 = papers[0]) == null ? void 0 : _a2.title) != null ? _b : "(none)"
+      };
+    } catch (err) {
+      return { url, total: 0, firstTitle: "", error: String(err) };
     }
   }
 };
