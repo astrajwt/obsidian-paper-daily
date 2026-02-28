@@ -60,7 +60,7 @@ function buildDailyMarkdown(
     `sources: [${activeSources.join(", ")}]`,
     `categories: [${settings.categories.join(", ")}]`,
     `keywords: [${settings.keywords.join(", ")}]`,
-    `interestKeywords: [${settings.interestKeywords.join(", ")}]`,
+    `interestKeywords: [${settings.interestKeywords.map(k => `${k.keyword}(${k.weight})`).join(", ")}]`,
     "---"
   ].join("\n");
 
@@ -90,6 +90,9 @@ function buildDailyMarkdown(
     const linksStr = linksArr.join(", ");
     const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
     const upvoteStr = p.hfUpvotes != null ? ` 🤗 ${p.hfUpvotes}` : "";
+    const llmStr = p.llmScore != null
+      ? `\n   - LLM评分: ${p.llmScore}/10${p.llmScoreReason ? ` — ${p.llmScoreReason}` : ""}`
+      : "";
     return [
       `${i + 1}. **${p.title}**${upvoteStr}`,
       `   - Directions: ${dirStr}`,
@@ -97,7 +100,7 @@ function buildDailyMarkdown(
       settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
       `   - Links: ${linksStr}`,
       `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}`,
+      `   - Updated: ${p.updated.slice(0, 10)}${llmStr}`,
     ].filter(Boolean).join("\n");
   });
   const topPapersSection = `## arXiv Papers (ranked)\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
@@ -140,12 +143,13 @@ function buildDailyMarkdown(
     const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ");
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ");
     const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
-    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
+    const llmScore = p.llmScore != null ? String(p.llmScore) : "";
+    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${llmScore} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
   });
   const allPapersSection = [
     "## All Papers (raw)",
-    "| Title | Updated | Directions | Interest Hits | HF ↑ | Links |",
-    "|-------|---------|------------|---------------|------|-------|",
+    "| Title | Updated | LLM | Directions | Interest Hits | HF ↑ | Links |",
+    "|-------|---------|-----|------------|---------------|------|-------|",
     ...allPapersRows
   ].join("\n");
 
@@ -287,10 +291,61 @@ export async function runDailyPipeline(
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
 
   // ── Step 3: Score + rank ──────────────────────────────────────
-  const rankedPapers = papers.length > 0
+  let rankedPapers = papers.length > 0
     ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK)
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
+
+  // ── Step 3b: LLM scoring (all papers) ────────────────────────
+  if (rankedPapers.length > 0 && settings.llm.apiKey) {
+    try {
+      const llm = buildLLMProvider(settings);
+      const kwStr = settings.interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const papersForScoring = rankedPapers.map(p => ({
+        id: p.id,
+        title: p.title,
+        abstract: p.abstract.slice(0, 250),
+        directions: p.topDirections ?? [],
+        interestHits: p.interestHits ?? [],
+        ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {})
+      }));
+      const scoringPrompt = `Score each paper 1–10 for quality and relevance to the user's interests.
+
+User's interest keywords (higher weight = more important): ${kwStr}
+
+Scoring criteria:
+- Alignment with interest keywords and their weights
+- Technical novelty and depth
+- Practical engineering value
+- Quality of evaluation / experiments
+
+Return ONLY a valid JSON array, no explanation, no markdown fence:
+[{"id":"arxiv:...","score":8,"reason":"one short phrase"},...]
+
+Papers:
+${JSON.stringify(papersForScoring)}`;
+
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 2048 });
+      const jsonMatch = result.text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const scores: Array<{ id: string; score: number; reason: string }> = JSON.parse(jsonMatch[0]);
+        const scoreMap = new Map(scores.map(s => [s.id, s]));
+        for (const paper of rankedPapers) {
+          const s = scoreMap.get(paper.id);
+          if (s) { paper.llmScore = s.score; paper.llmScoreReason = s.reason; }
+        }
+        // Re-rank by LLM score; papers without a score fall to the end
+        rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
+        log(`Step 3b LLM SCORE: scored ${scores.length}/${rankedPapers.length} papers, re-ranked`);
+      } else {
+        log(`Step 3b LLM SCORE: could not parse JSON from response`);
+      }
+    } catch (err) {
+      log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
+    }
+  } else {
+    log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
+  }
 
   // ── Step 3c: Trending (zero-score papers with high hotness) ───
   const trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }> = [];

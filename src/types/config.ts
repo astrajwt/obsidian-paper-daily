@@ -7,6 +7,11 @@ export interface DirectionConfig {
   };
 }
 
+export interface InterestKeyword {
+  keyword: string;
+  weight: number;  // 1–5, default 1
+}
+
 export interface LLMConfig {
   provider: "openai_compatible" | "anthropic";
   baseUrl: string;
@@ -27,7 +32,7 @@ export interface PaperDailySettings {
   // arXiv fetch
   categories: string[];
   keywords: string[];
-  interestKeywords: string[];
+  interestKeywords: InterestKeyword[];
   maxResultsPerDay: number;
   sortBy: "submittedDate" | "lastUpdatedDate";
   timeWindowHours: number;

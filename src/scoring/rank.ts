@@ -1,11 +1,11 @@
 import type { Paper } from "../types/paper";
-import type { DirectionConfig } from "../types/config";
-import { computeInterestHits } from "./interest";
+import type { DirectionConfig, InterestKeyword } from "../types/config";
+import { computeInterestHits, computeWeightedInterestScore } from "./interest";
 import { computeDirectionScores, getTopDirections } from "./directions";
 
 export function rankPapers(
   papers: Paper[],
-  interestKeywords: string[],
+  interestKeywords: InterestKeyword[],
   directions: DirectionConfig[],
   directionTopK: number
 ): Paper[] {
@@ -15,13 +15,12 @@ export function rankPapers(
     const topDirections = getTopDirections(directionScores, directionTopK);
 
     const totalDirectionScore = Object.values(directionScores).reduce((a, b) => a + b, 0);
-    const interestScore = interestHits.length;
+    const interestScore = computeWeightedInterestScore(paper, interestKeywords);
 
     // Ranking priority (descending importance):
-    //   ① HuggingFace community upvotes  — log scale so 1 upvote > nothing,
-    //                                       but 100 upvotes doesn't fully eclipse relevance
+    //   ① HuggingFace community upvotes  — log scale
     //   ② Direction relevance score       — keyword matches × direction weight
-    //   ③ Interest keyword hits           — explicit user interest
+    //   ③ Weighted interest score         — user keywords × configured weight
     //   ④ Recency                         — tiebreaker only
     const hfScore = Math.log1p(paper.hfUpvotes ?? 0) * 10;
     const rankScore = hfScore + totalDirectionScore * 2 + interestScore;

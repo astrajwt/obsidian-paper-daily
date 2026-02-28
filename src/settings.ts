@@ -170,7 +170,22 @@ Format as clean Markdown.`;
 export const DEFAULT_SETTINGS: PaperDailySettings = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
   keywords: [],
-  interestKeywords: ["rlhf", "ppo", "dpo", "grpo", "agent", "agentic rl", "kv cache", "speculative decoding", "moe", "pretraining", "scaling", "long context", "multimodal", "reward model"],
+  interestKeywords: [
+    { keyword: "rlhf", weight: 3 },
+    { keyword: "ppo", weight: 2 },
+    { keyword: "dpo", weight: 2 },
+    { keyword: "grpo", weight: 2 },
+    { keyword: "agent", weight: 3 },
+    { keyword: "agentic rl", weight: 3 },
+    { keyword: "kv cache", weight: 3 },
+    { keyword: "speculative decoding", weight: 3 },
+    { keyword: "moe", weight: 2 },
+    { keyword: "pretraining", weight: 2 },
+    { keyword: "scaling", weight: 2 },
+    { keyword: "long context", weight: 2 },
+    { keyword: "multimodal", weight: 2 },
+    { keyword: "reward model", weight: 3 },
+  ],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -338,14 +353,31 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("兴趣关键词 / Interest Keywords")
-      .setDesc("你最关注的关键词，用于排名和摘要高亮 | Your highest-priority keywords — used for ranking and digest highlighting")
-      .addText(text => text
-        .setPlaceholder("rlhf, kv cache, agent")
-        .setValue(this.plugin.settings.interestKeywords.join(","))
-        .onChange(async (value) => {
-          this.plugin.settings.interestKeywords = value.split(",").map(s => s.trim()).filter(Boolean);
-          await this.plugin.saveSettings();
-        }));
+      .setDesc("每行一个，格式：keyword:weight（权重1-5，省略则默认1）| One per line: keyword:weight (weight 1–5, defaults to 1 if omitted)\n例 / e.g.:\nrlhf:3\nagent:3\nkv cache:2");
+    const ikwArea = containerEl.createEl("textarea");
+    ikwArea.style.width = "100%";
+    ikwArea.style.height = "140px";
+    ikwArea.style.fontFamily = "monospace";
+    ikwArea.style.fontSize = "12px";
+    ikwArea.value = this.plugin.settings.interestKeywords
+      .map(k => `${k.keyword}:${k.weight}`)
+      .join("\n");
+    ikwArea.addEventListener("input", async () => {
+      this.plugin.settings.interestKeywords = ikwArea.value
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+          const idx = line.lastIndexOf(":");
+          if (idx > 0) {
+            const kw = line.slice(0, idx).trim();
+            const w = parseInt(line.slice(idx + 1).trim(), 10);
+            return { keyword: kw, weight: isNaN(w) || w < 1 ? 1 : Math.min(w, 5) };
+          }
+          return { keyword: line, weight: 1 };
+        });
+      await this.plugin.saveSettings();
+    });
 
     new Setting(containerEl)
       .setName("每日最大结果数 / Max Results Per Day")

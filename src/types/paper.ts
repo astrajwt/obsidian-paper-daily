@@ -18,6 +18,8 @@ export interface Paper {
   interestHits?: string[];
   directionScores?: Record<string, number>;
   topDirections?: string[];
+  llmScore?: number;
+  llmScoreReason?: string;
 }
 
 export interface FetchParams {

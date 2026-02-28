@@ -189,7 +189,22 @@ Format as clean Markdown.`;
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
   keywords: [],
-  interestKeywords: ["rlhf", "ppo", "dpo", "grpo", "agent", "agentic rl", "kv cache", "speculative decoding", "moe", "pretraining", "scaling", "long context", "multimodal", "reward model"],
+  interestKeywords: [
+    { keyword: "rlhf", weight: 3 },
+    { keyword: "ppo", weight: 2 },
+    { keyword: "dpo", weight: 2 },
+    { keyword: "grpo", weight: 2 },
+    { keyword: "agent", weight: 3 },
+    { keyword: "agentic rl", weight: 3 },
+    { keyword: "kv cache", weight: 3 },
+    { keyword: "speculative decoding", weight: 3 },
+    { keyword: "moe", weight: 2 },
+    { keyword: "pretraining", weight: 2 },
+    { keyword: "scaling", weight: 2 },
+    { keyword: "long context", weight: 2 },
+    { keyword: "multimodal", weight: 2 },
+    { keyword: "reward model", weight: 3 }
+  ],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -324,10 +339,25 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.keywords = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords").setDesc("\u4F60\u6700\u5173\u6CE8\u7684\u5173\u952E\u8BCD\uFF0C\u7528\u4E8E\u6392\u540D\u548C\u6458\u8981\u9AD8\u4EAE | Your highest-priority keywords \u2014 used for ranking and digest highlighting").addText((text) => text.setPlaceholder("rlhf, kv cache, agent").setValue(this.plugin.settings.interestKeywords.join(",")).onChange(async (value) => {
-      this.plugin.settings.interestKeywords = value.split(",").map((s) => s.trim()).filter(Boolean);
+    new import_obsidian.Setting(containerEl).setName("\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords").setDesc("\u6BCF\u884C\u4E00\u4E2A\uFF0C\u683C\u5F0F\uFF1Akeyword:weight\uFF08\u6743\u91CD1-5\uFF0C\u7701\u7565\u5219\u9ED8\u8BA41\uFF09| One per line: keyword:weight (weight 1\u20135, defaults to 1 if omitted)\n\u4F8B / e.g.:\nrlhf:3\nagent:3\nkv cache:2");
+    const ikwArea = containerEl.createEl("textarea");
+    ikwArea.style.width = "100%";
+    ikwArea.style.height = "140px";
+    ikwArea.style.fontFamily = "monospace";
+    ikwArea.style.fontSize = "12px";
+    ikwArea.value = this.plugin.settings.interestKeywords.map((k) => `${k.keyword}:${k.weight}`).join("\n");
+    ikwArea.addEventListener("input", async () => {
+      this.plugin.settings.interestKeywords = ikwArea.value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+        const idx = line.lastIndexOf(":");
+        if (idx > 0) {
+          const kw = line.slice(0, idx).trim();
+          const w = parseInt(line.slice(idx + 1).trim(), 10);
+          return { keyword: kw, weight: isNaN(w) || w < 1 ? 1 : Math.min(w, 5) };
+        }
+        return { keyword: line, weight: 1 };
+      });
       await this.plugin.saveSettings();
-    }));
+    });
     new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6700\u5927\u7ED3\u679C\u6570 / Max Results Per Day").setDesc("\u6BCF\u65E5\u6458\u8981\u5305\u542B\u7684\u6700\u5927\u8BBA\u6587\u6570\uFF08\u6392\u540D\u540E\u622A\u53D6\uFF09| Max papers in daily digest after ranking").addSlider((slider) => slider.setLimits(5, 100, 5).setValue(this.plugin.settings.maxResultsPerDay).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.maxResultsPerDay = value;
       await this.plugin.saveSettings();
@@ -1146,13 +1176,11 @@ function normalize(text) {
 }
 function computeInterestHits(paper, keywords) {
   const haystack = normalize(`${paper.title} ${paper.abstract}`);
-  const hits = [];
-  for (const kw of keywords) {
-    if (haystack.includes(normalize(kw))) {
-      hits.push(kw);
-    }
-  }
-  return hits;
+  return keywords.filter((kw) => haystack.includes(normalize(kw.keyword))).map((kw) => kw.keyword);
+}
+function computeWeightedInterestScore(paper, keywords) {
+  const haystack = normalize(`${paper.title} ${paper.abstract}`);
+  return keywords.filter((kw) => haystack.includes(normalize(kw.keyword))).reduce((sum, kw) => sum + kw.weight, 0);
 }
 
 // src/scoring/directions.ts
@@ -1207,7 +1235,7 @@ function rankPapers(papers, interestKeywords, directions, directionTopK) {
     const directionScores = computeDirectionScores(paper, directions);
     const topDirections = getTopDirections(directionScores, directionTopK);
     const totalDirectionScore = Object.values(directionScores).reduce((a, b) => a + b, 0);
-    const interestScore = interestHits.length;
+    const interestScore = computeWeightedInterestScore(paper, interestKeywords);
     const hfScore = Math.log1p((_a2 = paper.hfUpvotes) != null ? _a2 : 0) * 10;
     const rankScore = hfScore + totalDirectionScore * 2 + interestScore;
     return {
@@ -4839,7 +4867,7 @@ function buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendin
     `sources: [${activeSources.join(", ")}]`,
     `categories: [${settings.categories.join(", ")}]`,
     `keywords: [${settings.keywords.join(", ")}]`,
-    `interestKeywords: [${settings.interestKeywords.join(", ")}]`,
+    `interestKeywords: [${settings.interestKeywords.map((k) => `${k.keyword}(${k.weight})`).join(", ")}]`,
     "---"
   ].join("\n");
   const header = `# Paper Daily \u2014 ${date}`;
@@ -4867,6 +4895,8 @@ ${aiDigest}`;
     const linksStr = linksArr.join(", ");
     const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
     const upvoteStr = p.hfUpvotes != null ? ` \u{1F917} ${p.hfUpvotes}` : "";
+    const llmStr = p.llmScore != null ? `
+   - LLM\u8BC4\u5206: ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
     return [
       `${i + 1}. **${p.title}**${upvoteStr}`,
       `   - Directions: ${dirStr}`,
@@ -4874,7 +4904,7 @@ ${aiDigest}`;
       settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
       `   - Links: ${linksStr}`,
       `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}`
+      `   - Updated: ${p.updated.slice(0, 10)}${llmStr}`
     ].filter(Boolean).join("\n");
   });
   const topPapersSection = `## arXiv Papers (ranked)
@@ -4923,12 +4953,13 @@ ${hfLines.join("\n\n")}`;
     const dirStr = ((_a2 = p.topDirections) != null ? _a2 : []).slice(0, 2).join(", ");
     const hitsStr = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ");
     const upvotes = p.hfUpvotes != null ? String(p.hfUpvotes) : "";
-    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
+    const llmScore = p.llmScore != null ? String(p.llmScore) : "";
+    return `| ${p.title.slice(0, 60)} | ${p.updated.slice(0, 10)} | ${llmScore} | ${dirStr} | ${hitsStr} | ${upvotes} | ${links.join(" ")} |`;
   });
   const allPapersSection = [
     "## All Papers (raw)",
-    "| Title | Updated | Directions | Interest Hits | HF \u2191 | Links |",
-    "|-------|---------|------------|---------------|------|-------|",
+    "| Title | Updated | LLM | Directions | Interest Hits | HF \u2191 | Links |",
+    "|-------|---------|-----|------------|---------------|------|-------|",
     ...allPapersRows
   ].join("\n");
   let trendingSection = "";
@@ -5048,8 +5079,64 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
-  const rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
+  let rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
+  if (rankedPapers.length > 0 && settings.llm.apiKey) {
+    try {
+      const llm = buildLLMProvider(settings);
+      const kwStr = settings.interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const papersForScoring = rankedPapers.map((p) => {
+        var _a3, _b2;
+        return {
+          id: p.id,
+          title: p.title,
+          abstract: p.abstract.slice(0, 250),
+          directions: (_a3 = p.topDirections) != null ? _a3 : [],
+          interestHits: (_b2 = p.interestHits) != null ? _b2 : [],
+          ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}
+        };
+      });
+      const scoringPrompt = `Score each paper 1\u201310 for quality and relevance to the user's interests.
+
+User's interest keywords (higher weight = more important): ${kwStr}
+
+Scoring criteria:
+- Alignment with interest keywords and their weights
+- Technical novelty and depth
+- Practical engineering value
+- Quality of evaluation / experiments
+
+Return ONLY a valid JSON array, no explanation, no markdown fence:
+[{"id":"arxiv:...","score":8,"reason":"one short phrase"},...]
+
+Papers:
+${JSON.stringify(papersForScoring)}`;
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 2048 });
+      const jsonMatch = result.text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const scores = JSON.parse(jsonMatch[0]);
+        const scoreMap = new Map(scores.map((s) => [s.id, s]));
+        for (const paper of rankedPapers) {
+          const s = scoreMap.get(paper.id);
+          if (s) {
+            paper.llmScore = s.score;
+            paper.llmScoreReason = s.reason;
+          }
+        }
+        rankedPapers.sort((a, b) => {
+          var _a3, _b2;
+          return ((_a3 = b.llmScore) != null ? _a3 : -1) - ((_b2 = a.llmScore) != null ? _b2 : -1);
+        });
+        log(`Step 3b LLM SCORE: scored ${scores.length}/${rankedPapers.length} papers, re-ranked`);
+      } else {
+        log(`Step 3b LLM SCORE: could not parse JSON from response`);
+      }
+    } catch (err) {
+      log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
+    }
+  } else {
+    log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
+  }
   const trendingPapers = [];
   if (((_f = settings.trending) == null ? void 0 : _f.enabled) && papers.length > 0) {
     const rankedIds = new Set(rankedPapers.map((p) => p.id));
@@ -5265,6 +5352,9 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
     this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
     this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
+    if (Array.isArray(this.settings.interestKeywords) && this.settings.interestKeywords.length > 0 && typeof this.settings.interestKeywords[0] === "string") {
+      this.settings.interestKeywords = this.settings.interestKeywords.map((kw) => ({ keyword: kw, weight: 1 }));
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
