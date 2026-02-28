@@ -30,7 +30,11 @@ export class AnthropicProvider implements LLMProvider {
 
     const textBlock = response.content.find(b => b.type === "text");
     const text = textBlock?.type === "text" ? textBlock.text : "";
+    const usage = {
+      inputTokens: response.usage?.input_tokens ?? 0,
+      outputTokens: response.usage?.output_tokens ?? 0
+    };
 
-    return { text, raw: response };
+    return { text, usage, raw: response };
   }
 }

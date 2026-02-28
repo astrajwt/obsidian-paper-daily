@@ -86,12 +86,13 @@ export default class PaperDailyPlugin extends Plugin {
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
       callback: async () => {
-        new Notice("Paper Daily: Running daily fetch...");
+        const notice = new Notice("Paper Daily: 启动中...", 0);
         try {
-          await this.runDaily();
-          new Notice("Paper Daily: Daily digest complete.");
+          await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
+          setTimeout(() => notice.hide(), 4000);
         } catch (err) {
-          new Notice(`Paper Daily Error: ${String(err)}`);
+          notice.setMessage(`Paper Daily 错误: ${String(err)}`);
+          setTimeout(() => notice.hide(), 6000);
         }
       }
     });
@@ -129,14 +130,14 @@ export default class PaperDailyPlugin extends Plugin {
     });
   }
 
-  async runDaily(): Promise<void> {
+  async runDaily(onProgress?: (msg: string) => void): Promise<void> {
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
       this.snapshotStore,
-      { hfTrackStore: this.hfTrackStore }
+      { hfTrackStore: this.hfTrackStore, onProgress }
     );
   }
 

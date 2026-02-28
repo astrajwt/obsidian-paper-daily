@@ -7,8 +7,14 @@ export interface LLMInput {
   pdfBase64?: string;
 }
 
+export interface LLMUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface LLMOutput {
   text: string;
+  usage?: LLMUsage;
   raw?: unknown;
 }
 

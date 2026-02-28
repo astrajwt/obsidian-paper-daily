@@ -37,7 +37,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
     const json = response.json;
     const text = json?.choices?.[0]?.message?.content ?? "";
+    const usage = json?.usage ? {
+      inputTokens: json.usage.prompt_tokens ?? 0,
+      outputTokens: json.usage.completion_tokens ?? 0
+    } : undefined;
 
-    return { text, raw: json };
+    return { text, usage, raw: json };
   }
 }
