@@ -81,6 +81,10 @@ export interface PaperDailySettings {
     savePdf: boolean;
   };
 
+  // Detail section top-K display counts
+  arxivDetailTopK: number;  // how many arXiv papers to show in the detailed section
+  hfDetailTopK: number;     // how many HF papers to show in the detailed section
+
   // Settings UI language (does not affect AI output language)
   uiLanguage?: "zh" | "en";
 }

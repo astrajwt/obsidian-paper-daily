@@ -44,6 +44,10 @@ function formatTopDirections(papers: Paper[], topK: number): string {
   return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
 }
 
+function escapeTableCell(s: string): string {
+  return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
+}
+
 function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
@@ -79,38 +83,10 @@ function buildDailyMarkdown(
     ? `## 今日要点（AI 总结）\n\n> **Error**: ${error}`
     : `## 今日要点（AI 总结）\n\n${aiDigest}`;
 
-  // HuggingFace Daily Papers section
-  let hfSection = "";
-  if (hfDailyPapers.length > 0) {
-    // Build set of base arXiv IDs that appear in today's ranked (arXiv) results
-    const arxivBaseIds = new Set(
-      rankedPapers.map(p => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
-    );
-
-    const alsoInArxivCount = hfDailyPapers.filter(p => arxivBaseIds.has(p.id)).length;
-    const summaryLine = alsoInArxivCount > 0
-      ? `共 ${hfDailyPapers.length} 篇，其中 ${alsoInArxivCount} 篇同时出现在今日 arXiv 检索结果中。`
-      : `共 ${hfDailyPapers.length} 篇，均不在今日 arXiv 关键词检索范围内。`;
-
-    const hfLines = hfDailyPapers.map((p, i) => {
-      const linksArr: string[] = [];
-      if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
-      if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
-      if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
-      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-      const arxivBadge = arxivBaseIds.has(p.id) ? " 📄 今日 arXiv 收录" : "";
-      const streakBadge = (p.hfStreak ?? 1) > 1 ? ` 🔥 霸榜${p.hfStreak}天` : "";
-      return [
-        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}${streakBadge}`,
-        `   - Links: ${linksArr.join(", ")}`,
-        `   - Authors: ${authorsStr}`,
-        `   - Published: ${p.published.slice(0, 10)}`,
-      ].join("\n");
-    });
-    hfSection = `## HuggingFace Daily Papers\n\n${summaryLine}\n\n${hfLines.join("\n\n")}`;
-  }
-
-  const allPapersList = rankedPapers.map((p, i) => {
+  // ── arXiv Top-K Detailed Section ─────────────────────────────
+  const arxivTopK = settings.arxivDetailTopK ?? 10;
+  const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
+  const arxivDetailedLines = arxivTopPapers.map((p, i) => {
     const links: string[] = [];
     if (p.links.html) links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
@@ -128,9 +104,66 @@ function buildDailyMarkdown(
       `   - Directions: ${dirStr} | Hits: ${hitsStr}`,
     ].join("\n");
   });
-  const allPapersSection = `## All Papers\n\n${allPapersList.join("\n\n") || "_No papers_"}`;
+  const arxivDetailedSection = `## arXiv Top ${arxivTopK} Papers\n\n${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
 
-  // Trending section
+  // ── HuggingFace Top-K Detailed Section ───────────────────────
+  const hfTopK = settings.hfDetailTopK ?? 10;
+  let hfDetailedSection = "";
+  if (hfDailyPapers.length > 0) {
+    const arxivBaseIds = new Set(
+      rankedPapers.map(p => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+    );
+    const hfTopPapers = hfDailyPapers.slice(0, hfTopK);
+    const alsoInArxivCount = hfTopPapers.filter(p => arxivBaseIds.has(p.id)).length;
+    const countNote = hfDailyPapers.length > hfTopK
+      ? `共 ${hfDailyPapers.length} 篇，展示前 ${hfTopK} 篇。`
+      : `共 ${hfDailyPapers.length} 篇。`;
+    const overlapNote = alsoInArxivCount > 0
+      ? `其中 ${alsoInArxivCount} 篇同时出现在今日 arXiv 检索结果中。`
+      : "";
+    const hfLines = hfTopPapers.map((p, i) => {
+      const linksArr: string[] = [];
+      if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
+      if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
+      if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
+      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+      const arxivBadge = arxivBaseIds.has(p.id) ? " 📄 今日 arXiv 收录" : "";
+      const streakBadge = (p.hfStreak ?? 1) > 1 ? ` 🔥 霸榜${p.hfStreak}天` : "";
+      return [
+        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}${streakBadge}`,
+        `   - Links: ${linksArr.join(", ")}`,
+        `   - Authors: ${authorsStr}`,
+        `   - Published: ${p.published.slice(0, 10)}`,
+      ].join("\n");
+    });
+    hfDetailedSection = `## HuggingFace Daily Papers\n\n${countNote}${overlapNote ? " " + overlapNote : ""}\n\n${hfLines.join("\n\n")}`;
+  }
+
+  // ── All Papers Table ──────────────────────────────────────────
+  const tableRows = rankedPapers.map((p, i) => {
+    const titleLink = p.links.html
+      ? `[${escapeTableCell(p.title)}](${p.links.html})`
+      : escapeTableCell(p.title);
+    const linkParts: string[] = [];
+    if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
+    if (p.links.hf) linkParts.push(`[HF](${p.links.hf})`);
+    if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
+    const upvote = p.hfUpvotes != null ? `🤗${p.hfUpvotes} ` : "";
+    const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
+    const summary = escapeTableCell(p.llmSummary ?? "");
+    const dirs = (p.topDirections ?? []).slice(0, 2).join(", ") || "-";
+    const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
+    return `| ${i + 1} | ${titleLink} | ${upvote}${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+  });
+  const allPapersTableSection = [
+    "## All Papers",
+    "",
+    "| # | Title | Links | Score | Summary | Directions | Hits |",
+    "|---|-------|-------|-------|---------|------------|------|",
+    ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | | |"])
+  ].join("\n");
+
+  // ── Trending Section ──────────────────────────────────────────
   let trendingSection = "";
   if (trendingPapers.length > 0) {
     const trendingMode = settings.trending?.mode ?? "heuristic";
@@ -156,9 +189,10 @@ function buildDailyMarkdown(
     trendingSection = `## Trending Papers\n\n> ${trendingDesc}\n\n${trendingLines.join("\n\n")}`;
   }
 
-  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
-  if (hfSection) sections.push("", hfSection);
-  sections.push("", allPapersSection);
+  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection,
+    "", arxivDetailedSection];
+  if (hfDetailedSection) sections.push("", hfDetailedSection);
+  sections.push("", allPapersTableSection);
   if (trendingSection) sections.push("", trendingSection);
   return sections.join("\n");
 }

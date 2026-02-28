@@ -302,7 +302,9 @@ var DEFAULT_SETTINGS = {
   },
   paperDownload: {
     savePdf: false
-  }
+  },
+  arxivDetailTopK: 10,
+  hfDetailTopK: 10
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -571,6 +573,20 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.includePdfLink = value;
       await this.plugin.saveSettings();
     }));
+    new import_obsidian.Setting(containerEl).setName("arXiv \u8BE6\u89E3\u8BBA\u6587\u6570 / arXiv Detail Top-K").setDesc("\u6BCF\u65E5\u6458\u8981 arXiv \u8BE6\u89E3\u90E8\u5206\u5C55\u793A\u7684\u8BBA\u6587\u6570 | Number of arXiv papers shown in the detailed section").addSlider((slider) => {
+      var _a2;
+      return slider.setLimits(1, 30, 1).setValue((_a2 = this.plugin.settings.arxivDetailTopK) != null ? _a2 : 10).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.arxivDetailTopK = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("HuggingFace \u8BE6\u89E3\u8BBA\u6587\u6570 / HF Detail Top-K").setDesc("\u6BCF\u65E5\u6458\u8981 HuggingFace \u8BE6\u89E3\u90E8\u5206\u5C55\u793A\u7684\u8BBA\u6587\u6570 | Number of HF papers shown in the detailed section").addSlider((slider) => {
+      var _a2;
+      return slider.setLimits(1, 30, 1).setValue((_a2 = this.plugin.settings.hfDetailTopK) != null ? _a2 : 10).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.hfDetailTopK = value;
+        await this.plugin.saveSettings();
+      });
+    });
     containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
     new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
       this.plugin.settings.schedule.dailyTime = value;
@@ -4713,8 +4729,11 @@ function formatTopDirections(papers, topK) {
     return "No directions detected.";
   return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
 }
+function escapeTableCell(s) {
+  return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
+}
 function buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, aiDigest, activeSources, error) {
-  var _a2, _b;
+  var _a2, _b, _c, _d;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4734,39 +4753,9 @@ function buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendin
 > **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
 
 ${aiDigest}`;
-  let hfSection = "";
-  if (hfDailyPapers.length > 0) {
-    const arxivBaseIds = new Set(
-      rankedPapers.map((p) => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
-    );
-    const alsoInArxivCount = hfDailyPapers.filter((p) => arxivBaseIds.has(p.id)).length;
-    const summaryLine = alsoInArxivCount > 0 ? `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5176\u4E2D ${alsoInArxivCount} \u7BC7\u540C\u65F6\u51FA\u73B0\u5728\u4ECA\u65E5 arXiv \u68C0\u7D22\u7ED3\u679C\u4E2D\u3002` : `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5747\u4E0D\u5728\u4ECA\u65E5 arXiv \u5173\u952E\u8BCD\u68C0\u7D22\u8303\u56F4\u5185\u3002`;
-    const hfLines = hfDailyPapers.map((p, i) => {
-      var _a3, _b2;
-      const linksArr = [];
-      if (p.links.hf)
-        linksArr.push(`[HF](${p.links.hf})`);
-      if (p.links.html)
-        linksArr.push(`[arXiv](${p.links.html})`);
-      if (settings.includePdfLink && p.links.pdf)
-        linksArr.push(`[PDF](${p.links.pdf})`);
-      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
-      const arxivBadge = arxivBaseIds.has(p.id) ? " \u{1F4C4} \u4ECA\u65E5 arXiv \u6536\u5F55" : "";
-      const streakBadge = ((_a3 = p.hfStreak) != null ? _a3 : 1) > 1 ? ` \u{1F525} \u9738\u699C${p.hfStreak}\u5929` : "";
-      return [
-        `${i + 1}. **${p.title}** \u{1F917} ${(_b2 = p.hfUpvotes) != null ? _b2 : 0}${arxivBadge}${streakBadge}`,
-        `   - Links: ${linksArr.join(", ")}`,
-        `   - Authors: ${authorsStr}`,
-        `   - Published: ${p.published.slice(0, 10)}`
-      ].join("\n");
-    });
-    hfSection = `## HuggingFace Daily Papers
-
-${summaryLine}
-
-${hfLines.join("\n\n")}`;
-  }
-  const allPapersList = rankedPapers.map((p, i) => {
+  const arxivTopK = (_a2 = settings.arxivDetailTopK) != null ? _a2 : 10;
+  const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
+  const arxivDetailedLines = arxivTopPapers.map((p, i) => {
     var _a3, _b2;
     const links = [];
     if (p.links.html)
@@ -4787,12 +4776,71 @@ ${hfLines.join("\n\n")}`;
       `   - Directions: ${dirStr} | Hits: ${hitsStr}`
     ].join("\n");
   });
-  const allPapersSection = `## All Papers
+  const arxivDetailedSection = `## arXiv Top ${arxivTopK} Papers
 
-${allPapersList.join("\n\n") || "_No papers_"}`;
+${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
+  const hfTopK = (_b = settings.hfDetailTopK) != null ? _b : 10;
+  let hfDetailedSection = "";
+  if (hfDailyPapers.length > 0) {
+    const arxivBaseIds = new Set(
+      rankedPapers.map((p) => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+    );
+    const hfTopPapers = hfDailyPapers.slice(0, hfTopK);
+    const alsoInArxivCount = hfTopPapers.filter((p) => arxivBaseIds.has(p.id)).length;
+    const countNote = hfDailyPapers.length > hfTopK ? `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5C55\u793A\u524D ${hfTopK} \u7BC7\u3002` : `\u5171 ${hfDailyPapers.length} \u7BC7\u3002`;
+    const overlapNote = alsoInArxivCount > 0 ? `\u5176\u4E2D ${alsoInArxivCount} \u7BC7\u540C\u65F6\u51FA\u73B0\u5728\u4ECA\u65E5 arXiv \u68C0\u7D22\u7ED3\u679C\u4E2D\u3002` : "";
+    const hfLines = hfTopPapers.map((p, i) => {
+      var _a3, _b2;
+      const linksArr = [];
+      if (p.links.hf)
+        linksArr.push(`[HF](${p.links.hf})`);
+      if (p.links.html)
+        linksArr.push(`[arXiv](${p.links.html})`);
+      if (settings.includePdfLink && p.links.pdf)
+        linksArr.push(`[PDF](${p.links.pdf})`);
+      const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+      const arxivBadge = arxivBaseIds.has(p.id) ? " \u{1F4C4} \u4ECA\u65E5 arXiv \u6536\u5F55" : "";
+      const streakBadge = ((_a3 = p.hfStreak) != null ? _a3 : 1) > 1 ? ` \u{1F525} \u9738\u699C${p.hfStreak}\u5929` : "";
+      return [
+        `${i + 1}. **${p.title}** \u{1F917} ${(_b2 = p.hfUpvotes) != null ? _b2 : 0}${arxivBadge}${streakBadge}`,
+        `   - Links: ${linksArr.join(", ")}`,
+        `   - Authors: ${authorsStr}`,
+        `   - Published: ${p.published.slice(0, 10)}`
+      ].join("\n");
+    });
+    hfDetailedSection = `## HuggingFace Daily Papers
+
+${countNote}${overlapNote ? " " + overlapNote : ""}
+
+${hfLines.join("\n\n")}`;
+  }
+  const tableRows = rankedPapers.map((p, i) => {
+    var _a3, _b2, _c2;
+    const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
+    const linkParts = [];
+    if (p.links.html)
+      linkParts.push(`[arXiv](${p.links.html})`);
+    if (p.links.hf)
+      linkParts.push(`[HF](${p.links.hf})`);
+    if (settings.includePdfLink && p.links.pdf)
+      linkParts.push(`[PDF](${p.links.pdf})`);
+    const upvote = p.hfUpvotes != null ? `\u{1F917}${p.hfUpvotes} ` : "";
+    const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
+    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
+    const dirs = ((_b2 = p.topDirections) != null ? _b2 : []).slice(0, 2).join(", ") || "-";
+    const hits = ((_c2 = p.interestHits) != null ? _c2 : []).slice(0, 3).join(", ") || "-";
+    return `| ${i + 1} | ${titleLink} | ${upvote}${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+  });
+  const allPapersTableSection = [
+    "## All Papers",
+    "",
+    "| # | Title | Links | Score | Summary | Directions | Hits |",
+    "|---|-------|-------|-------|---------|------------|------|",
+    ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | | |"]
+  ].join("\n");
   let trendingSection = "";
   if (trendingPapers.length > 0) {
-    const trendingMode = (_b = (_a2 = settings.trending) == null ? void 0 : _a2.mode) != null ? _b : "heuristic";
+    const trendingMode = (_d = (_c = settings.trending) == null ? void 0 : _c.mode) != null ? _d : "heuristic";
     const trendingDesc = trendingMode === "llm" ? "These papers were identified by LLM as noteworthy among papers not matched by interest keywords." : "These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).";
     const trendingLines = trendingPapers.map((t, i) => {
       const links = [];
@@ -4818,10 +4866,20 @@ ${allPapersList.join("\n\n") || "_No papers_"}`;
 
 ${trendingLines.join("\n\n")}`;
   }
-  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
-  if (hfSection)
-    sections.push("", hfSection);
-  sections.push("", allPapersSection);
+  const sections = [
+    frontmatter,
+    "",
+    header,
+    "",
+    topDirsSection,
+    "",
+    digestSection,
+    "",
+    arxivDetailedSection
+  ];
+  if (hfDetailedSection)
+    sections.push("", hfDetailedSection);
+  sections.push("", allPapersTableSection);
   if (trendingSection)
     sections.push("", trendingSection);
   return sections.join("\n");

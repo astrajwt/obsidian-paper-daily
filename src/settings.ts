@@ -292,7 +292,10 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   paperDownload: {
     savePdf: false,
-  }
+  },
+
+  arxivDetailTopK: 10,
+  hfDetailTopK: 10,
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -705,6 +708,30 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.includePdfLink)
         .onChange(async (value) => {
           this.plugin.settings.includePdfLink = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("arXiv 详解论文数 / arXiv Detail Top-K")
+      .setDesc("每日摘要 arXiv 详解部分展示的论文数 | Number of arXiv papers shown in the detailed section")
+      .addSlider(slider => slider
+        .setLimits(1, 30, 1)
+        .setValue(this.plugin.settings.arxivDetailTopK ?? 10)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.arxivDetailTopK = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("HuggingFace 详解论文数 / HF Detail Top-K")
+      .setDesc("每日摘要 HuggingFace 详解部分展示的论文数 | Number of HF papers shown in the detailed section")
+      .addSlider(slider => slider
+        .setLimits(1, 30, 1)
+        .setValue(this.plugin.settings.hfDetailTopK ?? 10)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.hfDetailTopK = value;
           await this.plugin.saveSettings();
         }));
 
