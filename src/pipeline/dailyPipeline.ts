@@ -11,6 +11,7 @@ import { aggregateDirections } from "../scoring/directions";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
+import type { VaultLinker } from "../linking/vaultLinker";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -45,6 +46,7 @@ function buildDailyMarkdown(
   settings: PaperDailySettings,
   rankedPapers: Paper[],
   aiDigest: string,
+  relatedNotesMap: Map<string, string[]>,
   error?: string
 ): string {
   const frontmatter = [
@@ -89,7 +91,8 @@ function buildDailyMarkdown(
       settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
       `   - Links: ${linksStr}`,
       `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}`
+      `   - Updated: ${p.updated.slice(0, 10)}`,
+      relatedNotesMap.has(p.id) ? `   - Related Notes: ${relatedNotesMap.get(p.id)!.join(" ")}` : ""
     ].filter(Boolean).join("\n");
   });
   const topPapersSection = `## Top Papers (ranked)\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
@@ -117,6 +120,7 @@ export interface DailyPipelineOptions {
   windowStart?: Date;
   windowEnd?: Date;
   skipDedup?: boolean;
+  linker?: VaultLinker;
 }
 
 export async function runDailyPipeline(
@@ -192,6 +196,22 @@ export async function runDailyPipeline(
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
+  // ── Step 3b: Vault linking ────────────────────────────────────
+  const relatedNotesMap = new Map<string, string[]>();
+  if (settings.vaultLinking?.enabled && options.linker && rankedPapers.length > 0) {
+    let linkCount = 0;
+    for (const paper of rankedPapers) {
+      const matches = options.linker.findRelated(paper);
+      if (matches.length > 0) {
+        relatedNotesMap.set(paper.id, matches.map(m => `[[${m.displayName}]]`));
+        linkCount++;
+      }
+    }
+    log(`Step 3b LINKING: ${linkCount}/${rankedPapers.length} papers got related notes`);
+  } else {
+    log(`Step 3b LINKING: skipped (enabled=${settings.vaultLinking?.enabled} linker=${!!options.linker})`);
+  }
+
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
@@ -237,7 +257,7 @@ export async function runDailyPipeline(
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, relatedNotesMap, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

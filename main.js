@@ -228,7 +228,12 @@ var DEFAULT_SETTINGS = {
     monthlyDay: 1,
     monthlyTime: "09:00"
   },
-  backfillMaxDays: 30
+  backfillMaxDays: 30,
+  vaultLinking: {
+    enabled: true,
+    excludeFolders: ["PaperDaily", "Clippings", "Readwise", "templates"],
+    maxLinksPerPaper: 3
+  }
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -565,6 +570,32 @@ URL: ${result.url}`, "var(--color-green)");
         }
       });
     });
+    containerEl.createEl("h2", { text: "Vault Linking" });
+    containerEl.createEl("p", {
+      text: "Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian.Setting(containerEl).setName("Enable Vault Linking").setDesc("Scan vault notes and link related ones to each paper").addToggle((toggle) => toggle.setValue(this.plugin.settings.vaultLinking.enabled).onChange(async (value) => {
+      this.plugin.settings.vaultLinking.enabled = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("Exclude Folders").setDesc("Comma-separated folder names to skip when building the index").addText((text) => text.setPlaceholder("PaperDaily,Clippings,Readwise").setValue(this.plugin.settings.vaultLinking.excludeFolders.join(",")).onChange(async (value) => {
+      this.plugin.settings.vaultLinking.excludeFolders = value.split(",").map((s) => s.trim()).filter(Boolean);
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("Max Links Per Paper").setDesc("Maximum number of related notes shown per paper").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper).setDynamicTooltip().onChange(async (value) => {
+      this.plugin.settings.vaultLinking.maxLinksPerPaper = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("Rebuild Note Index").setDesc("Re-scan vault to update the note index (run after adding new notes)").addButton((btn) => btn.setButtonText("Rebuild Index").onClick(async () => {
+      btn.setButtonText("Scanning...").setDisabled(true);
+      try {
+        await this.plugin.rebuildLinkingIndex();
+        new import_obsidian.Notice("Vault index rebuilt.");
+      } finally {
+        btn.setButtonText("Rebuild Index").setDisabled(false);
+      }
+    }));
     containerEl.createEl("h2", { text: "Backfill" });
     new import_obsidian.Setting(containerEl).setName("Max Backfill Days").setDesc("Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
@@ -4273,7 +4304,7 @@ function formatTopDirections(papers, topK) {
     return "No directions detected.";
   return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
 }
-function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, error) {
+function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, relatedNotesMap, error) {
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4313,7 +4344,8 @@ ${aiDigest}`;
       settings.includeAbstract ? `   - Abstract: ${p.abstract.slice(0, 300)}...` : "",
       `   - Links: ${linksStr}`,
       `   - Authors: ${authorsStr}`,
-      `   - Updated: ${p.updated.slice(0, 10)}`
+      `   - Updated: ${p.updated.slice(0, 10)}`,
+      relatedNotesMap.has(p.id) ? `   - Related Notes: ${relatedNotesMap.get(p.id).join(" ")}` : ""
     ].filter(Boolean).join("\n");
   });
   const topPapersSection = `## Top Papers (ranked)
@@ -4339,7 +4371,7 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
   return [frontmatter, "", header, "", topDirsSection, "", digestSection, "", topPapersSection, "", allPapersSection].join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c;
+  var _a2, _b, _c, _d, _e;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4393,6 +4425,20 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
   const rankedPapers = papers.length > 0 ? rankPapers(papers, settings.interestKeywords, settings.directions, settings.directionTopK) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
+  const relatedNotesMap = /* @__PURE__ */ new Map();
+  if (((_d = settings.vaultLinking) == null ? void 0 : _d.enabled) && options.linker && rankedPapers.length > 0) {
+    let linkCount = 0;
+    for (const paper of rankedPapers) {
+      const matches = options.linker.findRelated(paper);
+      if (matches.length > 0) {
+        relatedNotesMap.set(paper.id, matches.map((m) => `[[${m.displayName}]]`));
+        linkCount++;
+      }
+    }
+    log(`Step 3b LINKING: ${linkCount}/${rankedPapers.length} papers got related notes`);
+  } else {
+    log(`Step 3b LINKING: skipped (enabled=${(_e = settings.vaultLinking) == null ? void 0 : _e.enabled} linker=${!!options.linker})`);
+  }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
@@ -4437,7 +4483,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, relatedNotesMap, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
@@ -4779,11 +4825,117 @@ var Scheduler = class {
   }
 };
 
+// src/linking/vaultLinker.ts
+function normalize3(s) {
+  return s.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+}
+function terms(s) {
+  const words = normalize3(s).split(" ").filter((w) => w.length > 2);
+  const bigrams = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    bigrams.push(`${words[i]} ${words[i + 1]}`);
+  }
+  return [...words, ...bigrams];
+}
+var VaultLinker = class {
+  constructor(app, excludeFolders, maxLinksPerPaper) {
+    this.app = app;
+    this.excludeFolders = excludeFolders;
+    this.maxLinksPerPaper = maxLinksPerPaper;
+    this.index = [];
+    this.built = false;
+  }
+  // Build index from vault. Scans folder names, file stems, and H1/H2 headings.
+  async buildIndex() {
+    this.index = [];
+    const vault = this.app.vault;
+    const allFiles = vault.getMarkdownFiles();
+    for (const file of allFiles) {
+      const topFolder = file.path.split("/")[0];
+      if (this.excludeFolders.some((ex) => ex.toLowerCase() === topFolder.toLowerCase())) {
+        continue;
+      }
+      const keywords = /* @__PURE__ */ new Set();
+      const parts = file.path.split("/");
+      for (const part of parts.slice(0, -1)) {
+        for (const t of terms(part))
+          keywords.add(t);
+      }
+      const stem = file.basename;
+      for (const t of terms(stem))
+        keywords.add(t);
+      try {
+        const content = await vault.cachedRead(file);
+        const lines = content.split("\n").slice(0, 60);
+        for (const line of lines) {
+          const heading = line.match(/^#{1,2}\s+(.+)/);
+          if (heading) {
+            for (const t of terms(heading[1]))
+              keywords.add(t);
+          }
+        }
+      } catch (e) {
+      }
+      const isIndex = stem.match(/^0*[0-9]*_?index$/i) || stem === "00_index";
+      const displayName = isIndex ? parts.slice(0, -1).join("/") : file.path.replace(/\.md$/, "");
+      this.index.push({
+        displayName,
+        path: file.path,
+        keywords: [...keywords]
+      });
+    }
+    this.built = true;
+  }
+  findRelated(paper) {
+    if (!this.built || this.index.length === 0)
+      return [];
+    const haystack = normalize3(`${paper.title} ${paper.abstract} ${paper.categories.join(" ")}`);
+    const scored = [];
+    for (const entry of this.index) {
+      const hits = [];
+      for (const kw of entry.keywords) {
+        if (kw.length <= 3) {
+          const re = new RegExp(`\\b${kw}\\b`);
+          if (re.test(haystack))
+            hits.push(kw);
+        } else {
+          if (haystack.includes(kw))
+            hits.push(kw);
+        }
+      }
+      if (hits.length > 0) {
+        scored.push({ entry, hits, score: hits.length });
+      }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const seen = /* @__PURE__ */ new Set();
+    const results = [];
+    for (const { entry, hits } of scored) {
+      if (seen.has(entry.displayName))
+        continue;
+      seen.add(entry.displayName);
+      results.push({ displayName: entry.displayName, path: entry.path, matchedOn: hits.slice(0, 5) });
+      if (results.length >= this.maxLinksPerPaper)
+        break;
+    }
+    return results;
+  }
+  isBuilt() {
+    return this.built;
+  }
+  // Rebuild index (call after vault changes)
+  async rebuild() {
+    this.built = false;
+    await this.buildIndex();
+  }
+};
+
 // src/main.ts
 var PaperDailyPlugin = class extends import_obsidian5.Plugin {
   async onload() {
     await this.loadSettings();
     await this.initStorage();
+    this.initLinker();
     this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
@@ -4797,6 +4949,7 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
+    this.settings.vaultLinking = Object.assign({}, DEFAULT_SETTINGS.vaultLinking, this.settings.vaultLinking);
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -4812,6 +4965,26 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     for (const sub of ["inbox", "weekly", "monthly", "papers", "cache"]) {
       await writer.ensureFolder(`${root}/${sub}`);
     }
+  }
+  initLinker() {
+    this.linker = new VaultLinker(
+      this.app,
+      this.settings.vaultLinking.excludeFolders,
+      this.settings.vaultLinking.maxLinksPerPaper
+    );
+    if (this.settings.vaultLinking.enabled) {
+      this.linker.buildIndex().catch(
+        (err) => console.warn("[PaperDaily] Vault index build failed:", err)
+      );
+    }
+  }
+  async rebuildLinkingIndex() {
+    this.linker = new VaultLinker(
+      this.app,
+      this.settings.vaultLinking.excludeFolders,
+      this.settings.vaultLinking.maxLinksPerPaper
+    );
+    await this.linker.buildIndex();
   }
   initScheduler() {
     this.scheduler = new Scheduler(
@@ -4895,12 +5068,14 @@ var PaperDailyPlugin = class extends import_obsidian5.Plugin {
     });
   }
   async runDaily() {
+    var _a2;
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
-      this.snapshotStore
+      this.snapshotStore,
+      { linker: ((_a2 = this.settings.vaultLinking) == null ? void 0 : _a2.enabled) ? this.linker : void 0 }
     );
   }
   async runWeekly() {

@@ -54,4 +54,11 @@ export interface PaperDailySettings {
 
   // Backfill
   backfillMaxDays: number;
+
+  // Vault linking
+  vaultLinking: {
+    enabled: boolean;
+    excludeFolders: string[];   // folders to skip when building index
+    maxLinksPerPaper: number;   // max related notes shown per paper
+  };
 }

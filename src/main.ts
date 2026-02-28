@@ -8,9 +8,10 @@ import { SnapshotStore } from "./storage/snapshotStore";
 import { runDailyPipeline } from "./pipeline/dailyPipeline";
 import { runBackfillPipeline } from "./pipeline/backfillPipeline";
 import { runWeeklyPipeline } from "./pipeline/weeklyPipeline";
-import { ArxivSource } from "./sources/arxivSource";
 import { runMonthlyPipeline } from "./pipeline/monthlyPipeline";
 import { Scheduler } from "./scheduler/scheduler";
+import { ArxivSource } from "./sources/arxivSource";
+import { VaultLinker } from "./linking/vaultLinker";
 
 export default class PaperDailyPlugin extends Plugin {
   settings!: PaperDailySettings;
@@ -19,10 +20,12 @@ export default class PaperDailyPlugin extends Plugin {
   private dedupStore!: DedupStore;
   private snapshotStore!: SnapshotStore;
   private scheduler!: Scheduler;
+  private linker!: VaultLinker;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     await this.initStorage();
+    this.initLinker();
     this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
@@ -36,9 +39,9 @@ export default class PaperDailyPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    // Deep merge nested objects that may be missing in saved data
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
+    this.settings.vaultLinking = Object.assign({}, DEFAULT_SETTINGS.vaultLinking, this.settings.vaultLinking);
   }
 
   async saveSettings(): Promise<void> {
@@ -59,6 +62,29 @@ export default class PaperDailyPlugin extends Plugin {
     for (const sub of ["inbox", "weekly", "monthly", "papers", "cache"]) {
       await writer.ensureFolder(`${root}/${sub}`);
     }
+  }
+
+  private initLinker(): void {
+    this.linker = new VaultLinker(
+      this.app,
+      this.settings.vaultLinking.excludeFolders,
+      this.settings.vaultLinking.maxLinksPerPaper
+    );
+    // Build index in background — don't block plugin load
+    if (this.settings.vaultLinking.enabled) {
+      this.linker.buildIndex().catch(err =>
+        console.warn("[PaperDaily] Vault index build failed:", err)
+      );
+    }
+  }
+
+  async rebuildLinkingIndex(): Promise<void> {
+    this.linker = new VaultLinker(
+      this.app,
+      this.settings.vaultLinking.excludeFolders,
+      this.settings.vaultLinking.maxLinksPerPaper
+    );
+    await this.linker.buildIndex();
   }
 
   private initScheduler(): void {
@@ -156,7 +182,8 @@ export default class PaperDailyPlugin extends Plugin {
       this.settings,
       this.stateStore,
       this.dedupStore,
-      this.snapshotStore
+      this.snapshotStore,
+      { linker: this.settings.vaultLinking?.enabled ? this.linker : undefined }
     );
   }
 

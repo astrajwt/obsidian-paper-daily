@@ -214,7 +214,13 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     monthlyTime: "09:00"
   },
 
-  backfillMaxDays: 30
+  backfillMaxDays: 30,
+
+  vaultLinking: {
+    enabled: true,
+    excludeFolders: ["PaperDaily", "Clippings", "Readwise", "templates"],
+    maxLinksPerPaper: 3
+  }
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -737,6 +743,61 @@ export class PaperDailySettingTab extends PluginSettingTab {
             }
           });
       });
+
+    // ── Vault Linking ─────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "Vault Linking" });
+    containerEl.createEl("p", {
+      text: "Automatically find related notes in your vault and add [[wikilinks]] to each paper in the daily digest.",
+      cls: "setting-item-description"
+    });
+
+    new Setting(containerEl)
+      .setName("Enable Vault Linking")
+      .setDesc("Scan vault notes and link related ones to each paper")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.vaultLinking.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.vaultLinking.enabled = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Exclude Folders")
+      .setDesc("Comma-separated folder names to skip when building the index")
+      .addText(text => text
+        .setPlaceholder("PaperDaily,Clippings,Readwise")
+        .setValue(this.plugin.settings.vaultLinking.excludeFolders.join(","))
+        .onChange(async (value) => {
+          this.plugin.settings.vaultLinking.excludeFolders = value.split(",").map(s => s.trim()).filter(Boolean);
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Max Links Per Paper")
+      .setDesc("Maximum number of related notes shown per paper")
+      .addSlider(slider => slider
+        .setLimits(1, 10, 1)
+        .setValue(this.plugin.settings.vaultLinking.maxLinksPerPaper)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.vaultLinking.maxLinksPerPaper = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Rebuild Note Index")
+      .setDesc("Re-scan vault to update the note index (run after adding new notes)")
+      .addButton(btn => btn
+        .setButtonText("Rebuild Index")
+        .onClick(async () => {
+          btn.setButtonText("Scanning...").setDisabled(true);
+          try {
+            await this.plugin.rebuildLinkingIndex();
+            new Notice("Vault index rebuilt.");
+          } finally {
+            btn.setButtonText("Rebuild Index").setDisabled(false);
+          }
+        }));
 
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Backfill" });
