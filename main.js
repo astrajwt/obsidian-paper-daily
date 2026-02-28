@@ -159,7 +159,7 @@ Format as clean Markdown.`;
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
   keywords: [],
-  interestKeywords: ["rlhf", "ppo", "dpo", "agent", "kv cache", "inference", "moe"],
+  interestKeywords: ["rlhf", "ppo", "dpo", "grpo", "agent", "agentic rl", "kv cache", "speculative decoding", "moe", "pretraining", "scaling", "long context", "multimodal", "reward model"],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -168,7 +168,7 @@ var DEFAULT_SETTINGS = {
       name: "RLHF & Post-training",
       weight: 1.5,
       match: {
-        keywords: ["rlhf", "ppo", "dpo", "grpo", "reward model", "preference", "post-training", "alignment"],
+        keywords: ["rlhf", "ppo", "dpo", "grpo", "reward model", "preference", "post-training", "alignment", "rlaif", "constitutional ai"],
         categories: ["cs.AI", "cs.LG"]
       }
     },
@@ -176,15 +176,23 @@ var DEFAULT_SETTINGS = {
       name: "Agentic RL",
       weight: 1.4,
       match: {
-        keywords: ["agent", "tool use", "planner", "react", "function calling", "multi-agent", "agentic"],
+        keywords: ["agentic rl", "agent", "tool use", "tool call", "planner", "react", "function calling", "multi-agent", "agentic", "self-play", "verifier"],
         categories: ["cs.AI"]
+      }
+    },
+    {
+      name: "Pre-training",
+      weight: 1.4,
+      match: {
+        keywords: ["pretraining", "pre-training", "scaling law", "data curation", "tokenizer", "continual learning", "continual pretraining", "foundation model", "corpus", "training data"],
+        categories: ["cs.LG", "cs.CL"]
       }
     },
     {
       name: "Inference Serving",
       weight: 1.3,
       match: {
-        keywords: ["kv cache", "pagedattention", "speculative", "vllm", "sglang", "tensorrt", "inference serving", "throughput", "latency"],
+        keywords: ["kv cache", "pagedattention", "speculative decoding", "speculative", "vllm", "sglang", "tensorrt", "inference serving", "throughput", "latency", "prefill", "decode"],
         categories: ["cs.DC", "cs.AR"]
       }
     },
@@ -192,7 +200,7 @@ var DEFAULT_SETTINGS = {
       name: "Training Systems",
       weight: 1.2,
       match: {
-        keywords: ["fsdp", "zero", "deepspeed", "megatron", "pipeline parallel", "checkpoint", "distributed training"],
+        keywords: ["fsdp", "zero", "deepspeed", "megatron", "pipeline parallel", "tensor parallel", "checkpoint", "distributed training", "communication overhead"],
         categories: ["cs.DC"]
       }
     },
@@ -200,8 +208,32 @@ var DEFAULT_SETTINGS = {
       name: "MoE",
       weight: 1.2,
       match: {
-        keywords: ["moe", "mixture of experts", "expert", "alltoall", "routing", "sparse"],
+        keywords: ["moe", "mixture of experts", "expert", "alltoall", "routing", "sparse", "load balancing"],
         categories: ["cs.LG", "cs.AI"]
+      }
+    },
+    {
+      name: "Long Context & Efficiency",
+      weight: 1.2,
+      match: {
+        keywords: ["long context", "context length", "context window", "position encoding", "rope", "flash attention", "linear attention", "mamba", "ssm", "state space model", "recurrent"],
+        categories: ["cs.LG", "cs.CL"]
+      }
+    },
+    {
+      name: "Multimodal",
+      weight: 1.1,
+      match: {
+        keywords: ["multimodal", "vision language", "vlm", "image generation", "diffusion model", "text-to-image", "clip", "vit", "visual", "video generation"],
+        categories: ["cs.CV", "cs.LG"]
+      }
+    },
+    {
+      name: "Quantization & Compression",
+      weight: 1.1,
+      match: {
+        keywords: ["quantization", "pruning", "knowledge distillation", "compression", "int4", "int8", "gguf", "sparsity", "efficient inference", "model compression"],
+        categories: ["cs.LG", "cs.AR"]
       }
     }
   ],
@@ -237,6 +269,10 @@ var DEFAULT_SETTINGS = {
   },
   hfSource: {
     enabled: true
+  },
+  rssSource: {
+    enabled: false,
+    feeds: []
   },
   paperDownload: {
     saveHtml: false,
@@ -616,6 +652,31 @@ URL: ${result.url}`, "var(--color-green)");
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.hfSource) == null ? void 0 : _a2.enabled) != null ? _b : true).onChange(async (value) => {
         this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    const rssHeader = containerEl.createEl("h2");
+    rssHeader.appendText("RSS Sources ");
+    rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
+    containerEl.createEl("p", {
+      text: "Subscribe to custom RSS/Atom feeds (e.g. semantic scholar alerts, journal feeds). Feed parsing is not yet active \u2014 configure URLs now and they will be fetched in a future update.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian.Setting(containerEl).setName("Enable RSS source").setDesc("(Beta) Toggle on to include RSS feeds when available").addToggle((toggle) => {
+      var _a2, _b;
+      return toggle.setValue((_b = (_a2 = this.plugin.settings.rssSource) == null ? void 0 : _a2.enabled) != null ? _b : false).setDisabled(true).onChange(async (value) => {
+        this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("Feed URLs").setDesc("One RSS/Atom URL per line. Will be parsed when beta feature activates.").addTextArea((area) => {
+      var _a2, _b;
+      area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
+      area.setValue(((_b = (_a2 = this.plugin.settings.rssSource) == null ? void 0 : _a2.feeds) != null ? _b : []).join("\n"));
+      area.inputEl.rows = 4;
+      area.inputEl.addEventListener("input", async () => {
+        const feeds = area.inputEl.value.split("\n").map((s) => s.trim()).filter(Boolean);
+        this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, feeds };
         await this.plugin.saveSettings();
       });
     });
@@ -5229,6 +5290,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     this.settings.vaultLinking = Object.assign({}, DEFAULT_SETTINGS.vaultLinking, this.settings.vaultLinking);
     this.settings.trending = Object.assign({}, DEFAULT_SETTINGS.trending, this.settings.trending);
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
+    this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
     this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
   }
   async saveSettings() {

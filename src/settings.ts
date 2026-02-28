@@ -140,7 +140,7 @@ Format as clean Markdown.`;
 export const DEFAULT_SETTINGS: PaperDailySettings = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
   keywords: [],
-  interestKeywords: ["rlhf", "ppo", "dpo", "agent", "kv cache", "inference", "moe"],
+  interestKeywords: ["rlhf", "ppo", "dpo", "grpo", "agent", "agentic rl", "kv cache", "speculative decoding", "moe", "pretraining", "scaling", "long context", "multimodal", "reward model"],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -150,7 +150,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
       name: "RLHF & Post-training",
       weight: 1.5,
       match: {
-        keywords: ["rlhf", "ppo", "dpo", "grpo", "reward model", "preference", "post-training", "alignment"],
+        keywords: ["rlhf", "ppo", "dpo", "grpo", "reward model", "preference", "post-training", "alignment", "rlaif", "constitutional ai"],
         categories: ["cs.AI", "cs.LG"]
       }
     },
@@ -158,15 +158,23 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
       name: "Agentic RL",
       weight: 1.4,
       match: {
-        keywords: ["agent", "tool use", "planner", "react", "function calling", "multi-agent", "agentic"],
+        keywords: ["agentic rl", "agent", "tool use", "tool call", "planner", "react", "function calling", "multi-agent", "agentic", "self-play", "verifier"],
         categories: ["cs.AI"]
+      }
+    },
+    {
+      name: "Pre-training",
+      weight: 1.4,
+      match: {
+        keywords: ["pretraining", "pre-training", "scaling law", "data curation", "tokenizer", "continual learning", "continual pretraining", "foundation model", "corpus", "training data"],
+        categories: ["cs.LG", "cs.CL"]
       }
     },
     {
       name: "Inference Serving",
       weight: 1.3,
       match: {
-        keywords: ["kv cache", "pagedattention", "speculative", "vllm", "sglang", "tensorrt", "inference serving", "throughput", "latency"],
+        keywords: ["kv cache", "pagedattention", "speculative decoding", "speculative", "vllm", "sglang", "tensorrt", "inference serving", "throughput", "latency", "prefill", "decode"],
         categories: ["cs.DC", "cs.AR"]
       }
     },
@@ -174,7 +182,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
       name: "Training Systems",
       weight: 1.2,
       match: {
-        keywords: ["fsdp", "zero", "deepspeed", "megatron", "pipeline parallel", "checkpoint", "distributed training"],
+        keywords: ["fsdp", "zero", "deepspeed", "megatron", "pipeline parallel", "tensor parallel", "checkpoint", "distributed training", "communication overhead"],
         categories: ["cs.DC"]
       }
     },
@@ -182,8 +190,32 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
       name: "MoE",
       weight: 1.2,
       match: {
-        keywords: ["moe", "mixture of experts", "expert", "alltoall", "routing", "sparse"],
+        keywords: ["moe", "mixture of experts", "expert", "alltoall", "routing", "sparse", "load balancing"],
         categories: ["cs.LG", "cs.AI"]
+      }
+    },
+    {
+      name: "Long Context & Efficiency",
+      weight: 1.2,
+      match: {
+        keywords: ["long context", "context length", "context window", "position encoding", "rope", "flash attention", "linear attention", "mamba", "ssm", "state space model", "recurrent"],
+        categories: ["cs.LG", "cs.CL"]
+      }
+    },
+    {
+      name: "Multimodal",
+      weight: 1.1,
+      match: {
+        keywords: ["multimodal", "vision language", "vlm", "image generation", "diffusion model", "text-to-image", "clip", "vit", "visual", "video generation"],
+        categories: ["cs.CV", "cs.LG"]
+      }
+    },
+    {
+      name: "Quantization & Compression",
+      weight: 1.1,
+      match: {
+        keywords: ["quantization", "pruning", "knowledge distillation", "compression", "int4", "int8", "gguf", "sparsity", "efficient inference", "model compression"],
+        categories: ["cs.LG", "cs.AR"]
       }
     }
   ],
@@ -226,6 +258,11 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   hfSource: {
     enabled: true
+  },
+
+  rssSource: {
+    enabled: false,
+    feeds: []
   },
 
   paperDownload: {
@@ -823,6 +860,44 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
           await this.plugin.saveSettings();
         }));
+
+    // ── RSS Sources [beta] ────────────────────────────────────────
+    const rssHeader = containerEl.createEl("h2");
+    rssHeader.appendText("RSS Sources ");
+    rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
+
+    containerEl.createEl("p", {
+      text: "Subscribe to custom RSS/Atom feeds (e.g. semantic scholar alerts, journal feeds). Feed parsing is not yet active — configure URLs now and they will be fetched in a future update.",
+      cls: "setting-item-description"
+    });
+
+    new Setting(containerEl)
+      .setName("Enable RSS source")
+      .setDesc("(Beta) Toggle on to include RSS feeds when available")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.rssSource?.enabled ?? false)
+        .setDisabled(true)   // grayed out until implemented
+        .onChange(async (value) => {
+          this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("Feed URLs")
+      .setDesc("One RSS/Atom URL per line. Will be parsed when beta feature activates.")
+      .addTextArea(area => {
+        area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
+        area.setValue((this.plugin.settings.rssSource?.feeds ?? []).join("\n"));
+        area.inputEl.rows = 4;
+        area.inputEl.addEventListener("input", async () => {
+          const feeds = area.inputEl.value
+            .split("\n")
+            .map(s => s.trim())
+            .filter(Boolean);
+          this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, feeds };
+          await this.plugin.saveSettings();
+        });
+      });
 
     // ── Paper Download ────────────────────────────────────────────
     containerEl.createEl("h2", { text: "Paper Download" });

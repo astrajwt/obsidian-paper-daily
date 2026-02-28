@@ -70,6 +70,12 @@ export interface PaperDailySettings {
     enabled: boolean;
   };
 
+  // RSS source [beta]
+  rssSource: {
+    enabled: boolean;
+    feeds: string[];   // one URL per entry
+  };
+
   // Paper full-text download
   paperDownload: {
     saveHtml: boolean;   // download HTML version and save as .md
