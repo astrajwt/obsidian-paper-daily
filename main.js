@@ -95,7 +95,7 @@ var DEFAULT_SETTINGS = {
   interestKeywords: ["rlhf", "ppo", "dpo", "agent", "kv cache", "inference", "moe"],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
-  timeWindowHours: 30,
+  timeWindowHours: 72,
   directions: [
     {
       name: "RLHF & Post-training",
@@ -629,7 +629,7 @@ var ArxivSource = class {
   }
   filterByWindow(papers, windowStart, windowEnd) {
     return papers.filter((p) => {
-      const dateStr = p.updated || p.published;
+      const dateStr = p.published || p.updated;
       if (!dateStr)
         return false;
       const d = new Date(dateStr);

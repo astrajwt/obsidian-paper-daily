@@ -84,8 +84,10 @@ export class ArxivSource implements PaperSource {
 
   filterByWindow(papers: Paper[], windowStart: Date, windowEnd: Date): Paper[] {
     return papers.filter(p => {
-      // Use updated date first, fall back to published
-      const dateStr = p.updated || p.published;
+      // Use published date for filtering — more stable than updated.
+      // updated can be a revision date from long ago; published reflects
+      // when arXiv first made the paper available.
+      const dateStr = p.published || p.updated;
       if (!dateStr) return false;
       const d = new Date(dateStr);
       return d >= windowStart && d <= windowEnd;

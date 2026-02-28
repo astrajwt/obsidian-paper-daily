@@ -68,7 +68,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   interestKeywords: ["rlhf", "ppo", "dpo", "agent", "kv cache", "inference", "moe"],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
-  timeWindowHours: 30,
+  timeWindowHours: 72,
 
   directions: [
     {
