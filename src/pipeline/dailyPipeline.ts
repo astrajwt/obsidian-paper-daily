@@ -405,30 +405,44 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log);
   }
 
-  // ── Step 3f: Full-text fetch for top-N papers (Deep Read) ─────
+  // ── Step 3f: Full-text / PDF fetch for top-N papers (Deep Read) ──
   let fulltextSection = "";
+  let deepReadPdfUrls: string[] = [];
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
-    const maxChars = settings.deepRead.maxCharsPerPaper ?? 8000;
-    const parts: string[] = [];
 
-    for (let i = 0; i < topN; i++) {
-      const paper = rankedPapers[i];
-      const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      log(`Step 3f FULLTEXT: fetching ${baseId}...`);
-      const text = await fetchArxivFullText(baseId, maxChars);
-      if (text) {
-        parts.push(`### [${i + 1}] ${paper.title}\n\n${text}`);
-        log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
-      } else {
-        log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+    if (settings.llm.provider === "anthropic") {
+      // Anthropic: pass PDF URLs as document blocks — no download, full paper
+      for (let i = 0; i < topN; i++) {
+        const paper = rankedPapers[i];
+        const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+        const pdfUrl = `https://arxiv.org/pdf/${baseId}`;
+        deepReadPdfUrls.push(pdfUrl);
+        log(`Step 3f PDF URL: queued ${pdfUrl}`);
       }
+      fulltextSection = `\n\n> Deep Read: top ${deepReadPdfUrls.length} papers attached as PDF documents.`;
+      log(`Step 3f PDF URL: ${deepReadPdfUrls.length}/${topN} PDF URLs queued for Anthropic`);
+    } else {
+      // Other providers: fetch HTML and inject as text
+      const maxChars = settings.deepRead.maxCharsPerPaper ?? 8000;
+      const parts: string[] = [];
+      for (let i = 0; i < topN; i++) {
+        const paper = rankedPapers[i];
+        const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+        log(`Step 3f FULLTEXT: fetching ${baseId}...`);
+        const text = await fetchArxivFullText(baseId, maxChars);
+        if (text) {
+          parts.push(`### [${i + 1}] ${paper.title}\n\n${text}`);
+          log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
+        } else {
+          log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+        }
+      }
+      if (parts.length > 0) {
+        fulltextSection = `\n\n## Full Paper Text (top ${parts.length} papers — use this for deeper per-paper analysis):\n> Texts are truncated. Focus on methods, experiments, and findings.\n\n${parts.join("\n\n---\n\n")}`;
+      }
+      log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
     }
-
-    if (parts.length > 0) {
-      fulltextSection = `\n\n## Full Paper Text (top ${parts.length} papers — use this for deeper per-paper analysis):\n> Texts are truncated. Focus on methods, experiments, and findings.\n\n${parts.join("\n\n---\n\n")}`;
-    }
-    log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
   } else {
     log(`Step 3f FULLTEXT: skipped (enabled=${settings.deepRead?.enabled ?? false})`);
   }
@@ -467,7 +481,7 @@ ${JSON.stringify(papersForScoring)}`;
         fulltext_section: fulltextSection,
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
-      const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
+      const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens, ...(deepReadPdfUrls.length > 0 ? { pdfUrls: deepReadPdfUrls } : {}) });
       llmDigest = result.text;
       if (result.usage) trackUsage("Step 4 digest", result.usage.inputTokens, result.usage.outputTokens);
       log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);

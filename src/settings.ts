@@ -108,7 +108,6 @@ For each active direction above, one sentence: what are today's papers collectiv
 For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
-- 🤗 HF 活跃度: {hfUpvotes} upvotes — {e.g. "社区高度关注" / "小众但相关"} (omit this line entirely if hfUpvotes is 0 or not present)
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 🧭 方向: {matched directions}  |  关键词: {interest hits}
 - 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
@@ -209,40 +208,6 @@ export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
   { id: "builtin_review",      name: "技术评审", prompt: DEFAULT_REVIEW_PROMPT, builtin: true },
 ];
 
-export const DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
-
-Week: {{week}}
-Papers from the past 7 days (JSON):
-{{papers_json}}
-
-Direction trends this week:
-{{directionTrends}}
-
-Generate a weekly report in {{language}} covering:
-1. **本周方向趋势 / Direction Trends** — which directions dominated, any shifts
-2. **Top Recurring Keywords** — most frequent interest keywords
-3. **推荐精读 / Recommended Deep Dives** (top 5 papers worth reading in full)
-4. **本周总结 / Weekly Summary** — 3-5 bullet points
-
-Format as clean Markdown.`;
-
-export const DEFAULT_MONTHLY_PROMPT = `You are a research paper analyst.
-
-Month: {{month}}
-Papers collected this month (JSON):
-{{papers_json}}
-
-Direction evolution:
-{{directionEvolution}}
-
-Generate a monthly report in {{language}} covering:
-1. **月度方向演进 / Direction Evolution** — stable vs emerging themes
-2. **关键词热度 / Keyword Heatmap** — top recurring keywords
-3. **月度精华 / Monthly Highlights** — top 10 papers
-4. **趋势洞察 / Trend Insights** — broader observations
-5. **月度总结 / Monthly Summary**
-
-Format as clean Markdown.`;
 
 export const DEFAULT_SETTINGS: PaperDailySettings = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
@@ -1307,8 +1272,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     temperature: 0.3,
     maxTokens: 4096,
     dailyPromptTemplate: DEFAULT_DAILY_PROMPT,
-    weeklyPromptTemplate: DEFAULT_WEEKLY_PROMPT,
-    monthlyPromptTemplate: DEFAULT_MONTHLY_PROMPT
   },
 
   rootFolder: "PaperDaily",

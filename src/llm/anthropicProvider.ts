@@ -18,6 +18,12 @@ export class AnthropicProvider implements LLMProvider {
         source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 }
       });
     }
+    for (const url of (input.pdfUrls ?? [])) {
+      userContent.push({
+        type: "document",
+        source: { type: "url", url }
+      });
+    }
     userContent.push({ type: "text", text: input.prompt });
 
     const response = await this.client.messages.create({

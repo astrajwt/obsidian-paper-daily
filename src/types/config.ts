@@ -31,8 +31,6 @@ export interface LLMConfig {
   temperature: number;
   maxTokens: number;
   dailyPromptTemplate: string;
-  weeklyPromptTemplate: string;
-  monthlyPromptTemplate: string;
 }
 
 export interface ScheduleConfig {
