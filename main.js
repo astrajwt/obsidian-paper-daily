@@ -130,7 +130,6 @@ For each active direction above, one sentence: what are today's papers collectiv
 For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
-- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {brief interpretation: e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173" / "\u672A\u4E0A\u699C"}
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
@@ -4880,11 +4879,14 @@ ${aiDigest}`;
   });
   const topPapersSection = `## arXiv Papers (ranked)
 
-> Papers also featured on HuggingFace Daily are ranked higher (\u{1F917} upvote boost).
-
 ${topPapersLines.join("\n\n") || "_No papers_"}`;
   let hfSection = "";
   if (hfDailyPapers.length > 0) {
+    const arxivBaseIds = new Set(
+      rankedPapers.map((p) => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+    );
+    const alsoInArxivCount = hfDailyPapers.filter((p) => arxivBaseIds.has(p.id)).length;
+    const summaryLine = alsoInArxivCount > 0 ? `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5176\u4E2D ${alsoInArxivCount} \u7BC7\u540C\u65F6\u51FA\u73B0\u5728\u4ECA\u65E5 arXiv \u68C0\u7D22\u7ED3\u679C\u4E2D\u3002` : `\u5171 ${hfDailyPapers.length} \u7BC7\uFF0C\u5747\u4E0D\u5728\u4ECA\u65E5 arXiv \u5173\u952E\u8BCD\u68C0\u7D22\u8303\u56F4\u5185\u3002`;
     const hfLines = hfDailyPapers.map((p, i) => {
       var _a2;
       const linksArr = [];
@@ -4895,8 +4897,9 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
       if (settings.includePdfLink && p.links.pdf)
         linksArr.push(`[PDF](${p.links.pdf})`);
       const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+      const arxivBadge = arxivBaseIds.has(p.id) ? " \u{1F4C4} \u4ECA\u65E5 arXiv \u6536\u5F55" : "";
       return [
-        `${i + 1}. **${p.title}** \u{1F917} ${(_a2 = p.hfUpvotes) != null ? _a2 : 0}`,
+        `${i + 1}. **${p.title}** \u{1F917} ${(_a2 = p.hfUpvotes) != null ? _a2 : 0}${arxivBadge}`,
         `   - Links: ${linksArr.join(", ")}`,
         `   - Authors: ${authorsStr}`,
         `   - Published: ${p.published.slice(0, 10)}`
@@ -4904,7 +4907,7 @@ ${topPapersLines.join("\n\n") || "_No papers_"}`;
     });
     hfSection = `## HuggingFace Daily Papers
 
-> Sorted by community upvotes. Papers that also appear in arXiv results are ranked higher there.
+${summaryLine}
 
 ${hfLines.join("\n\n")}`;
   }
@@ -5074,7 +5077,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       const llm = buildLLMProvider(settings);
       const topK = Math.min(rankedPapers.length, 10);
       const topPapersForLLM = rankedPapers.slice(0, topK).map((p) => {
-        var _a3, _b2, _c2;
+        var _a3, _b2;
         return {
           id: p.id,
           title: p.title,
@@ -5082,7 +5085,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           categories: p.categories,
           directions: (_a3 = p.topDirections) != null ? _a3 : [],
           interestHits: (_b2 = p.interestHits) != null ? _b2 : [],
-          hfUpvotes: (_c2 = p.hfUpvotes) != null ? _c2 : 0,
+          ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {},
           source: p.source,
           published: p.published,
           updated: p.updated,

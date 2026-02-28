@@ -100,25 +100,36 @@ function buildDailyMarkdown(
       `   - Updated: ${p.updated.slice(0, 10)}`,
     ].filter(Boolean).join("\n");
   });
-  const topPapersSection = `## arXiv Papers (ranked)\n\n> Papers also featured on HuggingFace Daily are ranked higher (🤗 upvote boost).\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
+  const topPapersSection = `## arXiv Papers (ranked)\n\n${topPapersLines.join("\n\n") || "_No papers_"}`;
 
   // HuggingFace Daily Papers section
   let hfSection = "";
   if (hfDailyPapers.length > 0) {
+    // Build set of base arXiv IDs that appear in today's ranked (arXiv) results
+    const arxivBaseIds = new Set(
+      rankedPapers.map(p => `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`)
+    );
+
+    const alsoInArxivCount = hfDailyPapers.filter(p => arxivBaseIds.has(p.id)).length;
+    const summaryLine = alsoInArxivCount > 0
+      ? `共 ${hfDailyPapers.length} 篇，其中 ${alsoInArxivCount} 篇同时出现在今日 arXiv 检索结果中。`
+      : `共 ${hfDailyPapers.length} 篇，均不在今日 arXiv 关键词检索范围内。`;
+
     const hfLines = hfDailyPapers.map((p, i) => {
       const linksArr: string[] = [];
       if (p.links.hf) linksArr.push(`[HF](${p.links.hf})`);
       if (p.links.html) linksArr.push(`[arXiv](${p.links.html})`);
       if (settings.includePdfLink && p.links.pdf) linksArr.push(`[PDF](${p.links.pdf})`);
       const authorsStr = p.authors.slice(0, 3).join(", ") + (p.authors.length > 3 ? " et al." : "");
+      const arxivBadge = arxivBaseIds.has(p.id) ? " 📄 今日 arXiv 收录" : "";
       return [
-        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}`,
+        `${i + 1}. **${p.title}** 🤗 ${p.hfUpvotes ?? 0}${arxivBadge}`,
         `   - Links: ${linksArr.join(", ")}`,
         `   - Authors: ${authorsStr}`,
         `   - Published: ${p.published.slice(0, 10)}`,
       ].join("\n");
     });
-    hfSection = `## HuggingFace Daily Papers\n\n> Sorted by community upvotes. Papers that also appear in arXiv results are ranked higher there.\n\n${hfLines.join("\n\n")}`;
+    hfSection = `## HuggingFace Daily Papers\n\n${summaryLine}\n\n${hfLines.join("\n\n")}`;
   }
 
   const allPapersRows = rankedPapers.map(p => {
@@ -318,7 +329,7 @@ export async function runDailyPipeline(
         categories: p.categories,
         directions: p.topDirections ?? [],
         interestHits: p.interestHits ?? [],
-        hfUpvotes: p.hfUpvotes ?? 0,
+        ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}),
         source: p.source,
         published: p.published,
         updated: p.updated,

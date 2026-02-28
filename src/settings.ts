@@ -108,7 +108,6 @@ For each active direction above, one sentence: what are today's papers collectiv
 For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
-- 🤗 HF 活跃度: {hfUpvotes} upvotes — {brief interpretation: e.g. "社区高度关注" / "小众但相关" / "未上榜"}
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 🧭 方向: {matched directions}  |  关键词: {interest hits}
 - 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
