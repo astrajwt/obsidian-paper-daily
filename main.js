@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => PaperDailyPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -112,7 +112,7 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes \u2192 direction
 
 ## arXiv papers to analyze (pre-ranked):
 {{papers_json}}
-
+{{fulltext_section}}
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
@@ -134,7 +134,7 @@ For **each paper** in the arXiv list, output exactly this structure:
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
-- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on? Be concrete.
+- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
 - \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, generalization, etc.
 - \u{1F517} {links from the paper data}
 
@@ -325,7 +325,13 @@ var DEFAULT_SETTINGS = {
     savePdf: false
   },
   arxivDetailTopK: 10,
-  hfDetailTopK: 10
+  hfDetailTopK: 10,
+  deepRead: {
+    enabled: false,
+    topN: 5,
+    maxCharsPerPaper: 8e3,
+    cacheTTLDays: 60
+  }
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -722,6 +728,42 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    containerEl.createEl("h2", { text: "\u5168\u6587\u7CBE\u8BFB / Deep Read" });
+    const drSubContainer = containerEl.createDiv();
+    const refreshDrSub = () => {
+      var _a2;
+      drSubContainer.style.display = ((_a2 = this.plugin.settings.deepRead) == null ? void 0 : _a2.enabled) ? "" : "none";
+    };
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u7CBE\u8BFB / Enable Deep Read").setDesc("\u6293\u53D6\u6392\u540D\u6700\u9AD8\u7684 N \u7BC7\u8BBA\u6587\u7684\u5168\u6587\uFF08arxiv.org/html\uFF09\uFF0C\u6CE8\u5165 LLM prompt\uFF0C\u8BA9\u6A21\u578B\u505A\u66F4\u6DF1\u5EA6\u7684\u9010\u7BC7\u5206\u6790 | Fetch full paper text and inject into the digest prompt for richer per-paper analysis").addToggle((toggle) => {
+      var _a2, _b;
+      return toggle.setValue((_b = (_a2 = this.plugin.settings.deepRead) == null ? void 0 : _a2.enabled) != null ? _b : false).onChange(async (value) => {
+        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, enabled: value };
+        await this.plugin.saveSettings();
+        refreshDrSub();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u7CBE\u8BFB\u7BC7\u6570 / Papers to fetch").setDesc("\u6BCF\u65E5\u6293\u53D6\u5168\u6587\u7684\u6700\u9AD8\u5206\u8BBA\u6587\u7BC7\u6570\uFF08\u5EFA\u8BAE 3\u20135\uFF0C\u8D8A\u591A prompt \u8D8A\u957F\uFF09| Number of top papers to fetch full text for").addSlider((slider) => {
+      var _a2, _b;
+      return slider.setLimits(1, 10, 1).setValue((_b = (_a2 = this.plugin.settings.deepRead) == null ? void 0 : _a2.topN) != null ? _b : 5).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5B57\u7B26\u4E0A\u9650 / Max chars per paper").setDesc("\u5168\u6587\u622A\u65AD\u957F\u5EA6\uFF0C\u8D8A\u5927\u8D8A\u4E30\u5BCC\u4F46 prompt \u66F4\u957F\uFF08\u9ED8\u8BA4 8000\uFF09| Truncation limit per paper in characters").addSlider((slider) => {
+      var _a2, _b;
+      return slider.setLimits(3e3, 2e4, 1e3).setValue((_b = (_a2 = this.plugin.settings.deepRead) == null ? void 0 : _a2.maxCharsPerPaper) != null ? _b : 8e3).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, maxCharsPerPaper: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u5168\u6587\u7F13\u5B58\u4FDD\u7559\u5929\u6570 / Cache TTL (days)").setDesc("\u5168\u6587\u7F13\u5B58\u5728 cache/fulltext/ \u4E0B\u4FDD\u7559\u591A\u5C11\u5929\u540E\u81EA\u52A8\u6E05\u7406 | Days to keep cached full texts before pruning").addSlider((slider) => {
+      var _a2, _b;
+      return slider.setLimits(7, 180, 1).setValue((_b = (_a2 = this.plugin.settings.deepRead) == null ? void 0 : _a2.cacheTTLDays) != null ? _b : 60).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    refreshDrSub();
     containerEl.createEl("h2", { text: "\u53BB\u91CD\u7F13\u5B58 / Dedup Cache" });
     new import_obsidian.Setting(containerEl).setName("\u6E05\u7A7A\u53BB\u91CD\u7F13\u5B58 / Clear Seen IDs").setDesc("\u6E05\u7A7A\u540E\u4E0B\u6B21\u8FD0\u884C\u4F1A\u91CD\u65B0\u62C9\u53D6\u6240\u6709\u8BBA\u6587 | After clearing, the next run will re-fetch all papers within the time window").addButton((btn) => btn.setButtonText("\u6E05\u7A7A / Clear").setWarning().onClick(async () => {
       await this.plugin.clearDedup();
@@ -1413,8 +1455,83 @@ async function readPaperPdfAsBase64(app, rootFolder, paperId) {
   }
 }
 
-// src/llm/openaiCompatible.ts
+// src/storage/fulltextCache.ts
 var import_obsidian6 = require("obsidian");
+var FulltextCache = class {
+  constructor(writer, app, rootFolder) {
+    this.writer = writer;
+    this.app = app;
+    this.dir = `${rootFolder}/cache/fulltext`;
+  }
+  keyToPath(baseId) {
+    return `${this.dir}/${baseId}.md`;
+  }
+  async get(baseId) {
+    return await this.writer.readNote(this.keyToPath(baseId));
+  }
+  async set(baseId, text) {
+    await this.writer.writeNote(this.keyToPath(baseId), text);
+  }
+  /** Delete cache files not modified within ttlDays. Returns count deleted. */
+  async prune(ttlDays) {
+    const cutoff = Date.now() - ttlDays * 86400 * 1e3;
+    let deleted = 0;
+    const folder = this.app.vault.getAbstractFileByPath((0, import_obsidian6.normalizePath)(this.dir));
+    if (!(folder instanceof import_obsidian6.TFolder))
+      return 0;
+    for (const child of [...folder.children]) {
+      if (child instanceof import_obsidian6.TFile && child.stat.mtime < cutoff) {
+        await this.app.vault.delete(child);
+        deleted++;
+      }
+    }
+    return deleted;
+  }
+};
+
+// src/sources/ar5ivFetcher.ts
+var import_obsidian7 = require("obsidian");
+async function fetchArxivFullText(baseId, maxChars) {
+  const urls = [
+    `https://arxiv.org/html/${baseId}`,
+    `https://ar5iv.labs.arxiv.org/html/${baseId}`
+  ];
+  for (const url of urls) {
+    try {
+      const resp = await (0, import_obsidian7.requestUrl)({ url, method: "GET" });
+      if (resp.status === 200 && resp.text.length > 500) {
+        return extractText(resp.text, maxChars);
+      }
+    } catch (e) {
+    }
+  }
+  return null;
+}
+function extractText(html, maxChars) {
+  var _a2, _b;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  for (const sel of [
+    "math",
+    "figure",
+    "figcaption",
+    ".ltx_bibliography",
+    ".ltx_page_footer",
+    "nav",
+    "header",
+    "script",
+    "style",
+    "svg"
+  ]) {
+    doc.querySelectorAll(sel).forEach((el) => el.remove());
+  }
+  const root = (_a2 = doc.querySelector("article")) != null ? _a2 : doc.body;
+  const raw = ((_b = root.textContent) != null ? _b : "").replace(/\s+/g, " ").trim();
+  return raw.slice(0, maxChars);
+}
+
+// src/llm/openaiCompatible.ts
+var import_obsidian8 = require("obsidian");
 var OpenAICompatibleProvider = class {
   constructor(baseUrl, apiKey, model) {
     this.baseUrl = baseUrl;
@@ -1435,7 +1552,7 @@ var OpenAICompatibleProvider = class {
       max_tokens: (_b = input.maxTokens) != null ? _b : 4096
     };
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
-    const response = await (0, import_obsidian6.requestUrl)({
+    const response = await (0, import_obsidian8.requestUrl)({
       url,
       method: "POST",
       headers: {
@@ -4873,7 +4990,7 @@ ${trendingLines.join("\n\n")}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5011,27 +5128,33 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 
 Papers:
 ${JSON.stringify(papersForScoring)}`;
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 2048 });
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 4096 });
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const scores = JSON.parse(jsonMatch[0]);
-        const scoreMap = new Map(scores.map((s) => [s.id, s]));
+        const normalizeId = (id) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
+        const scoreMap = new Map(scores.map((s) => [normalizeId(s.id), s]));
+        let matched = 0;
         for (const paper of rankedPapers) {
-          const s = scoreMap.get(paper.id);
+          const s = scoreMap.get(normalizeId(paper.id));
           if (s) {
             paper.llmScore = s.score;
             paper.llmScoreReason = s.reason;
             if (s.summary)
               paper.llmSummary = s.summary;
+            matched++;
           }
         }
         rankedPapers.sort((a, b) => {
           var _a3, _b2;
           return ((_a3 = b.llmScore) != null ? _a3 : -1) - ((_b2 = a.llmScore) != null ? _b2 : -1);
         });
-        log(`Step 3b LLM SCORE: scored ${scores.length}/${rankedPapers.length} papers, re-ranked`);
+        log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
+        if (matched === 0) {
+          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_i = scores[0]) == null ? void 0 : _i.id}" vs paper id="${(_j = rankedPapers[0]) == null ? void 0 : _j.id}"`);
+        }
       } else {
-        log(`Step 3b LLM SCORE: could not parse JSON from response`);
+        log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
       }
     } catch (err) {
       log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
@@ -5040,11 +5163,11 @@ ${JSON.stringify(papersForScoring)}`;
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
   const trendingPapers = [];
-  if (((_i = settings.trending) == null ? void 0 : _i.enabled) && papers.length > 0) {
+  if (((_k = settings.trending) == null ? void 0 : _k.enabled) && papers.length > 0) {
     const rankedIds = new Set(rankedPapers.map((p) => p.id));
     const unranked = papers.filter((p) => !rankedIds.has(p.id));
-    const trendingMode = (_j = settings.trending.mode) != null ? _j : "heuristic";
-    const topK = (_k = settings.trending.topK) != null ? _k : 5;
+    const trendingMode = (_l = settings.trending.mode) != null ? _l : "heuristic";
+    const topK = (_m = settings.trending.topK) != null ? _m : 5;
     if (trendingMode === "heuristic") {
       const scored = unranked.map((p) => {
         const h = computeHotness(p);
@@ -5092,19 +5215,19 @@ ${JSON.stringify(papersForTrending)}`;
       }
     }
   } else {
-    log(`Step 3c TRENDING: skipped (enabled=${(_l = settings.trending) == null ? void 0 : _l.enabled})`);
+    log(`Step 3c TRENDING: skipped (enabled=${(_n = settings.trending) == null ? void 0 : _n.enabled})`);
   }
   const allForDownload = [...rankedPapers, ...trendingPapers.map((t) => t.paper)];
   if (allForDownload.length > 0) {
     await downloadPapersForDay(app, allForDownload, settings, log);
   }
-  const trendingModeForSummary = (_n = (_m = settings.trending) == null ? void 0 : _m.mode) != null ? _n : "heuristic";
+  const trendingModeForSummary = (_p = (_o = settings.trending) == null ? void 0 : _o.mode) != null ? _p : "heuristic";
   if (trendingPapers.length > 0 && settings.llm.apiKey && trendingModeForSummary === "heuristic") {
     try {
       const llm = buildLLMProvider(settings);
       const needsBatchSummary = [];
       for (const t of trendingPapers) {
-        if (settings.llm.provider === "anthropic" && ((_o = settings.paperDownload) == null ? void 0 : _o.savePdf)) {
+        if (settings.llm.provider === "anthropic" && ((_q = settings.paperDownload) == null ? void 0 : _q.savePdf)) {
           const pdfBase64 = await readPaperPdfAsBase64(app, settings.rootFolder, t.paper.id);
           if (pdfBase64) {
             try {
@@ -5158,6 +5281,49 @@ ${JSON.stringify(papersForSummary)}`;
       log(`Step 3e TRENDING SUMMARY ERROR: ${String(err)} (non-fatal)`);
     }
   }
+  let fulltextSection = "";
+  if (((_r = settings.deepRead) == null ? void 0 : _r.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_s = settings.deepRead.topN) != null ? _s : 5, rankedPapers.length);
+    const maxChars = (_t = settings.deepRead.maxCharsPerPaper) != null ? _t : 8e3;
+    const cache = new FulltextCache(writer, app, settings.rootFolder);
+    const parts = [];
+    for (let i = 0; i < topN; i++) {
+      const paper = rankedPapers[i];
+      const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      let text = await cache.get(baseId);
+      if (!text) {
+        log(`Step 3f FULLTEXT: fetching ${baseId}...`);
+        text = await fetchArxivFullText(baseId, maxChars);
+        if (text) {
+          await cache.set(baseId, text);
+          log(`Step 3f FULLTEXT: cached ${baseId} (${text.length} chars)`);
+        } else {
+          log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+        }
+      } else {
+        log(`Step 3f FULLTEXT: cache hit for ${baseId} (${text.length} chars)`);
+      }
+      if (text) {
+        parts.push(`### [${i + 1}] ${paper.title}
+
+${text}`);
+      }
+    }
+    const pruned = await cache.prune((_u = settings.deepRead.cacheTTLDays) != null ? _u : 60);
+    if (pruned > 0)
+      log(`Step 3f FULLTEXT: pruned ${pruned} stale cache entries`);
+    if (parts.length > 0) {
+      fulltextSection = `
+
+## Full Paper Text (top ${parts.length} papers \u2014 use this for deeper per-paper analysis):
+> Texts are truncated. Focus on methods, experiments, and findings.
+
+${parts.join("\n\n---\n\n")}`;
+    }
+    log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
+  } else {
+    log(`Step 3f FULLTEXT: skipped (enabled=${(_w = (_v = settings.deepRead) == null ? void 0 : _v.enabled) != null ? _w : false})`);
+  }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
@@ -5193,6 +5359,7 @@ ${JSON.stringify(papersForSummary)}`;
         topDirections: topDirsStr,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
+        fulltext_section: fulltextSection,
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
@@ -5340,7 +5507,7 @@ var Scheduler = class {
 };
 
 // src/main.ts
-var PaperDailyPlugin = class extends import_obsidian7.Plugin {
+var PaperDailyPlugin = class extends import_obsidian9.Plugin {
   async onload() {
     await this.loadSettings();
     await this.initStorage();
@@ -5395,12 +5562,12 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
       callback: async () => {
-        new import_obsidian7.Notice("Paper Daily: Running daily fetch...");
+        new import_obsidian9.Notice("Paper Daily: Running daily fetch...");
         try {
           await this.runDaily();
-          new import_obsidian7.Notice("Paper Daily: Daily digest complete.");
+          new import_obsidian9.Notice("Paper Daily: Daily digest complete.");
         } catch (err) {
-          new import_obsidian7.Notice(`Paper Daily Error: ${String(err)}`);
+          new import_obsidian9.Notice(`Paper Daily Error: ${String(err)}`);
         }
       }
     });
@@ -5415,12 +5582,12 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       id: "rebuild-index",
       name: "Rebuild index from local cache",
       callback: async () => {
-        new import_obsidian7.Notice("Paper Daily: Rebuilding dedup index...");
+        new import_obsidian9.Notice("Paper Daily: Rebuilding dedup index...");
         try {
           await this.dedupStore.load();
-          new import_obsidian7.Notice("Paper Daily: Index rebuilt.");
+          new import_obsidian9.Notice("Paper Daily: Index rebuilt.");
         } catch (err) {
-          new import_obsidian7.Notice(`Paper Daily Error: ${String(err)}`);
+          new import_obsidian9.Notice(`Paper Daily Error: ${String(err)}`);
         }
       }
     });
@@ -5493,7 +5660,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     }
   }
 };
-var BackfillModal = class extends import_obsidian7.Modal {
+var BackfillModal = class extends import_obsidian9.Modal {
   constructor(app, plugin) {
     super(app);
     this.startDate = "";
@@ -5504,14 +5671,14 @@ var BackfillModal = class extends import_obsidian7.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
-    new import_obsidian7.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
+    new import_obsidian9.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
       this.startDate = v;
     }));
-    new import_obsidian7.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
+    new import_obsidian9.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
       this.endDate = v;
     }));
     this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
-    new import_obsidian7.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
+    new import_obsidian9.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
       if (!this.startDate || !this.endDate) {
         this.statusEl.setText("Please enter both start and end dates.");
         return;

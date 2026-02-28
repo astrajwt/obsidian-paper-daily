@@ -90,7 +90,7 @@ arXiv papers below have been pre-ranked by: HuggingFace upvotes → direction re
 
 ## arXiv papers to analyze (pre-ranked):
 {{papers_json}}
-
+{{fulltext_section}}
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
@@ -112,7 +112,7 @@ For **each paper** in the arXiv list, output exactly this structure:
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 🧭 方向: {matched directions}  |  关键词: {interest hits}
 - 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
-- 🔧 工程启示: what can a practitioner/engineer take away or act on? Be concrete.
+- 🔧 工程启示: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
 - ⚠️ 局限性: honest weaknesses — scope, baselines, reproducibility, generalization, etc.
 - 🔗 {links from the paper data}
 
@@ -317,6 +317,13 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   arxivDetailTopK: 10,
   hfDetailTopK: 10,
+
+  deepRead: {
+    enabled: false,
+    topN: 5,
+    maxCharsPerPaper: 8000,
+    cacheTTLDays: 60,
+  },
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -941,6 +948,63 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
           await this.plugin.saveSettings();
         }));
+
+    // ── Deep Read ────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "全文精读 / Deep Read" });
+
+    const drSubContainer = containerEl.createDiv();
+    const refreshDrSub = () => {
+      drSubContainer.style.display = this.plugin.settings.deepRead?.enabled ? "" : "none";
+    };
+
+    new Setting(containerEl)
+      .setName("开启精读 / Enable Deep Read")
+      .setDesc("抓取排名最高的 N 篇论文的全文（arxiv.org/html），注入 LLM prompt，让模型做更深度的逐篇分析 | Fetch full paper text and inject into the digest prompt for richer per-paper analysis")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.deepRead?.enabled ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, enabled: value } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+          refreshDrSub();
+        }));
+
+    new Setting(drSubContainer)
+      .setName("精读篇数 / Papers to fetch")
+      .setDesc("每日抓取全文的最高分论文篇数（建议 3–5，越多 prompt 越长）| Number of top papers to fetch full text for")
+      .addSlider(slider => slider
+        .setLimits(1, 10, 1)
+        .setValue(this.plugin.settings.deepRead?.topN ?? 5)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(drSubContainer)
+      .setName("每篇字符上限 / Max chars per paper")
+      .setDesc("全文截断长度，越大越丰富但 prompt 更长（默认 8000）| Truncation limit per paper in characters")
+      .addSlider(slider => slider
+        .setLimits(3000, 20000, 1000)
+        .setValue(this.plugin.settings.deepRead?.maxCharsPerPaper ?? 8000)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, maxCharsPerPaper: value } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(drSubContainer)
+      .setName("全文缓存保留天数 / Cache TTL (days)")
+      .setDesc("全文缓存在 cache/fulltext/ 下保留多少天后自动清理 | Days to keep cached full texts before pruning")
+      .addSlider(slider => slider
+        .setLimits(7, 180, 1)
+        .setValue(this.plugin.settings.deepRead?.cacheTTLDays ?? 60)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
+    refreshDrSub();
 
     // ── Dedup Cache ───────────────────────────────────────────────
     containerEl.createEl("h2", { text: "去重缓存 / Dedup Cache" });

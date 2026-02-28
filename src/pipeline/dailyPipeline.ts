@@ -11,6 +11,8 @@ import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
 import { computeHotness } from "../scoring/hotness";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
+import { FulltextCache } from "../storage/fulltextCache";
+import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -370,24 +372,31 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 Papers:
 ${JSON.stringify(papersForScoring)}`;
 
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 2048 });
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 4096 });
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const scores: Array<{ id: string; score: number; reason: string; summary?: string }> = JSON.parse(jsonMatch[0]);
-        const scoreMap = new Map(scores.map(s => [s.id, s]));
+        // Build a normalized lookup: strip arxiv: prefix and version suffix for fuzzy matching
+        const normalizeId = (id: string) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
+        const scoreMap = new Map(scores.map(s => [normalizeId(s.id), s]));
+        let matched = 0;
         for (const paper of rankedPapers) {
-          const s = scoreMap.get(paper.id);
+          const s = scoreMap.get(normalizeId(paper.id));
           if (s) {
             paper.llmScore = s.score;
             paper.llmScoreReason = s.reason;
             if (s.summary) paper.llmSummary = s.summary;
+            matched++;
           }
         }
         // Re-rank by LLM score; papers without a score fall to the end
         rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
-        log(`Step 3b LLM SCORE: scored ${scores.length}/${rankedPapers.length} papers, re-ranked`);
+        log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
+        if (matched === 0) {
+          log(`Step 3b LLM SCORE WARNING: 0 matched — ID format mismatch? Sample LLM id="${scores[0]?.id}" vs paper id="${rankedPapers[0]?.id}"`);
+        }
       } else {
-        log(`Step 3b LLM SCORE: could not parse JSON from response`);
+        log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
       }
     } catch (err) {
       log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
@@ -529,6 +538,46 @@ ${JSON.stringify(papersForSummary)}`;
     }
   }
 
+  // ── Step 3f: Full-text fetch for top-N papers (Deep Read) ─────
+  let fulltextSection = "";
+  if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
+    const maxChars = settings.deepRead.maxCharsPerPaper ?? 8000;
+    const cache = new FulltextCache(writer, app, settings.rootFolder);
+    const parts: string[] = [];
+
+    for (let i = 0; i < topN; i++) {
+      const paper = rankedPapers[i];
+      const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      let text = await cache.get(baseId);
+      if (!text) {
+        log(`Step 3f FULLTEXT: fetching ${baseId}...`);
+        text = await fetchArxivFullText(baseId, maxChars);
+        if (text) {
+          await cache.set(baseId, text);
+          log(`Step 3f FULLTEXT: cached ${baseId} (${text.length} chars)`);
+        } else {
+          log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+        }
+      } else {
+        log(`Step 3f FULLTEXT: cache hit for ${baseId} (${text.length} chars)`);
+      }
+      if (text) {
+        parts.push(`### [${i + 1}] ${paper.title}\n\n${text}`);
+      }
+    }
+
+    const pruned = await cache.prune(settings.deepRead.cacheTTLDays ?? 60);
+    if (pruned > 0) log(`Step 3f FULLTEXT: pruned ${pruned} stale cache entries`);
+
+    if (parts.length > 0) {
+      fulltextSection = `\n\n## Full Paper Text (top ${parts.length} papers — use this for deeper per-paper analysis):\n> Texts are truncated. Focus on methods, experiments, and findings.\n\n${parts.join("\n\n---\n\n")}`;
+    }
+    log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
+  } else {
+    log(`Step 3f FULLTEXT: skipped (enabled=${settings.deepRead?.enabled ?? false})`);
+  }
+
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
@@ -559,6 +608,7 @@ ${JSON.stringify(papersForSummary)}`;
         topDirections: topDirsStr,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
+        fulltext_section: fulltextSection,
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });

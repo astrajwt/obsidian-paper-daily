@@ -85,6 +85,14 @@ export interface PaperDailySettings {
   arxivDetailTopK: number;  // how many arXiv papers to show in the detailed section
   hfDetailTopK: number;     // how many HF papers to show in the detailed section
 
+  // Deep read: fetch full paper text from arxiv.org/html and inject into LLM prompt
+  deepRead?: {
+    enabled: boolean;
+    topN: number;             // how many top-ranked papers to fetch (default 5)
+    maxCharsPerPaper: number; // truncation limit per paper (default 8000)
+    cacheTTLDays: number;     // days before cached full texts are pruned (default 60)
+  };
+
   // Settings UI language (does not affect AI output language)
   uiLanguage?: "zh" | "en";
 }
