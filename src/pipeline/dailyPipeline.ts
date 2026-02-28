@@ -10,8 +10,6 @@ import { rankPapers } from "../scoring/rank";
 import { aggregateDirections } from "../scoring/directions";
 import { computeHotness } from "../scoring/hotness";
 import { downloadPapersForDay } from "../storage/paperDownloader";
-import { FulltextCache } from "../storage/fulltextCache";
-import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -51,7 +49,6 @@ function buildDailyMarkdown(
   rankedPapers: Paper[],
   hfDailyPapers: Paper[],
   trendingPapers: Array<{ paper: Paper; hotness: number; reasons: string[] }>,
-  deepReadResults: Array<{ paper: Paper; summary: string }>,
   aiDigest: string,
   activeSources: string[],
   error?: string
@@ -150,26 +147,7 @@ function buildDailyMarkdown(
     trendingSection = `## Trending Papers (no keyword match)\n\n> These papers scored 0 on interest/directions but rank high on hotness (version revisions, cross-listing, recency).\n\n${trendingLines.join("\n\n")}`;
   }
 
-  // Deep Read section
-  let deepReadSection = "";
-  if (deepReadResults.length > 0) {
-    const deepReadItems = deepReadResults.map((r, i) => {
-      const links: string[] = [];
-      if (r.paper.links.html) links.push(`[arXiv](${r.paper.links.html})`);
-      if (settings.includePdfLink && r.paper.links.pdf) links.push(`[PDF](${r.paper.links.pdf})`);
-      if (r.paper.links.hf) links.push(`[HF](${r.paper.links.hf})`);
-      return [
-        `### ${i + 1}. ${r.paper.title}`,
-        `${links.join(" · ")}`,
-        "",
-        r.summary
-      ].join("\n");
-    });
-    deepReadSection = `## 精读 / Deep Read\n\n${deepReadItems.join("\n\n---\n\n")}`;
-  }
-
   const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection];
-  if (deepReadSection) sections.push("", deepReadSection);
   if (hfSection) sections.push("", hfSection);
   sections.push("", allPapersSection);
   if (trendingSection) sections.push("", trendingSection);
@@ -390,70 +368,6 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log);
   }
 
-  // ── Step 3e: Full-text cache fetch for top N (精读 source) ────
-  const deepReadResults: Array<{ paper: Paper; summary: string }> = [];
-  const fulltextMap = new Map<string, string>(); // baseId -> text
-  if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const cache = new FulltextCache(writer, app, settings.rootFolder);
-    const topN = Math.min(settings.deepRead.topN ?? 3, rankedPapers.length);
-    const maxChars = settings.deepRead.maxCharsPerPaper ?? 12000;
-
-    for (const paper of rankedPapers.slice(0, topN)) {
-      const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      let fulltext = await cache.get(baseId);
-      if (!fulltext) {
-        log(`Step 3e FULLTEXT: fetching ${baseId} from ar5iv...`);
-        fulltext = await fetchArxivFullText(baseId, maxChars);
-        if (fulltext) {
-          await cache.set(baseId, fulltext);
-          log(`Step 3e FULLTEXT: cached ${baseId} (${fulltext.length} chars)`);
-        } else {
-          log(`Step 3e FULLTEXT: could not fetch ${baseId}, skipping deep read for this paper`);
-        }
-      } else {
-        log(`Step 3e FULLTEXT: cache hit for ${baseId} (${fulltext.length} chars)`);
-      }
-      if (fulltext) fulltextMap.set(paper.id, fulltext);
-    }
-
-    const pruned = await cache.prune(settings.deepRead.cacheTTLDays ?? 60);
-    if (pruned > 0) log(`Step 3e FULLTEXT: pruned ${pruned} old cache entries`);
-  } else {
-    log(`Step 3e FULLTEXT: skipped (enabled=${settings.deepRead?.enabled})`);
-  }
-
-  // ── Step 3f: Deep read LLM (per-paper full-text analysis) ─────
-  if (fulltextMap.size > 0 && settings.llm.apiKey) {
-    log(`Step 3f DEEP READ: ${fulltextMap.size} papers to analyze`);
-    const llm = buildLLMProvider(settings);
-    const lang = settings.language === "zh" ? "Chinese (中文)" : "English";
-    for (const paper of rankedPapers.slice(0, settings.deepRead.topN ?? 3)) {
-      const fulltext = fulltextMap.get(paper.id);
-      if (!fulltext) continue;
-      try {
-        const prompt = `You are a senior researcher. Perform a deep technical read of this paper and produce a structured analysis in ${lang}.
-
-Paper: ${paper.title}
-Authors: ${paper.authors.slice(0, 5).join(", ")}
-
-Full text (truncated):
-${fulltext}
-
-Output these sections (use the language specified above throughout):
-## 核心贡献 / Core Contribution
-## 方法细节 / Method
-## 实验结果 / Results
-## 工程启示 / Engineering Takeaways
-## 局限性 / Limitations`;
-        const result = await llm.generate({ prompt, temperature: 0.2, maxTokens: settings.llm.maxTokens });
-        deepReadResults.push({ paper, summary: result.text });
-        log(`Step 3f DEEP READ: completed ${paper.id}`);
-      } catch (err) {
-        log(`Step 3f DEEP READ ERROR: ${paper.id}: ${String(err)} (skipping)`);
-      }
-    }
-  }
-
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
@@ -507,7 +421,7 @@ Output these sections (use the language specified above throughout):
     : llmError ? `LLM failed: ${llmError}` : undefined;
 
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, deepReadResults, llmDigest, activeSources, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, hfDailyPapers, trendingPapers, llmDigest, activeSources, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

@@ -84,14 +84,6 @@ export interface PaperDailySettings {
     maxPapers: number;   // max papers to download per day
   };
 
-  // Deep Read: full-text LLM analysis for top N papers
-  deepRead: {
-    enabled: boolean;
-    topN: number;              // papers to deep read per day (default 3)
-    maxCharsPerPaper: number;  // fulltext truncation (default 12000 ≈ 3000 tokens)
-    cacheTTLDays: number;      // how long to keep cached full texts (default 60)
-  };
-
   // Settings UI language (does not affect AI output language)
   uiLanguage?: "zh" | "en";
 }

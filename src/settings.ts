@@ -295,13 +295,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     saveHtml: false,
     savePdf: false,
     maxPapers: 5
-  },
-
-  deepRead: {
-    enabled: false,
-    topN: 3,
-    maxCharsPerPaper: 12000,
-    cacheTTLDays: 60
   }
 };
 
@@ -972,51 +965,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     refreshDlSub();
-
-    // ── Deep Read ─────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "精读 / Deep Read" });
-
-    const drSubContainer = containerEl.createDiv();
-    const refreshDrSub = () => {
-      drSubContainer.style.display = this.plugin.settings.deepRead?.enabled ? "" : "none";
-    };
-
-    new Setting(containerEl)
-      .setName("开启精读 / Enable Deep Read")
-      .setDesc("对打分最高的 N 篇论文抓取全文（ar5iv）并调用大模型做深度分析 | Fetch full text (ar5iv) for top-N papers and run an in-depth LLM analysis")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.deepRead?.enabled ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, enabled: value };
-          await this.plugin.saveSettings();
-          refreshDrSub();
-        }));
-
-    new Setting(drSubContainer)
-      .setName("精读篇数 / Papers to deep read")
-      .setDesc("每日精读的最高分论文篇数 | Number of top-scored papers to deep read per day")
-      .addSlider(slider => slider
-        .setLimits(1, 10, 1)
-        .setValue(this.plugin.settings.deepRead?.topN ?? 3)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value };
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(drSubContainer)
-      .setName("全文缓存保留天数 / Cache TTL (days)")
-      .setDesc("全文缓存在 cache/fulltext/ 下保留多少天后自动清理 | Days to keep cached full texts before pruning")
-      .addSlider(slider => slider
-        .setLimits(7, 180, 1)
-        .setValue(this.plugin.settings.deepRead?.cacheTTLDays ?? 60)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value };
-          await this.plugin.saveSettings();
-        }));
-
-    refreshDrSub();
 
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "历史回填 / Backfill" });
