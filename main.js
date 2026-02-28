@@ -32,6 +32,73 @@ var import_obsidian5 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
+var PROVIDER_PRESETS = {
+  deepseek: {
+    label: "DeepSeek",
+    provider: "openai_compatible",
+    baseUrl: "https://api.deepseek.com/v1",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+    keyPlaceholder: "sk-..."
+  },
+  openai: {
+    label: "OpenAI",
+    provider: "openai_compatible",
+    baseUrl: "https://api.openai.com/v1",
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
+    keyPlaceholder: "sk-..."
+  },
+  anthropic: {
+    label: "Claude",
+    provider: "anthropic",
+    baseUrl: "",
+    models: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-opus-4-5"],
+    keyPlaceholder: "sk-ant-..."
+  },
+  glm: {
+    label: "GLM / \u667A\u8C31",
+    provider: "openai_compatible",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    models: ["glm-4-flash", "glm-4-air", "glm-4", "glm-z1-flash"],
+    keyPlaceholder: "your-zhipu-api-key"
+  },
+  minimax: {
+    label: "MiniMax",
+    provider: "openai_compatible",
+    baseUrl: "https://api.minimax.chat/v1",
+    models: ["MiniMax-Text-01", "abab6.5s-chat", "abab5.5-chat"],
+    keyPlaceholder: "your-minimax-api-key"
+  },
+  moonshot: {
+    label: "Moonshot / Kimi",
+    provider: "openai_compatible",
+    baseUrl: "https://api.moonshot.cn/v1",
+    models: ["moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
+    keyPlaceholder: "sk-..."
+  },
+  qwen: {
+    label: "Qwen / \u901A\u4E49",
+    provider: "openai_compatible",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    models: ["qwen-plus", "qwen-turbo", "qwen-max", "qwen-long"],
+    keyPlaceholder: "sk-..."
+  },
+  custom: {
+    label: "Custom",
+    provider: "openai_compatible",
+    baseUrl: "",
+    models: [],
+    keyPlaceholder: "your-api-key"
+  }
+};
+function detectPreset(baseUrl) {
+  for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
+    if (key === "custom")
+      continue;
+    if (preset.baseUrl && baseUrl.startsWith(preset.baseUrl))
+      return key;
+  }
+  return baseUrl ? "custom" : "deepseek";
+}
 var DEFAULT_DAILY_PROMPT = `You are a research paper analyst specializing in AI/ML systems, RL, and LLM infrastructure.
 
 Today's date: {{date}}
@@ -225,25 +292,154 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       }
     }));
     containerEl.createEl("h2", { text: "LLM Provider" });
-    new import_obsidian.Setting(containerEl).setName("Provider").setDesc("LLM provider to use for generating digests").addDropdown((drop) => drop.addOption("openai_compatible", "OpenAI Compatible").addOption("anthropic", "Anthropic").setValue(this.plugin.settings.llm.provider).onChange(async (value) => {
-      this.plugin.settings.llm.provider = value;
+    const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
+    presetWrap.style.display = "flex";
+    presetWrap.style.flexWrap = "wrap";
+    presetWrap.style.gap = "6px";
+    presetWrap.style.marginBottom = "16px";
+    let activePreset = detectPreset(this.plugin.settings.llm.baseUrl);
+    let baseUrlInput;
+    let modelSelect;
+    let customModelInput;
+    let modelCustomRow;
+    let apiKeyInput;
+    const renderModelOptions = (presetKey) => {
+      if (!modelSelect)
+        return;
+      const preset = PROVIDER_PRESETS[presetKey];
+      modelSelect.empty();
+      for (const m of preset.models) {
+        const opt = modelSelect.createEl("option", { text: m, value: m });
+        if (m === this.plugin.settings.llm.model)
+          opt.selected = true;
+      }
+      const customOpt = modelSelect.createEl("option", { text: "Other (custom)...", value: "__custom__" });
+      if (!preset.models.includes(this.plugin.settings.llm.model)) {
+        customOpt.selected = true;
+        if (modelCustomRow)
+          modelCustomRow.style.display = "";
+        if (customModelInput)
+          customModelInput.value = this.plugin.settings.llm.model;
+      } else {
+        if (modelCustomRow)
+          modelCustomRow.style.display = "none";
+      }
+    };
+    const applyPreset = async (presetKey) => {
+      activePreset = presetKey;
+      const preset = PROVIDER_PRESETS[presetKey];
+      this.plugin.settings.llm.provider = preset.provider;
+      if (preset.baseUrl) {
+        this.plugin.settings.llm.baseUrl = preset.baseUrl;
+        if (baseUrlInput)
+          baseUrlInput.value = preset.baseUrl;
+      }
+      if (apiKeyInput)
+        apiKeyInput.placeholder = preset.keyPlaceholder;
+      renderModelOptions(presetKey);
+      if (preset.models.length > 0 && !preset.models.includes(this.plugin.settings.llm.model)) {
+        this.plugin.settings.llm.model = preset.models[0];
+        if (modelSelect)
+          modelSelect.value = preset.models[0];
+        if (modelCustomRow)
+          modelCustomRow.style.display = "none";
+      }
+      presetWrap.querySelectorAll(".paper-daily-preset-btn").forEach((b) => {
+        const el = b;
+        if (el.dataset.preset === presetKey) {
+          el.style.opacity = "1";
+          el.style.fontWeight = "600";
+          el.style.borderColor = "var(--interactive-accent)";
+          el.style.color = "var(--interactive-accent)";
+        } else {
+          el.style.opacity = "0.6";
+          el.style.fontWeight = "400";
+          el.style.borderColor = "var(--background-modifier-border)";
+          el.style.color = "var(--text-normal)";
+        }
+      });
       await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("API base URL (for openai_compatible; ignored for Anthropic)").addText((text) => text.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.llm.baseUrl).onChange(async (value) => {
-      this.plugin.settings.llm.baseUrl = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Your API key").addText((text) => {
+    };
+    for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
+      const btn = presetWrap.createEl("button", {
+        text: preset.label,
+        cls: "paper-daily-preset-btn"
+      });
+      btn.dataset.preset = key;
+      btn.style.padding = "4px 12px";
+      btn.style.borderRadius = "6px";
+      btn.style.border = "1px solid var(--background-modifier-border)";
+      btn.style.cursor = "pointer";
+      btn.style.fontSize = "0.85em";
+      btn.style.background = "var(--background-secondary)";
+      btn.style.transition = "all 0.15s";
+      if (key === activePreset) {
+        btn.style.opacity = "1";
+        btn.style.fontWeight = "600";
+        btn.style.borderColor = "var(--interactive-accent)";
+        btn.style.color = "var(--interactive-accent)";
+      } else {
+        btn.style.opacity = "0.6";
+        btn.style.color = "var(--text-normal)";
+      }
+      btn.addEventListener("click", () => applyPreset(key));
+    }
+    new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("API endpoint (auto-filled by preset; edit for custom deployments)").addText((text) => {
+      baseUrlInput = text.inputEl;
+      text.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.llm.baseUrl).onChange(async (value) => {
+        this.plugin.settings.llm.baseUrl = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Your API key for the selected provider").addText((text) => {
+      var _a2, _b;
+      apiKeyInput = text.inputEl;
       text.inputEl.type = "password";
-      text.setPlaceholder("sk-...").setValue(this.plugin.settings.llm.apiKey).onChange(async (value) => {
+      text.inputEl.placeholder = (_b = (_a2 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a2.keyPlaceholder) != null ? _b : "sk-...";
+      text.setValue(this.plugin.settings.llm.apiKey).onChange(async (value) => {
         this.plugin.settings.llm.apiKey = value;
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Model").setDesc("Model name (e.g. gpt-4o-mini, claude-3-5-haiku-latest)").addText((text) => text.setPlaceholder("gpt-4o-mini").setValue(this.plugin.settings.llm.model).onChange(async (value) => {
-      this.plugin.settings.llm.model = value;
+    const modelSetting = new import_obsidian.Setting(containerEl).setName("Model").setDesc("Select a preset model or choose Other to type a custom name");
+    modelSetting.controlEl.style.flexDirection = "column";
+    modelSetting.controlEl.style.alignItems = "flex-start";
+    modelSetting.controlEl.style.gap = "6px";
+    modelSelect = modelSetting.controlEl.createEl("select");
+    modelSelect.style.width = "100%";
+    modelSelect.style.padding = "4px 6px";
+    modelSelect.style.borderRadius = "4px";
+    modelSelect.style.border = "1px solid var(--background-modifier-border)";
+    modelSelect.style.background = "var(--background-primary)";
+    modelSelect.style.color = "var(--text-normal)";
+    modelSelect.style.fontSize = "0.9em";
+    modelCustomRow = modelSetting.controlEl.createDiv();
+    modelCustomRow.style.width = "100%";
+    modelCustomRow.style.display = "none";
+    customModelInput = modelCustomRow.createEl("input", { type: "text" });
+    customModelInput.placeholder = "Enter model name...";
+    customModelInput.style.width = "100%";
+    customModelInput.style.padding = "4px 6px";
+    customModelInput.style.borderRadius = "4px";
+    customModelInput.style.border = "1px solid var(--background-modifier-border)";
+    customModelInput.style.background = "var(--background-primary)";
+    customModelInput.style.color = "var(--text-normal)";
+    customModelInput.style.fontSize = "0.9em";
+    customModelInput.addEventListener("change", async () => {
+      this.plugin.settings.llm.model = customModelInput.value;
       await this.plugin.saveSettings();
-    }));
+    });
+    renderModelOptions(activePreset);
+    modelSelect.addEventListener("change", async () => {
+      if (modelSelect.value === "__custom__") {
+        modelCustomRow.style.display = "";
+        customModelInput.focus();
+      } else {
+        modelCustomRow.style.display = "none";
+        this.plugin.settings.llm.model = modelSelect.value;
+        await this.plugin.saveSettings();
+      }
+    });
     new import_obsidian.Setting(containerEl).setName("Temperature").setDesc("LLM temperature (0.0 - 1.0)").addSlider((slider) => slider.setLimits(0, 1, 0.05).setValue(this.plugin.settings.llm.temperature).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.llm.temperature = value;
       await this.plugin.saveSettings();
