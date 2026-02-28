@@ -850,7 +850,7 @@ var ArxivSource = class {
       if (paper)
         papers.push(paper);
     }
-    return this.filterByWindow(papers, params.windowStart, params.windowEnd);
+    return papers;
   }
 };
 

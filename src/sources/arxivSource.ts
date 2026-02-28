@@ -95,7 +95,6 @@ export class ArxivSource implements PaperSource {
   }
 
   async fetch(params: FetchParams): Promise<Paper[]> {
-    // Over-fetch by 3x to allow filtering + scoring
     const maxResults = params.maxResults * 3;
     const url = this.buildUrl(params, maxResults);
 
@@ -117,7 +116,10 @@ export class ArxivSource implements PaperSource {
       if (paper) papers.push(paper);
     }
 
-    // Filter by time window
-    return this.filterByWindow(papers, params.windowStart, params.windowEnd);
+    // arXiv API already returns results sorted by submittedDate descending.
+    // Time-window filtering is unreliable because arXiv only announces papers
+    // on weekdays and has variable processing delays. Just return all fetched
+    // papers and let the ranking + dedup layer handle freshness.
+    return papers;
   }
 }
