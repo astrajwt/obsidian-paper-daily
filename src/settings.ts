@@ -291,9 +291,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   },
 
   paperDownload: {
-    enabled: false,
     savePdf: false,
-    maxPapers: 5
   }
 };
 
@@ -909,51 +907,17 @@ export class PaperDailySettingTab extends PluginSettingTab {
       });
 
     // ── Paper Download ────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "全文下载 / Paper Download" });
-    containerEl.createEl("p", {
-      text: "下载排名靠前的论文 PDF，存至 papers/pdf/，已下载的文件自动跳过 | Download PDF of top-ranked papers (papers/pdf/). Already-downloaded files are skipped.",
-      cls: "setting-item-description"
-    });
-
-    const dlSubContainer = containerEl.createDiv();
-    const refreshDlSub = () => {
-      dlSubContainer.style.display = this.plugin.settings.paperDownload?.enabled ? "" : "none";
-    };
+    containerEl.createEl("h2", { text: "PDF 下载 / PDF Download" });
 
     new Setting(containerEl)
-      .setName("开启全文下载 / Enable Paper Download")
-      .setDesc("开启后可下载 PDF | When enabled, download PDF")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.paperDownload?.enabled ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, enabled: value };
-          await this.plugin.saveSettings();
-          refreshDlSub();
-        }));
-
-    new Setting(dlSubContainer)
       .setName("保存 PDF / Save PDF")
-      .setDesc("下载 PDF 并存入 Vault（Obsidian 可直接预览）| Download the PDF and save it in the vault (viewable in Obsidian)")
+      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/). Already-downloaded files are skipped.")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
         .onChange(async (value) => {
           this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
           await this.plugin.saveSettings();
         }));
-
-    new Setting(dlSubContainer)
-      .setName("每日最多下载数 / Max papers to download per day")
-      .setDesc("限制下载数量以避免等待时间过长 | Limit downloads to top-N ranked papers to avoid long wait times")
-      .addSlider(slider => slider
-        .setLimits(1, 30, 1)
-        .setValue(this.plugin.settings.paperDownload?.maxPapers ?? 5)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, maxPapers: value };
-          await this.plugin.saveSettings();
-        }));
-
-    refreshDlSub();
 
     // ── Dedup Cache ───────────────────────────────────────────────
     containerEl.createEl("h2", { text: "去重缓存 / Dedup Cache" });

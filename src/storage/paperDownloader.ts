@@ -32,31 +32,29 @@ async function downloadOne(
   app: App,
   paper: Paper,
   rootFolder: string,
-  savePdf: boolean,
   log: (msg: string) => void
 ): Promise<void> {
   const arxivId = getArxivId(paper.id);
   const filename = safeFilename(arxivId);
 
-  if (savePdf && paper.links.pdf) {
-    const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${filename}.pdf`);
-    if (app.vault.getAbstractFileByPath(pdfPath)) {
-      log(`PDF skip (exists): ${filename}`);
-    } else {
-      try {
-        const resp = await requestUrl({ url: paper.links.pdf, method: "GET" });
-        if (resp.status === 200) {
-          await ensureFolder(app, `${rootFolder}/papers/pdf`);
-          await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
-          log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
-        } else {
-          log(`PDF skip (HTTP ${resp.status}): ${filename}`);
-        }
-      } catch (err) {
-        log(`PDF error: ${filename}: ${String(err)}`);
+  if (!paper.links.pdf) return;
+  const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  if (app.vault.getAbstractFileByPath(pdfPath)) {
+    log(`PDF skip (exists): ${filename}`);
+  } else {
+    try {
+      const resp = await requestUrl({ url: paper.links.pdf, method: "GET" });
+      if (resp.status === 200) {
+        await ensureFolder(app, `${rootFolder}/papers/pdf`);
+        await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
+        log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
+      } else {
+        log(`PDF skip (HTTP ${resp.status}): ${filename}`);
       }
-      await sleep(1200);
+    } catch (err) {
+      log(`PDF error: ${filename}: ${String(err)}`);
     }
+    await sleep(1200);
   }
 }
 
@@ -68,16 +66,11 @@ export async function downloadPapersForDay(
   settings: PaperDailySettings,
   log: (msg: string) => void
 ): Promise<void> {
-  const cfg = settings.paperDownload;
-  if (!cfg?.enabled) return;
-  if (!cfg.savePdf) return;
+  if (!settings.paperDownload?.savePdf) return;
 
-  const topN = papers.slice(0, cfg.maxPapers ?? 5);
-  log(`Step DOWNLOAD: ${topN.length} papers (savePdf=${cfg.savePdf})`);
-
-  for (const paper of topN) {
-    await downloadOne(app, paper, settings.rootFolder, !!cfg.savePdf, log);
+  log(`Step DOWNLOAD: ${papers.length} papers`);
+  for (const paper of papers) {
+    await downloadOne(app, paper, settings.rootFolder, log);
   }
-
   log(`Step DOWNLOAD: done`);
 }

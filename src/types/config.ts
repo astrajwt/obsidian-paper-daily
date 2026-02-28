@@ -78,9 +78,7 @@ export interface PaperDailySettings {
 
   // Paper full-text download
   paperDownload: {
-    enabled: boolean;    // master toggle
-    savePdf: boolean;    // download PDF and save as .pdf
-    maxPapers: number;   // max papers to download per day
+    savePdf: boolean;
   };
 
   // Settings UI language (does not affect AI output language)

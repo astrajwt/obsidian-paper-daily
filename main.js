@@ -301,9 +301,7 @@ var DEFAULT_SETTINGS = {
     feeds: []
   },
   paperDownload: {
-    enabled: false,
-    savePdf: false,
-    maxPapers: 5
+    savePdf: false
   }
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
@@ -709,39 +707,14 @@ URL: ${result.url}`, "var(--color-green)");
         await this.plugin.saveSettings();
       });
     });
-    containerEl.createEl("h2", { text: "\u5168\u6587\u4E0B\u8F7D / Paper Download" });
-    containerEl.createEl("p", {
-      text: "\u4E0B\u8F7D\u6392\u540D\u9760\u524D\u7684\u8BBA\u6587 PDF\uFF0C\u5B58\u81F3 papers/pdf/\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download PDF of top-ranked papers (papers/pdf/). Already-downloaded files are skipped.",
-      cls: "setting-item-description"
-    });
-    const dlSubContainer = containerEl.createDiv();
-    const refreshDlSub = () => {
-      var _a2;
-      dlSubContainer.style.display = ((_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.enabled) ? "" : "none";
-    };
-    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u5168\u6587\u4E0B\u8F7D / Enable Paper Download").setDesc("\u5F00\u542F\u540E\u53EF\u4E0B\u8F7D PDF | When enabled, download PDF").addToggle((toggle) => {
-      var _a2, _b;
-      return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.enabled) != null ? _b : false).onChange(async (value) => {
-        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, enabled: value };
-        await this.plugin.saveSettings();
-        refreshDlSub();
-      });
-    });
-    new import_obsidian.Setting(dlSubContainer).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D PDF \u5E76\u5B58\u5165 Vault\uFF08Obsidian \u53EF\u76F4\u63A5\u9884\u89C8\uFF09| Download the PDF and save it in the vault (viewable in Obsidian)").addToggle((toggle) => {
+    containerEl.createEl("h2", { text: "PDF \u4E0B\u8F7D / PDF Download" });
+    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D\u8BBA\u6587 PDF \u5E76\u5B58\u5165 Vault\uFF08papers/pdf/\uFF09\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download paper PDFs into the vault (papers/pdf/). Already-downloaded files are skipped.").addToggle((toggle) => {
       var _a2, _b;
       return toggle.setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.savePdf) != null ? _b : false).onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(dlSubContainer).setName("\u6BCF\u65E5\u6700\u591A\u4E0B\u8F7D\u6570 / Max papers to download per day").setDesc("\u9650\u5236\u4E0B\u8F7D\u6570\u91CF\u4EE5\u907F\u514D\u7B49\u5F85\u65F6\u95F4\u8FC7\u957F | Limit downloads to top-N ranked papers to avoid long wait times").addSlider((slider) => {
-      var _a2, _b;
-      return slider.setLimits(1, 30, 1).setValue((_b = (_a2 = this.plugin.settings.paperDownload) == null ? void 0 : _a2.maxPapers) != null ? _b : 5).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, maxPapers: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    refreshDlSub();
     containerEl.createEl("h2", { text: "\u53BB\u91CD\u7F13\u5B58 / Dedup Cache" });
     new import_obsidian.Setting(containerEl).setName("\u6E05\u7A7A\u53BB\u91CD\u7F13\u5B58 / Clear Seen IDs").setDesc("\u6E05\u7A7A\u540E\u4E0B\u6B21\u8FD0\u884C\u4F1A\u91CD\u65B0\u62C9\u53D6\u6240\u6709\u8BBA\u6587 | After clearing, the next run will re-fetch all papers within the time window").addButton((btn) => btn.setButtonText("\u6E05\u7A7A / Clear").setWarning().onClick(async () => {
       await this.plugin.clearDedup();
@@ -1379,41 +1352,37 @@ async function ensureFolder(app, folderPath) {
   } catch (e) {
   }
 }
-async function downloadOne(app, paper, rootFolder, savePdf, log) {
+async function downloadOne(app, paper, rootFolder, log) {
   const arxivId = getArxivId(paper.id);
   const filename = safeFilename(arxivId);
-  if (savePdf && paper.links.pdf) {
-    const pdfPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/pdf/${filename}.pdf`);
-    if (app.vault.getAbstractFileByPath(pdfPath)) {
-      log(`PDF skip (exists): ${filename}`);
-    } else {
-      try {
-        const resp = await (0, import_obsidian5.requestUrl)({ url: paper.links.pdf, method: "GET" });
-        if (resp.status === 200) {
-          await ensureFolder(app, `${rootFolder}/papers/pdf`);
-          await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
-          log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
-        } else {
-          log(`PDF skip (HTTP ${resp.status}): ${filename}`);
-        }
-      } catch (err) {
-        log(`PDF error: ${filename}: ${String(err)}`);
+  if (!paper.links.pdf)
+    return;
+  const pdfPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  if (app.vault.getAbstractFileByPath(pdfPath)) {
+    log(`PDF skip (exists): ${filename}`);
+  } else {
+    try {
+      const resp = await (0, import_obsidian5.requestUrl)({ url: paper.links.pdf, method: "GET" });
+      if (resp.status === 200) {
+        await ensureFolder(app, `${rootFolder}/papers/pdf`);
+        await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
+        log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
+      } else {
+        log(`PDF skip (HTTP ${resp.status}): ${filename}`);
       }
-      await sleep(1200);
+    } catch (err) {
+      log(`PDF error: ${filename}: ${String(err)}`);
     }
+    await sleep(1200);
   }
 }
 async function downloadPapersForDay(app, papers, settings, log) {
   var _a2;
-  const cfg = settings.paperDownload;
-  if (!(cfg == null ? void 0 : cfg.enabled))
+  if (!((_a2 = settings.paperDownload) == null ? void 0 : _a2.savePdf))
     return;
-  if (!cfg.savePdf)
-    return;
-  const topN = papers.slice(0, (_a2 = cfg.maxPapers) != null ? _a2 : 5);
-  log(`Step DOWNLOAD: ${topN.length} papers (savePdf=${cfg.savePdf})`);
-  for (const paper of topN) {
-    await downloadOne(app, paper, settings.rootFolder, !!cfg.savePdf, log);
+  log(`Step DOWNLOAD: ${papers.length} papers`);
+  for (const paper of papers) {
+    await downloadOne(app, paper, settings.rootFolder, log);
   }
   log(`Step DOWNLOAD: done`);
 }
