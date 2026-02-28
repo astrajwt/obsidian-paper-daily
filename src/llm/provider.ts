@@ -3,6 +3,8 @@ export interface LLMInput {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  /** Base64-encoded PDF content. Supported by Anthropic provider only. */
+  pdfBase64?: string;
 }
 
 export interface LLMOutput {

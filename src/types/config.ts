@@ -59,8 +59,8 @@ export interface PaperDailySettings {
   // Trending (zero-score papers with high hotness)
   trending: {
     enabled: boolean;
-    topK: number;       // how many trending papers to include
-    minHotness: number; // minimum hotness score to qualify
+    mode: "heuristic" | "llm"; // heuristic: signal-based scoring; llm: LLM scores abstracts
+    topK: number;              // how many trending papers to include
   };
 
   // HuggingFace Papers source

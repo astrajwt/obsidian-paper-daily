@@ -1,4 +1,4 @@
-import { App, normalizePath, requestUrl } from "obsidian";
+import { App, normalizePath, requestUrl, TFile } from "obsidian";
 import type { Paper } from "../types/paper";
 import type { PaperDailySettings } from "../types/config";
 
@@ -58,8 +58,6 @@ async function downloadOne(
   }
 }
 
-// ── Public entry point ─────────────────────────────────────────
-
 export async function downloadPapersForDay(
   app: App,
   papers: Paper[],
@@ -73,4 +71,30 @@ export async function downloadPapersForDay(
     await downloadOne(app, paper, settings.rootFolder, log);
   }
   log(`Step DOWNLOAD: done`);
+}
+
+/**
+ * Read a downloaded PDF from the vault and return it as a base64 string.
+ * Returns null if the file does not exist or cannot be read.
+ * Used to pass PDF content directly to LLM providers that support it (e.g. Anthropic).
+ */
+export async function readPaperPdfAsBase64(
+  app: App,
+  rootFolder: string,
+  paperId: string
+): Promise<string | null> {
+  const arxivId = paperId.replace(/^arxiv:/i, "");
+  const filename = arxivId.replace(/[/\\:*?"<>|]/g, "_");
+  const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  const abstractFile = app.vault.getAbstractFileByPath(pdfPath);
+  if (!(abstractFile instanceof TFile)) return null;
+  try {
+    const buffer = await app.vault.readBinary(abstractFile);
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    bytes.forEach(b => { binary += String.fromCharCode(b); });
+    return btoa(binary);
+  } catch {
+    return null;
+  }
 }

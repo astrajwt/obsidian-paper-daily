@@ -275,8 +275,8 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   trending: {
     enabled: true,
-    topK: 5,
-    minHotness: 2
+    mode: "heuristic" as "heuristic" | "llm",
+    topK: 5
   },
 
   hfSource: {
@@ -797,11 +797,23 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("开启热度模式 / Enable Trending Mode")
-      .setDesc("在摘要末尾附加热度论文板块 | Append a Trending section with zero-keyword-match papers that score high on hotness")
+      .setDesc("在摘要末尾附加热度论文板块 | Append a Trending section with papers not matched by keywords")
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.trending.enabled)
         .onChange(async (value) => {
           this.plugin.settings.trending.enabled = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("热度检测模式 / Trending Detection Mode")
+      .setDesc("heuristic：基于版本修订 / 多分类 / 时效 / HF 赞数打分 | llm：大模型对摘要打分并生成详细摘要")
+      .addDropdown(drop => drop
+        .addOption("heuristic", "Heuristic（启发式）")
+        .addOption("llm", "LLM（大模型打分）")
+        .setValue(this.plugin.settings.trending.mode ?? "heuristic")
+        .onChange(async (value) => {
+          this.plugin.settings.trending.mode = value as "heuristic" | "llm";
           await this.plugin.saveSettings();
         }));
 
@@ -814,18 +826,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.trending.topK = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("最低热度分 / Minimum Hotness Score")
-      .setDesc("低于此分数的论文将被忽略（最高 12 分：v4+修订 + 4分类 + <24h + 21个HF赞）| Papers below this score are ignored (max 12: v4+ + 4 categories + <24h + 21 HF upvotes)")
-      .addSlider(slider => slider
-        .setLimits(1, 9, 1)
-        .setValue(this.plugin.settings.trending.minHotness)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.trending.minHotness = value;
           await this.plugin.saveSettings();
         }));
 
