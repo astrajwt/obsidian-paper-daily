@@ -306,9 +306,6 @@ export default class PaperDailyPlugin extends Plugin {
 
 class BackfillModal extends Modal {
   private plugin: PaperDailyPlugin;
-  private startDate = "";
-  private endDate = "";
-  private statusEl!: HTMLElement;
 
   constructor(app: App, plugin: PaperDailyPlugin) {
     super(app);
@@ -318,47 +315,56 @@ class BackfillModal extends Modal {
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
+    contentEl.createEl("h2", { text: "批量生成日报" });
+
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    const lastWeek = new Date(today);
+    lastWeek.setDate(today.getDate() - 7);
+
+    let startInput!: HTMLInputElement;
+    let endInput!: HTMLInputElement;
 
     new Setting(contentEl)
-      .setName("Start Date")
-      .setDesc("YYYY-MM-DD")
-      .addText(text => text
-        .setPlaceholder("2026-02-01")
-        .onChange(v => { this.startDate = v; }));
+      .setName("开始日期 / Start Date")
+      .addText(text => {
+        startInput = text.inputEl;
+        startInput.type = "date";
+        startInput.value = fmt(lastWeek);
+      });
 
     new Setting(contentEl)
-      .setName("End Date")
-      .setDesc("YYYY-MM-DD")
-      .addText(text => text
-        .setPlaceholder("2026-02-28")
-        .onChange(v => { this.endDate = v; }));
+      .setName("结束日期 / End Date")
+      .addText(text => {
+        endInput = text.inputEl;
+        endInput.type = "date";
+        endInput.value = fmt(today);
+      });
 
-    this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
+    const errorEl = contentEl.createEl("p");
+    errorEl.style.cssText = "color:var(--text-error);font-size:0.85em;margin:8px 0 0;min-height:1.2em;";
 
     new Setting(contentEl)
       .addButton(btn => btn
-        .setButtonText("Run Backfill")
+        .setButtonText("取消")
+        .onClick(() => this.close()))
+      .addButton(btn => btn
+        .setButtonText("开始生成")
         .setCta()
-        .onClick(async () => {
-          if (!this.startDate || !this.endDate) {
-            this.statusEl.setText("Please enter both start and end dates.");
+        .onClick(() => {
+          const start = startInput.value;
+          const end = endInput.value;
+          if (!start || !end) {
+            errorEl.setText("请选择开始和结束日期。");
             return;
           }
-          this.statusEl.setText("Starting backfill...");
-          try {
-            await this.plugin.runBackfill(
-              this.startDate,
-              this.endDate,
-              (msg) => { this.statusEl.setText(msg); }
-            );
-          } catch (err) {
-            this.statusEl.setText(`Error: ${String(err)}`);
+          if (start > end) {
+            errorEl.setText("开始日期不能晚于结束日期。");
+            return;
           }
-        }))
-      .addButton(btn => btn
-        .setButtonText("Close")
-        .onClick(() => this.close()));
+          this.close();
+          void this.plugin.runBackfillWithUI(start, end);
+        }));
   }
 
   onClose(): void {

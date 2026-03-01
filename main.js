@@ -5747,39 +5747,44 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
 var BackfillModal = class extends import_obsidian6.Modal {
   constructor(app, plugin) {
     super(app);
-    this.startDate = "";
-    this.endDate = "";
     this.plugin = plugin;
   }
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
-    new import_obsidian6.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
-      this.startDate = v;
-    }));
-    new import_obsidian6.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
-      this.endDate = v;
-    }));
-    this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
-    new import_obsidian6.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
-      if (!this.startDate || !this.endDate) {
-        this.statusEl.setText("Please enter both start and end dates.");
+    contentEl.createEl("h2", { text: "\u6279\u91CF\u751F\u6210\u65E5\u62A5" });
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    const lastWeek = new Date(today);
+    lastWeek.setDate(today.getDate() - 7);
+    let startInput;
+    let endInput;
+    new import_obsidian6.Setting(contentEl).setName("\u5F00\u59CB\u65E5\u671F / Start Date").addText((text) => {
+      startInput = text.inputEl;
+      startInput.type = "date";
+      startInput.value = fmt(lastWeek);
+    });
+    new import_obsidian6.Setting(contentEl).setName("\u7ED3\u675F\u65E5\u671F / End Date").addText((text) => {
+      endInput = text.inputEl;
+      endInput.type = "date";
+      endInput.value = fmt(today);
+    });
+    const errorEl = contentEl.createEl("p");
+    errorEl.style.cssText = "color:var(--text-error);font-size:0.85em;margin:8px 0 0;min-height:1.2em;";
+    new import_obsidian6.Setting(contentEl).addButton((btn) => btn.setButtonText("\u53D6\u6D88").onClick(() => this.close())).addButton((btn) => btn.setButtonText("\u5F00\u59CB\u751F\u6210").setCta().onClick(() => {
+      const start = startInput.value;
+      const end = endInput.value;
+      if (!start || !end) {
+        errorEl.setText("\u8BF7\u9009\u62E9\u5F00\u59CB\u548C\u7ED3\u675F\u65E5\u671F\u3002");
         return;
       }
-      this.statusEl.setText("Starting backfill...");
-      try {
-        await this.plugin.runBackfill(
-          this.startDate,
-          this.endDate,
-          (msg) => {
-            this.statusEl.setText(msg);
-          }
-        );
-      } catch (err) {
-        this.statusEl.setText(`Error: ${String(err)}`);
+      if (start > end) {
+        errorEl.setText("\u5F00\u59CB\u65E5\u671F\u4E0D\u80FD\u665A\u4E8E\u7ED3\u675F\u65E5\u671F\u3002");
+        return;
       }
-    })).addButton((btn) => btn.setButtonText("Close").onClick(() => this.close()));
+      this.close();
+      void this.plugin.runBackfillWithUI(start, end);
+    }));
   }
   onClose() {
     this.contentEl.empty();
