@@ -209,7 +209,9 @@ Output language: {{language}}
 Aim for 400–600 words total. Do not copy the abstract verbatim — synthesize.`;
 
 export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
-  { id: "builtin_engineering", name: "每日trending", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
+  { id: "builtin_engineering", name: "每日trending", type: "daily", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
+  { id: "builtin_scoring", name: "批量评分", type: "scoring", prompt: DEFAULT_SCORING_PROMPT, builtin: true },
+  { id: "builtin_deepread", name: "全文精读", type: "deepread", prompt: DEFAULT_DEEP_READ_PROMPT, builtin: true },
 ];
 
 
@@ -279,6 +281,8 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
 
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t })),
   activePromptId: "builtin_engineering",
+  activeScorePromptId: "builtin_scoring",
+  activeDeepReadPromptId: "builtin_deepread",
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -631,20 +635,31 @@ export class PaperDailySettingTab extends PluginSettingTab {
     // ── Prompt Templates (tabbed library) ────────────────────────
     containerEl.createEl("h3", { text: "Prompt 模板库 / Prompt Library" });
     {
+      const TYPE_LABELS: Record<string, string> = { daily: "日报", scoring: "评分", deepread: "精读" };
+      const TYPE_COLORS: Record<string, string> = { daily: "#4a90d9", scoring: "#5cb85c", deepread: "#9b59b6" };
+
       const desc = containerEl.createEl("div", { cls: "setting-item-description" });
-      desc.createEl("p", { text: "点击 Tab 切换并激活模板。可用占位符：" });
+      desc.createEl("p", { text: "点击 Tab 可切换模板并将其设为对应功能的激活模板。" });
       const table = desc.createEl("table");
       table.style.fontSize = "11px";
       table.style.borderCollapse = "collapse";
       table.style.width = "100%";
       const rows: [string, string][] = [
-        ["{{date}}", "当日日期，格式 YYYY-MM-DD"],
-        ["{{papers_json}}", "排名后的 arXiv + HF 论文列表（JSON），每篇含 id / title / abstract / interestHits / hfUpvotes / links 等字段，最多 10 篇"],
-        ["{{hf_papers_json}}", "HuggingFace Daily Papers 原始列表（JSON），含 title / hfUpvotes / streakDays，最多 15 条"],
-        ["{{fulltext_section}}", "Deep Read 精读结果（Markdown）；每篇通过 arxiv.org/html URL 让模型直接读原文并生成分析；未开启 Deep Read 时为空"],
-        ["{{local_pdfs}}", "当日已下载到本地的 PDF 列表（Markdown 链接）；未开启 PDF 下载时为空字符串"],
-        ["{{interest_keywords}}", "用户配置的兴趣关键词列表，含权重，格式如 rlhf(weight:5), agent(weight:5)，供模型参考优先级"],
-        ["{{language}}", "输出语言，由设置中'语言'选项决定，值为 Chinese (中文) 或 English"],
+        ["[日报] {{date}}", "当日日期 YYYY-MM-DD"],
+        ["[日报] {{papers_json}}", "排名后论文列表 JSON（最多 10 篇）"],
+        ["[日报] {{hf_papers_json}}", "HF Daily Papers JSON（最多 15 条）"],
+        ["[日报] {{fulltext_section}}", "Deep Read 精读结果（Markdown）"],
+        ["[日报] {{local_pdfs}}", "已下载本地 PDF 列表（Markdown）"],
+        ["[日报] {{interest_keywords}}", "兴趣关键词及权重"],
+        ["[日报] {{language}}", "Chinese (中文) 或 English"],
+        ["[评分] {{interest_keywords}}", "兴趣关键词及权重"],
+        ["[评分] {{papers_json}}", "本批论文 JSON（含 id/title/abstract/interestHits/hfUpvotes）"],
+        ["[精读] {{title}} {{authors}}", "论文标题 / 前 5 位作者"],
+        ["[精读] {{published}} {{arxiv_url}}", "发布日期 / arXiv 链接"],
+        ["[精读] {{interest_hits}}", "命中的兴趣关键词"],
+        ["[精读] {{abstract}}", "摘要全文"],
+        ["[精读] {{fulltext}}", "arxiv.org/html URL（让模型直接读）"],
+        ["[精读] {{language}}", "Chinese (中文) 或 English"],
       ];
       for (const [ph, explain] of rows) {
         const tr = table.createEl("tr");
@@ -661,16 +676,39 @@ export class PaperDailySettingTab extends PluginSettingTab {
       }
       desc.style.marginBottom = "10px";
 
-      // Ensure library is initialized
+      // ── Migrate: ensure all builtins present and new active IDs set ──
       if (!this.plugin.settings.promptLibrary || this.plugin.settings.promptLibrary.length === 0) {
         this.plugin.settings.promptLibrary = DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t }));
         this.plugin.settings.activePromptId = "builtin_engineering";
+        this.plugin.settings.activeScorePromptId = "builtin_scoring";
+        this.plugin.settings.activeDeepReadPromptId = "builtin_deepread";
       }
-      if (!this.plugin.settings.activePromptId) {
-        this.plugin.settings.activePromptId = this.plugin.settings.promptLibrary[0].id;
+      const lib = this.plugin.settings.promptLibrary!;
+      for (const def of DEFAULT_PROMPT_LIBRARY) {
+        if (!lib.find(t => t.id === def.id)) lib.push({ ...def });
       }
+      // Ensure type field on existing builtins
+      for (const def of DEFAULT_PROMPT_LIBRARY) {
+        const existing = lib.find(t => t.id === def.id);
+        if (existing && !existing.type) existing.type = def.type;
+      }
+      if (!this.plugin.settings.activePromptId) this.plugin.settings.activePromptId = "builtin_engineering";
+      if (!this.plugin.settings.activeScorePromptId) this.plugin.settings.activeScorePromptId = "builtin_scoring";
+      if (!this.plugin.settings.activeDeepReadPromptId) this.plugin.settings.activeDeepReadPromptId = "builtin_deepread";
 
-      let selectedId = this.plugin.settings.activePromptId;
+      const getActiveIdForType = (type: string) => {
+        if (type === "scoring") return this.plugin.settings.activeScorePromptId;
+        if (type === "deepread") return this.plugin.settings.activeDeepReadPromptId;
+        return this.plugin.settings.activePromptId;
+      };
+      const setActiveIdForType = async (type: string, id: string) => {
+        if (type === "scoring") this.plugin.settings.activeScorePromptId = id;
+        else if (type === "deepread") this.plugin.settings.activeDeepReadPromptId = id;
+        else this.plugin.settings.activePromptId = id;
+        await this.plugin.saveSettings();
+      };
+
+      let selectedId = this.plugin.settings.activePromptId!;
 
       const tabBar = containerEl.createDiv();
       tabBar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;align-items:center;";
@@ -683,14 +721,27 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
       const renderTabs = () => {
         tabBar.empty();
-        const lib = this.plugin.settings.promptLibrary!;
         for (const tpl of lib) {
+          const tplType = tpl.type ?? "daily";
+          const activeIdForType = getActiveIdForType(tplType);
           const isSelected = tpl.id === selectedId;
-          const btn = tabBar.createEl("button", { text: tpl.name });
+          const isActiveForType = tpl.id === activeIdForType;
+          const typeColor = TYPE_COLORS[tplType] ?? "#888";
+          const typeLabel = TYPE_LABELS[tplType] ?? tplType;
+
+          const btn = tabBar.createEl("button");
+          // Badge span
+          const badge = btn.createEl("span", { text: typeLabel });
+          badge.style.cssText = `display:inline-block;font-size:0.75em;padding:1px 5px;border-radius:3px;margin-right:5px;background:${typeColor};color:#fff;font-weight:600;vertical-align:middle;`;
+          btn.appendText(tpl.name);
+          if (isActiveForType) {
+            const dot = btn.createEl("span", { text: " ✓" });
+            dot.style.cssText = `color:${typeColor};font-weight:700;`;
+          }
           const accent = "var(--interactive-accent)";
           const border = "var(--background-modifier-border)";
           btn.style.cssText = [
-            "padding:5px 14px",
+            "padding:5px 12px",
             "border-radius:5px",
             "cursor:pointer",
             "font-size:0.85em",
@@ -700,10 +751,9 @@ export class PaperDailySettingTab extends PluginSettingTab {
             "font-weight:" + (isSelected ? "600" : "400"),
             "transition:all 0.1s",
           ].join(";");
-          btn.onclick = () => {
+          btn.onclick = async () => {
             selectedId = tpl.id;
-            this.plugin.settings.activePromptId = tpl.id;
-            this.plugin.saveSettings();
+            await setActiveIdForType(tplType, tpl.id);
             promptTA.value = tpl.prompt;
             renderTabs();
             renderActions();
@@ -713,13 +763,13 @@ export class PaperDailySettingTab extends PluginSettingTab {
         const addBtn = tabBar.createEl("button", { text: "＋ 新建" });
         addBtn.style.cssText = "padding:5px 12px;border-radius:5px;cursor:pointer;font-size:0.85em;border:2px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);";
         addBtn.onclick = async () => {
-          const lib2 = this.plugin.settings.promptLibrary!;
           const newTpl: PromptTemplate = {
             id: `custom_${Date.now()}`,
-            name: `自定义 ${lib2.filter(t => !t.builtin).length + 1}`,
+            name: `自定义 ${lib.filter(t => !t.builtin).length + 1}`,
+            type: "daily",
             prompt: DEFAULT_DAILY_PROMPT,
           };
-          lib2.push(newTpl);
+          lib.push(newTpl);
           selectedId = newTpl.id;
           this.plugin.settings.activePromptId = newTpl.id;
           await this.plugin.saveSettings();
@@ -731,7 +781,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
       const renderActions = () => {
         actionsRow.empty();
-        const lib = this.plugin.settings.promptLibrary!;
         const tpl = lib.find(t => t.id === selectedId);
         if (!tpl) return;
 
@@ -779,8 +828,9 @@ export class PaperDailySettingTab extends PluginSettingTab {
             const idx = lib.findIndex(t => t.id === selectedId);
             lib.splice(idx, 1);
             selectedId = lib[Math.max(0, idx - 1)].id;
-            this.plugin.settings.activePromptId = selectedId;
-            promptTA.value = lib.find(t => t.id === selectedId)!.prompt;
+            const prevTpl = lib.find(t => t.id === selectedId)!;
+            await setActiveIdForType(prevTpl.type ?? "daily", selectedId);
+            promptTA.value = prevTpl.prompt;
             await this.plugin.saveSettings();
             renderTabs();
             renderActions();
@@ -789,7 +839,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
       };
 
       // Initialize
-      const initTpl = this.plugin.settings.promptLibrary!.find(t => t.id === selectedId) ?? this.plugin.settings.promptLibrary![0];
+      const initTpl = lib.find(t => t.id === selectedId) ?? lib[0];
       promptTA.value = initTpl.prompt;
       renderTabs();
       renderActions();
@@ -934,39 +984,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         });
       });
 
-    // ── Scoring Prompt ────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "批量评分 Prompt / Scoring Prompt" });
-
-    new Setting(containerEl)
-      .setName("评分 Prompt / Scoring Prompt")
-      .setDesc(
-        "每批论文的快速打分 Prompt。留空使用默认模板。\n" +
-        "可用占位符：{{interest_keywords}}（兴趣关键词+权重），{{papers_json}}（本批论文 JSON）\n" +
-        "必须要求模型返回 JSON 数组，格式：[{\"id\":\"arxiv:...\",\"score\":1-10,\"reason\":\"...\",\"summary\":\"...\"}]"
-      )
-      .addTextArea(area => {
-        area.setPlaceholder("(leave blank for default)");
-        area.setValue(this.plugin.settings.scoringPromptTemplate ?? "");
-        area.inputEl.rows = 10;
-        area.inputEl.style.width = "100%";
-        area.inputEl.style.fontFamily = "monospace";
-        area.inputEl.style.fontSize = "0.85em";
-        area.inputEl.addEventListener("input", async () => {
-          const val = area.inputEl.value.trim();
-          this.plugin.settings.scoringPromptTemplate = val || undefined;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .addButton(btn => btn
-        .setButtonText("重置默认 / Reset to Default")
-        .onClick(async () => {
-          this.plugin.settings.scoringPromptTemplate = undefined;
-          await this.plugin.saveSettings();
-          this.display();
-        }));
-
     // ── Deep Read ────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "全文精读 / Deep Read" });
 
@@ -1043,31 +1060,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           } as typeof this.plugin.settings.deepRead;
           await this.plugin.saveSettings();
         }));
-
-    // --- Per-paper prompt textarea ---
-    new Setting(drSubContainer)
-      .setName("每篇精读 Prompt / Per-paper Deep Read prompt")
-      .setDesc(
-        "留空使用默认模板。可用变量: {{title}}, {{authors}}, {{published}}, {{arxiv_url}}, " +
-        "{{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
-      )
-      .addTextArea(area => {
-        const plugin = this.plugin;
-        area.setPlaceholder("(leave blank for default)");
-        area.setValue(plugin.settings.deepRead?.deepReadPromptTemplate ?? "");
-        area.inputEl.rows = 8;
-        area.inputEl.style.width = "100%";
-        area.inputEl.style.fontFamily = "monospace";
-        area.inputEl.style.fontSize = "0.85em";
-        area.inputEl.addEventListener("input", async () => {
-          const val = area.inputEl.value.trim();
-          plugin.settings.deepRead = {
-            ...plugin.settings.deepRead,
-            deepReadPromptTemplate: val || undefined
-          } as typeof plugin.settings.deepRead;
-          await plugin.saveSettings();
-        });
-      });
 
     refreshDrSub();
 

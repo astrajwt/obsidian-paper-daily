@@ -2,6 +2,7 @@ export interface PromptTemplate {
   id: string;
   name: string;
   prompt: string;
+  type?: "daily" | "scoring" | "deepread";
   builtin?: boolean;
 }
 
@@ -70,7 +71,9 @@ export interface PaperDailySettings {
 
   // Prompt template library
   promptLibrary?: PromptTemplate[];
-  activePromptId?: string;
+  activePromptId?: string;       // daily
+  activeScorePromptId?: string;  // scoring (Step 3b)
+  activeDeepReadPromptId?: string; // deepread (Step 3f)
 
   // Deep read: fetch full paper text from arxiv.org/html and inject into LLM prompt
   deepRead?: {

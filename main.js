@@ -228,7 +228,9 @@ One sentence: what they built/proved + the single most important result number.
 Output language: {{language}}
 Aim for 400\u2013600 words total. Do not copy the abstract verbatim \u2014 synthesize.`;
 var DEFAULT_PROMPT_LIBRARY = [
-  { id: "builtin_engineering", name: "\u6BCF\u65E5trending", prompt: DEFAULT_DAILY_PROMPT, builtin: true }
+  { id: "builtin_engineering", name: "\u6BCF\u65E5trending", type: "daily", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
+  { id: "builtin_scoring", name: "\u6279\u91CF\u8BC4\u5206", type: "scoring", prompt: DEFAULT_SCORING_PROMPT, builtin: true },
+  { id: "builtin_deepread", name: "\u5168\u6587\u7CBE\u8BFB", type: "deepread", prompt: DEFAULT_DEEP_READ_PROMPT, builtin: true }
 ];
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
@@ -286,7 +288,9 @@ var DEFAULT_SETTINGS = {
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t })),
-  activePromptId: "builtin_engineering"
+  activePromptId: "builtin_engineering",
+  activeScorePromptId: "builtin_scoring",
+  activeDeepReadPromptId: "builtin_deepread"
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -532,20 +536,30 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     }));
     containerEl.createEl("h3", { text: "Prompt \u6A21\u677F\u5E93 / Prompt Library" });
     {
+      const TYPE_LABELS = { daily: "\u65E5\u62A5", scoring: "\u8BC4\u5206", deepread: "\u7CBE\u8BFB" };
+      const TYPE_COLORS = { daily: "#4a90d9", scoring: "#5cb85c", deepread: "#9b59b6" };
       const desc = containerEl.createEl("div", { cls: "setting-item-description" });
-      desc.createEl("p", { text: "\u70B9\u51FB Tab \u5207\u6362\u5E76\u6FC0\u6D3B\u6A21\u677F\u3002\u53EF\u7528\u5360\u4F4D\u7B26\uFF1A" });
+      desc.createEl("p", { text: "\u70B9\u51FB Tab \u53EF\u5207\u6362\u6A21\u677F\u5E76\u5C06\u5176\u8BBE\u4E3A\u5BF9\u5E94\u529F\u80FD\u7684\u6FC0\u6D3B\u6A21\u677F\u3002" });
       const table = desc.createEl("table");
       table.style.fontSize = "11px";
       table.style.borderCollapse = "collapse";
       table.style.width = "100%";
       const rows = [
-        ["{{date}}", "\u5F53\u65E5\u65E5\u671F\uFF0C\u683C\u5F0F YYYY-MM-DD"],
-        ["{{papers_json}}", "\u6392\u540D\u540E\u7684 arXiv + HF \u8BBA\u6587\u5217\u8868\uFF08JSON\uFF09\uFF0C\u6BCF\u7BC7\u542B id / title / abstract / interestHits / hfUpvotes / links \u7B49\u5B57\u6BB5\uFF0C\u6700\u591A 10 \u7BC7"],
-        ["{{hf_papers_json}}", "HuggingFace Daily Papers \u539F\u59CB\u5217\u8868\uFF08JSON\uFF09\uFF0C\u542B title / hfUpvotes / streakDays\uFF0C\u6700\u591A 15 \u6761"],
-        ["{{fulltext_section}}", "Deep Read \u7CBE\u8BFB\u7ED3\u679C\uFF08Markdown\uFF09\uFF1B\u6BCF\u7BC7\u901A\u8FC7 arxiv.org/html URL \u8BA9\u6A21\u578B\u76F4\u63A5\u8BFB\u539F\u6587\u5E76\u751F\u6210\u5206\u6790\uFF1B\u672A\u5F00\u542F Deep Read \u65F6\u4E3A\u7A7A"],
-        ["{{local_pdfs}}", "\u5F53\u65E5\u5DF2\u4E0B\u8F7D\u5230\u672C\u5730\u7684 PDF \u5217\u8868\uFF08Markdown \u94FE\u63A5\uFF09\uFF1B\u672A\u5F00\u542F PDF \u4E0B\u8F7D\u65F6\u4E3A\u7A7A\u5B57\u7B26\u4E32"],
-        ["{{interest_keywords}}", "\u7528\u6237\u914D\u7F6E\u7684\u5174\u8DA3\u5173\u952E\u8BCD\u5217\u8868\uFF0C\u542B\u6743\u91CD\uFF0C\u683C\u5F0F\u5982 rlhf(weight:5), agent(weight:5)\uFF0C\u4F9B\u6A21\u578B\u53C2\u8003\u4F18\u5148\u7EA7"],
-        ["{{language}}", "\u8F93\u51FA\u8BED\u8A00\uFF0C\u7531\u8BBE\u7F6E\u4E2D'\u8BED\u8A00'\u9009\u9879\u51B3\u5B9A\uFF0C\u503C\u4E3A Chinese (\u4E2D\u6587) \u6216 English"]
+        ["[\u65E5\u62A5] {{date}}", "\u5F53\u65E5\u65E5\u671F YYYY-MM-DD"],
+        ["[\u65E5\u62A5] {{papers_json}}", "\u6392\u540D\u540E\u8BBA\u6587\u5217\u8868 JSON\uFF08\u6700\u591A 10 \u7BC7\uFF09"],
+        ["[\u65E5\u62A5] {{hf_papers_json}}", "HF Daily Papers JSON\uFF08\u6700\u591A 15 \u6761\uFF09"],
+        ["[\u65E5\u62A5] {{fulltext_section}}", "Deep Read \u7CBE\u8BFB\u7ED3\u679C\uFF08Markdown\uFF09"],
+        ["[\u65E5\u62A5] {{local_pdfs}}", "\u5DF2\u4E0B\u8F7D\u672C\u5730 PDF \u5217\u8868\uFF08Markdown\uFF09"],
+        ["[\u65E5\u62A5] {{interest_keywords}}", "\u5174\u8DA3\u5173\u952E\u8BCD\u53CA\u6743\u91CD"],
+        ["[\u65E5\u62A5] {{language}}", "Chinese (\u4E2D\u6587) \u6216 English"],
+        ["[\u8BC4\u5206] {{interest_keywords}}", "\u5174\u8DA3\u5173\u952E\u8BCD\u53CA\u6743\u91CD"],
+        ["[\u8BC4\u5206] {{papers_json}}", "\u672C\u6279\u8BBA\u6587 JSON\uFF08\u542B id/title/abstract/interestHits/hfUpvotes\uFF09"],
+        ["[\u7CBE\u8BFB] {{title}} {{authors}}", "\u8BBA\u6587\u6807\u9898 / \u524D 5 \u4F4D\u4F5C\u8005"],
+        ["[\u7CBE\u8BFB] {{published}} {{arxiv_url}}", "\u53D1\u5E03\u65E5\u671F / arXiv \u94FE\u63A5"],
+        ["[\u7CBE\u8BFB] {{interest_hits}}", "\u547D\u4E2D\u7684\u5174\u8DA3\u5173\u952E\u8BCD"],
+        ["[\u7CBE\u8BFB] {{abstract}}", "\u6458\u8981\u5168\u6587"],
+        ["[\u7CBE\u8BFB] {{fulltext}}", "arxiv.org/html URL\uFF08\u8BA9\u6A21\u578B\u76F4\u63A5\u8BFB\uFF09"],
+        ["[\u7CBE\u8BFB] {{language}}", "Chinese (\u4E2D\u6587) \u6216 English"]
       ];
       for (const [ph, explain] of rows) {
         const tr = table.createEl("tr");
@@ -564,10 +578,41 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       if (!this.plugin.settings.promptLibrary || this.plugin.settings.promptLibrary.length === 0) {
         this.plugin.settings.promptLibrary = DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t }));
         this.plugin.settings.activePromptId = "builtin_engineering";
+        this.plugin.settings.activeScorePromptId = "builtin_scoring";
+        this.plugin.settings.activeDeepReadPromptId = "builtin_deepread";
       }
-      if (!this.plugin.settings.activePromptId) {
-        this.plugin.settings.activePromptId = this.plugin.settings.promptLibrary[0].id;
+      const lib = this.plugin.settings.promptLibrary;
+      for (const def of DEFAULT_PROMPT_LIBRARY) {
+        if (!lib.find((t) => t.id === def.id))
+          lib.push({ ...def });
       }
+      for (const def of DEFAULT_PROMPT_LIBRARY) {
+        const existing = lib.find((t) => t.id === def.id);
+        if (existing && !existing.type)
+          existing.type = def.type;
+      }
+      if (!this.plugin.settings.activePromptId)
+        this.plugin.settings.activePromptId = "builtin_engineering";
+      if (!this.plugin.settings.activeScorePromptId)
+        this.plugin.settings.activeScorePromptId = "builtin_scoring";
+      if (!this.plugin.settings.activeDeepReadPromptId)
+        this.plugin.settings.activeDeepReadPromptId = "builtin_deepread";
+      const getActiveIdForType = (type) => {
+        if (type === "scoring")
+          return this.plugin.settings.activeScorePromptId;
+        if (type === "deepread")
+          return this.plugin.settings.activeDeepReadPromptId;
+        return this.plugin.settings.activePromptId;
+      };
+      const setActiveIdForType = async (type, id) => {
+        if (type === "scoring")
+          this.plugin.settings.activeScorePromptId = id;
+        else if (type === "deepread")
+          this.plugin.settings.activeDeepReadPromptId = id;
+        else
+          this.plugin.settings.activePromptId = id;
+        await this.plugin.saveSettings();
+      };
       let selectedId = this.plugin.settings.activePromptId;
       const tabBar = containerEl.createDiv();
       tabBar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;align-items:center;";
@@ -576,15 +621,27 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       const actionsRow = containerEl.createDiv();
       actionsRow.style.cssText = "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;";
       const renderTabs = () => {
+        var _a3, _b, _c;
         tabBar.empty();
-        const lib = this.plugin.settings.promptLibrary;
         for (const tpl of lib) {
+          const tplType = (_a3 = tpl.type) != null ? _a3 : "daily";
+          const activeIdForType = getActiveIdForType(tplType);
           const isSelected = tpl.id === selectedId;
-          const btn = tabBar.createEl("button", { text: tpl.name });
+          const isActiveForType = tpl.id === activeIdForType;
+          const typeColor = (_b = TYPE_COLORS[tplType]) != null ? _b : "#888";
+          const typeLabel = (_c = TYPE_LABELS[tplType]) != null ? _c : tplType;
+          const btn = tabBar.createEl("button");
+          const badge = btn.createEl("span", { text: typeLabel });
+          badge.style.cssText = `display:inline-block;font-size:0.75em;padding:1px 5px;border-radius:3px;margin-right:5px;background:${typeColor};color:#fff;font-weight:600;vertical-align:middle;`;
+          btn.appendText(tpl.name);
+          if (isActiveForType) {
+            const dot = btn.createEl("span", { text: " \u2713" });
+            dot.style.cssText = `color:${typeColor};font-weight:700;`;
+          }
           const accent = "var(--interactive-accent)";
           const border = "var(--background-modifier-border)";
           btn.style.cssText = [
-            "padding:5px 14px",
+            "padding:5px 12px",
             "border-radius:5px",
             "cursor:pointer",
             "font-size:0.85em",
@@ -594,10 +651,9 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
             "font-weight:" + (isSelected ? "600" : "400"),
             "transition:all 0.1s"
           ].join(";");
-          btn.onclick = () => {
+          btn.onclick = async () => {
             selectedId = tpl.id;
-            this.plugin.settings.activePromptId = tpl.id;
-            this.plugin.saveSettings();
+            await setActiveIdForType(tplType, tpl.id);
             promptTA.value = tpl.prompt;
             renderTabs();
             renderActions();
@@ -606,13 +662,13 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         const addBtn = tabBar.createEl("button", { text: "\uFF0B \u65B0\u5EFA" });
         addBtn.style.cssText = "padding:5px 12px;border-radius:5px;cursor:pointer;font-size:0.85em;border:2px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);";
         addBtn.onclick = async () => {
-          const lib2 = this.plugin.settings.promptLibrary;
           const newTpl = {
             id: `custom_${Date.now()}`,
-            name: `\u81EA\u5B9A\u4E49 ${lib2.filter((t) => !t.builtin).length + 1}`,
+            name: `\u81EA\u5B9A\u4E49 ${lib.filter((t) => !t.builtin).length + 1}`,
+            type: "daily",
             prompt: DEFAULT_DAILY_PROMPT
           };
-          lib2.push(newTpl);
+          lib.push(newTpl);
           selectedId = newTpl.id;
           this.plugin.settings.activePromptId = newTpl.id;
           await this.plugin.saveSettings();
@@ -623,7 +679,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       };
       const renderActions = () => {
         actionsRow.empty();
-        const lib = this.plugin.settings.promptLibrary;
         const tpl = lib.find((t) => t.id === selectedId);
         if (!tpl)
           return;
@@ -661,18 +716,20 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
           const delBtn = actionsRow.createEl("button", { text: "\u5220\u9664 / Delete" });
           delBtn.style.cssText = "padding:4px 14px;border-radius:4px;cursor:pointer;font-size:0.85em;background:var(--background-secondary);border:1px solid var(--text-error,#cc4444);color:var(--text-error,#cc4444);";
           delBtn.onclick = async () => {
+            var _a3;
             const idx = lib.findIndex((t) => t.id === selectedId);
             lib.splice(idx, 1);
             selectedId = lib[Math.max(0, idx - 1)].id;
-            this.plugin.settings.activePromptId = selectedId;
-            promptTA.value = lib.find((t) => t.id === selectedId).prompt;
+            const prevTpl = lib.find((t) => t.id === selectedId);
+            await setActiveIdForType((_a3 = prevTpl.type) != null ? _a3 : "daily", selectedId);
+            promptTA.value = prevTpl.prompt;
             await this.plugin.saveSettings();
             renderTabs();
             renderActions();
           };
         }
       };
-      const initTpl = (_a2 = this.plugin.settings.promptLibrary.find((t) => t.id === selectedId)) != null ? _a2 : this.plugin.settings.promptLibrary[0];
+      const initTpl = (_a2 = lib.find((t) => t.id === selectedId)) != null ? _a2 : lib[0];
       promptTA.value = initTpl.prompt;
       renderTabs();
       renderActions();
@@ -754,28 +811,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    containerEl.createEl("h2", { text: "\u6279\u91CF\u8BC4\u5206 Prompt / Scoring Prompt" });
-    new import_obsidian.Setting(containerEl).setName("\u8BC4\u5206 Prompt / Scoring Prompt").setDesc(
-      '\u6BCF\u6279\u8BBA\u6587\u7684\u5FEB\u901F\u6253\u5206 Prompt\u3002\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\n\u53EF\u7528\u5360\u4F4D\u7B26\uFF1A{{interest_keywords}}\uFF08\u5174\u8DA3\u5173\u952E\u8BCD+\u6743\u91CD\uFF09\uFF0C{{papers_json}}\uFF08\u672C\u6279\u8BBA\u6587 JSON\uFF09\n\u5FC5\u987B\u8981\u6C42\u6A21\u578B\u8FD4\u56DE JSON \u6570\u7EC4\uFF0C\u683C\u5F0F\uFF1A[{"id":"arxiv:...","score":1-10,"reason":"...","summary":"..."}]'
-    ).addTextArea((area) => {
-      var _a3;
-      area.setPlaceholder("(leave blank for default)");
-      area.setValue((_a3 = this.plugin.settings.scoringPromptTemplate) != null ? _a3 : "");
-      area.inputEl.rows = 10;
-      area.inputEl.style.width = "100%";
-      area.inputEl.style.fontFamily = "monospace";
-      area.inputEl.style.fontSize = "0.85em";
-      area.inputEl.addEventListener("input", async () => {
-        const val = area.inputEl.value.trim();
-        this.plugin.settings.scoringPromptTemplate = val || void 0;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u91CD\u7F6E\u9ED8\u8BA4 / Reset to Default").onClick(async () => {
-      this.plugin.settings.scoringPromptTemplate = void 0;
-      await this.plugin.saveSettings();
-      this.display();
-    }));
     containerEl.createEl("h2", { text: "\u5168\u6587\u7CBE\u8BFB / Deep Read" });
     const drSubContainer = containerEl.createDiv();
     const refreshDrSub = () => {
@@ -826,26 +861,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
           tags
         };
         await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u7CBE\u8BFB Prompt / Per-paper Deep Read prompt").setDesc(
-      "\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\u53EF\u7528\u53D8\u91CF: {{title}}, {{authors}}, {{published}}, {{arxiv_url}}, {{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
-    ).addTextArea((area) => {
-      var _a3, _b;
-      const plugin = this.plugin;
-      area.setPlaceholder("(leave blank for default)");
-      area.setValue((_b = (_a3 = plugin.settings.deepRead) == null ? void 0 : _a3.deepReadPromptTemplate) != null ? _b : "");
-      area.inputEl.rows = 8;
-      area.inputEl.style.width = "100%";
-      area.inputEl.style.fontFamily = "monospace";
-      area.inputEl.style.fontSize = "0.85em";
-      area.inputEl.addEventListener("input", async () => {
-        const val = area.inputEl.value.trim();
-        plugin.settings.deepRead = {
-          ...plugin.settings.deepRead,
-          deepReadPromptTemplate: val || void 0
-        };
-        await plugin.saveSettings();
       });
     });
     refreshDrSub();
@@ -4720,6 +4735,24 @@ function getActivePrompt(settings) {
   }
   return settings.llm.dailyPromptTemplate;
 }
+function getActiveScoringPrompt(settings) {
+  var _a2;
+  if (settings.promptLibrary && settings.activeScorePromptId) {
+    const tpl = settings.promptLibrary.find((t) => t.id === settings.activeScorePromptId);
+    if (tpl)
+      return tpl.prompt;
+  }
+  return (_a2 = settings.scoringPromptTemplate) != null ? _a2 : DEFAULT_SCORING_PROMPT;
+}
+function getActiveDeepReadPrompt(settings) {
+  var _a2, _b;
+  if (settings.promptLibrary && settings.activeDeepReadPromptId) {
+    const tpl = settings.promptLibrary.find((t) => t.id === settings.activeDeepReadPromptId);
+    if (tpl)
+      return tpl.prompt;
+  }
+  return (_b = (_a2 = settings.deepRead) == null ? void 0 : _a2.deepReadPromptTemplate) != null ? _b : DEFAULT_DEEP_READ_PROMPT;
+}
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
@@ -4784,7 +4817,7 @@ ${lines.join("\n")}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4927,7 +4960,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     const BATCH_SIZE = 60;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
-    const scoringTemplate = settings.scoringPromptTemplate || DEFAULT_SCORING_PROMPT;
+    const scoringTemplate = getActiveScoringPrompt(settings);
     const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
     const normalizeId = (id) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
     const llm = buildLLMProvider(settings);
@@ -4997,7 +5030,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   if (((_q = settings.deepRead) == null ? void 0 : _q.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN = Math.min((_r = settings.deepRead.topN) != null ? _r : 5, rankedPapers.length);
     const maxTokens = (_s = settings.deepRead.deepReadMaxTokens) != null ? _s : 1024;
-    const drPrompt = (_t = settings.deepRead.deepReadPromptTemplate) != null ? _t : DEFAULT_DEEP_READ_PROMPT;
+    const drPrompt = getActiveDeepReadPrompt(settings);
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
     progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
     const llm = buildLLMProvider(settings);
@@ -5010,10 +5043,10 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       const arxivUrl = `https://arxiv.org/abs/${baseId}`;
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
-        authors: ((_u = paper.authors) != null ? _u : []).slice(0, 5).join(", ") || "Unknown",
+        authors: ((_t = paper.authors) != null ? _t : []).slice(0, 5).join(", ") || "Unknown",
         published: paper.published ? paper.published.slice(0, 10) : date,
         arxiv_url: arxivUrl,
-        interest_hits: ((_v = paper.interestHits) != null ? _v : []).join(", ") || "none",
+        interest_hits: ((_u = paper.interestHits) != null ? _u : []).join(", ") || "none",
         abstract: paper.abstract,
         fulltext: htmlUrl,
         language: langStr
@@ -5028,10 +5061,10 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 ${paper.deepReadAnalysis}`);
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
         try {
-          const outputFolder = (_x = (_w = settings.deepRead) == null ? void 0 : _w.outputFolder) != null ? _x : "PaperDaily/deep-read";
+          const outputFolder = (_w = (_v = settings.deepRead) == null ? void 0 : _v.outputFolder) != null ? _w : "PaperDaily/deep-read";
           const fileTags = [
-            ...(_z = (_y = settings.deepRead) == null ? void 0 : _y.tags) != null ? _z : ["paper", "deep-read"],
-            ...((_A = paper.interestHits) != null ? _A : []).map((h) => h.replace(/\s+/g, "-"))
+            ...(_y = (_x = settings.deepRead) == null ? void 0 : _x.tags) != null ? _y : ["paper", "deep-read"],
+            ...((_z = paper.interestHits) != null ? _z : []).map((h) => h.replace(/\s+/g, "-"))
           ];
           const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
           const paperFrontmatter = [
@@ -5041,7 +5074,7 @@ ${paper.deepReadAnalysis}`);
             `date: ${date}`,
             `arxivId: ${baseId}`,
             `arxivUrl: ${arxivUrl}`,
-            `authors: [${((_B = paper.authors) != null ? _B : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
+            `authors: [${((_A = paper.authors) != null ? _A : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
             `published: ${paper.published ? paper.published.slice(0, 10) : date}`,
             `tags: [${fileTags.map((t) => `"${t}"`).join(", ")}]`,
             ...paper.llmScore != null ? [`llmScore: ${paper.llmScore}`] : [],
@@ -5073,7 +5106,7 @@ ${paper.deepReadAnalysis}
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_D = (_C = settings.deepRead) == null ? void 0 : _C.enabled) != null ? _D : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_C = (_B = settings.deepRead) == null ? void 0 : _B.enabled) != null ? _C : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);

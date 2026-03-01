@@ -43,6 +43,22 @@ function getActivePrompt(settings: PaperDailySettings): string {
   return settings.llm.dailyPromptTemplate; // fallback for existing users
 }
 
+function getActiveScoringPrompt(settings: PaperDailySettings): string {
+  if (settings.promptLibrary && settings.activeScorePromptId) {
+    const tpl = settings.promptLibrary.find(t => t.id === settings.activeScorePromptId);
+    if (tpl) return tpl.prompt;
+  }
+  return settings.scoringPromptTemplate ?? DEFAULT_SCORING_PROMPT;
+}
+
+function getActiveDeepReadPrompt(settings: PaperDailySettings): string {
+  if (settings.promptLibrary && settings.activeDeepReadPromptId) {
+    const tpl = settings.promptLibrary.find(t => t.id === settings.activeDeepReadPromptId);
+    if (tpl) return tpl.prompt;
+  }
+  return settings.deepRead?.deepReadPromptTemplate ?? DEFAULT_DEEP_READ_PROMPT;
+}
+
 function escapeTableCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
@@ -299,7 +315,7 @@ export async function runDailyPipeline(
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     const BATCH_SIZE = 60;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
-    const scoringTemplate = settings.scoringPromptTemplate || DEFAULT_SCORING_PROMPT;
+    const scoringTemplate = getActiveScoringPrompt(settings);
     const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
     const normalizeId = (id: string) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
     const llm = buildLLMProvider(settings);
@@ -370,7 +386,7 @@ export async function runDailyPipeline(
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN      = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
     const maxTokens = settings.deepRead.deepReadMaxTokens ?? 1024;
-    const drPrompt  = settings.deepRead.deepReadPromptTemplate ?? DEFAULT_DEEP_READ_PROMPT;
+    const drPrompt  = getActiveDeepReadPrompt(settings);
     const langStr   = settings.language === "zh" ? "Chinese (中文)" : "English";
 
     progress(`[3/5] 📖 Deep Read — ${topN} 篇精读中...`);
