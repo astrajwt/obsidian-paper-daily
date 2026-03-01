@@ -281,6 +281,13 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.clearDedup();
       new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
     }));
+    new import_obsidian.Setting(containerEl).setName("HF \u56DE\u6EAF\u5929\u6570 / HF Lookback Days").setDesc("huggingface.co/papers \u65E0\u5F53\u65E5\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\uFF0C\u5F80\u524D\u67E5\u627E\u6700\u8FD1 N \u5929\u7684\u7CBE\u9009 | If today has no HF papers (e.g. weekend), look back up to N days").addSlider((slider) => {
+      var _a3, _b;
+      return slider.setLimits(0, 7, 1).setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+        await this.plugin.saveSettings();
+      });
+    });
     containerEl.createEl("h2", { text: "\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords" });
     containerEl.createEl("p", {
       text: "\u7528\u4E8E\u8BBA\u6587\u6253\u5206\u4E0E\u9AD8\u4EAE\u663E\u793A\uFF0C\u6743\u91CD\u8D8A\u9AD8\u6392\u540D\u8D8A\u9760\u524D\u3002\u5339\u914D\u4E0D\u533A\u5206\u5927\u5C0F\u5199\u3002",
@@ -665,32 +672,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         } finally {
           btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setDisabled(false);
         }
-      });
-    });
-    containerEl.createEl("h2", { text: "HuggingFace \u8BBA\u6587\u6E90 / HuggingFace Papers" });
-    containerEl.createEl("p", {
-      text: "\u4ECE huggingface.co/papers \u6293\u53D6\u6BCF\u65E5\u7CBE\u9009\u8BBA\u6587\u3002HF \u70B9\u8D5E\u6570\u4F5C\u4E3A\u6392\u540D\u9996\u8981\u4FE1\u53F7\uFF0C\u672A\u88AB arXiv \u5173\u952E\u8BCD\u8986\u76D6\u7684\u793E\u533A\u7CBE\u9009\u8BBA\u6587\u4E5F\u4F1A\u81EA\u52A8\u8865\u5145\u8FDB\u6765 | Fetch daily featured papers from huggingface.co/papers. HF upvotes are the primary ranking signal; community picks outside your arXiv filters are added automatically.",
-      cls: "setting-item-description"
-    });
-    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F HuggingFace \u6E90 / Enable HuggingFace Source").setDesc("\u6293\u53D6 HF \u6BCF\u65E5\u8BBA\u6587\u5E76\u5C06\u70B9\u8D5E\u6570\u5408\u5E76\u5230\u6392\u540D\u4E2D | Fetch HF daily papers and merge upvotes into scoring").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.enabled) != null ? _b : true).onChange(async (value) => {
-        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u56DE\u6EAF\u5929\u6570 / Lookback Days").setDesc("\u4ECA\u65E5\u65E0\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\u5F80\u524D\u67E5\u627E\u6700\u8FD1\u51E0\u5929\u7684 HF \u7CBE\u9009 | If today has no HF papers (e.g. weekend), look back up to N days").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(0, 7, 1).setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u8DF3\u8FC7\u5DF2\u51FA\u73B0\u8FC7\u7684 HF \u7CBE\u9009 / Dedup HF Papers").setDesc("\u5F00\u542F\u540E\uFF0C\u66FE\u5728 HF \u7CBE\u9009\u4E2D\u51FA\u73B0\u8FC7\u7684\u8BBA\u6587\u4E0D\u518D\u91CD\u590D\u5C55\u793A\uFF1BarXiv \u6709\u65B0\u7248\u672C\u7684\u8BBA\u6587\u4E0D\u53D7\u5F71\u54CD | Skip HF papers already shown on a previous day; arXiv updates are unaffected").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.dedup) != null ? _b : false).onChange(async (value) => {
-        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, dedup: value };
-        await this.plugin.saveSettings();
       });
     });
     const rssHeader = containerEl.createEl("h2");

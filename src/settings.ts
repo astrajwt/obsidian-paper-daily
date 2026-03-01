@@ -304,6 +304,18 @@ export class PaperDailySettingTab extends PluginSettingTab {
           new Notice("去重缓存已清空 / Dedup cache cleared.");
         }));
 
+    new Setting(containerEl)
+      .setName("HF 回溯天数 / HF Lookback Days")
+      .setDesc("huggingface.co/papers 无当日数据时（如周末），往前查找最近 N 天的精选 | If today has no HF papers (e.g. weekend), look back up to N days")
+      .addSlider(slider => slider
+        .setLimits(0, 7, 1)
+        .setValue(this.plugin.settings.hfSource?.lookbackDays ?? 3)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+          await this.plugin.saveSettings();
+        }));
+
     // ── Interest Keywords ─────────────────────────────────────────
     containerEl.createEl("h2", { text: "兴趣关键词 / Interest Keywords" });
     containerEl.createEl("p", {
@@ -822,45 +834,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
             }
           });
       });
-
-    // ── HuggingFace Papers ────────────────────────────────────────
-    containerEl.createEl("h2", { text: "HuggingFace 论文源 / HuggingFace Papers" });
-    containerEl.createEl("p", {
-      text: "从 huggingface.co/papers 抓取每日精选论文。HF 点赞数作为排名首要信号，未被 arXiv 关键词覆盖的社区精选论文也会自动补充进来 | Fetch daily featured papers from huggingface.co/papers. HF upvotes are the primary ranking signal; community picks outside your arXiv filters are added automatically.",
-      cls: "setting-item-description"
-    });
-
-    new Setting(containerEl)
-      .setName("开启 HuggingFace 源 / Enable HuggingFace Source")
-      .setDesc("抓取 HF 每日论文并将点赞数合并到排名中 | Fetch HF daily papers and merge upvotes into scoring")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.hfSource?.enabled ?? true)
-        .onChange(async (value) => {
-          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("回溯天数 / Lookback Days")
-      .setDesc("今日无数据时（如周末）往前查找最近几天的 HF 精选 | If today has no HF papers (e.g. weekend), look back up to N days")
-      .addSlider(slider => slider
-        .setLimits(0, 7, 1)
-        .setValue(this.plugin.settings.hfSource?.lookbackDays ?? 3)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("跳过已出现过的 HF 精选 / Dedup HF Papers")
-      .setDesc("开启后，曾在 HF 精选中出现过的论文不再重复展示；arXiv 有新版本的论文不受影响 | Skip HF papers already shown on a previous day; arXiv updates are unaffected")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.hfSource?.dedup ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, dedup: value };
-          await this.plugin.saveSettings();
-        }));
 
     // ── RSS Sources [beta] ────────────────────────────────────────
     const rssHeader = containerEl.createEl("h2");
