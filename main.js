@@ -260,6 +260,7 @@ var DEFAULT_SETTINGS = {
     { keyword: "quantization", weight: 3 }
   ],
   fetchMode: "all",
+  dedup: true,
   llm: {
     provider: "openai_compatible",
     baseUrl: "https://api.openai.com/v1",
@@ -360,6 +361,16 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u53BB\u91CD / Dedup").setDesc("\u8DF3\u8FC7\u5DF2\u5728\u5F80\u671F\u65E5\u62A5\u4E2D\u51FA\u73B0\u8FC7\u7684\u8BBA\u6587\uFF0C\u907F\u514D\u91CD\u590D\u5C55\u793A\u3002\u5173\u95ED\u540E\u6BCF\u6B21\u8FD0\u884C\u90FD\u4F1A\u91CD\u65B0\u5904\u7406\u5168\u90E8\u62C9\u53D6\u7ED3\u679C | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.").addToggle((toggle) => {
+      var _a3;
+      return toggle.setValue((_a3 = this.plugin.settings.dedup) != null ? _a3 : true).onChange(async (value) => {
+        this.plugin.settings.dedup = value;
+        await this.plugin.saveSettings();
+      });
+    }).addButton((btn) => btn.setButtonText("\u6E05\u7A7A\u7F13\u5B58 / Clear").setWarning().onClick(async () => {
+      await this.plugin.clearDedup();
+      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
+    }));
     containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
     presetWrap.style.display = "flex";
@@ -834,11 +845,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     refreshDrSub();
-    containerEl.createEl("h2", { text: "\u53BB\u91CD\u7F13\u5B58 / Dedup Cache" });
-    new import_obsidian.Setting(containerEl).setName("\u6E05\u7A7A\u53BB\u91CD\u7F13\u5B58 / Clear Seen IDs").setDesc("\u6E05\u7A7A\u540E\u4E0B\u6B21\u8FD0\u884C\u4F1A\u91CD\u65B0\u62C9\u53D6\u6240\u6709\u8BBA\u6587 | After clearing, the next run will re-fetch all papers within the time window").addButton((btn) => btn.setButtonText("\u6E05\u7A7A / Clear").setWarning().onClick(async () => {
-      await this.plugin.clearDedup();
-      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
-    }));
     containerEl.createEl("h2", { text: "\u5386\u53F2\u56DE\u586B / Backfill" });
     new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
@@ -4794,7 +4800,7 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4916,11 +4922,12 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`Step 1b HF FETCH: skipped (disabled)`);
   }
   const countBeforeDedup = papers.length;
-  if (!options.skipDedup && papers.length > 0) {
+  const dedupEnabled = ((_l = settings.dedup) != null ? _l : true) && !options.skipDedup;
+  if (dedupEnabled && papers.length > 0) {
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
-  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
-  if (((_l = settings.fetchMode) != null ? _l : "all") === "interest_only" && interestKeywords.length > 0) {
+  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length}${dedupEnabled ? "" : ", dedup disabled"})`);
+  if (((_m = settings.fetchMode) != null ? _m : "all") === "interest_only" && interestKeywords.length > 0) {
     for (const p of papers) {
       p.interestHits = computeInterestHits(p, interestKeywords);
     }
@@ -4990,7 +4997,7 @@ ${JSON.stringify(papersForScoring)}`;
         });
         log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
         if (matched === 0) {
-          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_m = scores[0]) == null ? void 0 : _m.id}" vs paper id="${(_n = rankedPapers[0]) == null ? void 0 : _n.id}"`);
+          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_n = scores[0]) == null ? void 0 : _n.id}" vs paper id="${(_o = rankedPapers[0]) == null ? void 0 : _o.id}"`);
         }
       } else {
         log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
@@ -5005,10 +5012,10 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log, date);
   }
   let fulltextSection = "";
-  if (((_o = settings.deepRead) == null ? void 0 : _o.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_p = settings.deepRead.topN) != null ? _p : 5, rankedPapers.length);
-    const maxTokens = (_q = settings.deepRead.deepReadMaxTokens) != null ? _q : 1024;
-    const drPrompt = (_r = settings.deepRead.deepReadPromptTemplate) != null ? _r : DEFAULT_DEEP_READ_PROMPT;
+  if (((_p = settings.deepRead) == null ? void 0 : _p.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_q = settings.deepRead.topN) != null ? _q : 5, rankedPapers.length);
+    const maxTokens = (_r = settings.deepRead.deepReadMaxTokens) != null ? _r : 1024;
+    const drPrompt = (_s = settings.deepRead.deepReadPromptTemplate) != null ? _s : DEFAULT_DEEP_READ_PROMPT;
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
     progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
     const llm = buildLLMProvider(settings);
@@ -5020,8 +5027,8 @@ ${JSON.stringify(papersForScoring)}`;
       log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} \u2192 ${htmlUrl}`);
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
-        authors: ((_s = paper.authors) != null ? _s : []).slice(0, 5).join(", ") || "Unknown",
-        interest_hits: ((_t = paper.interestHits) != null ? _t : []).join(", ") || "none",
+        authors: ((_t = paper.authors) != null ? _t : []).slice(0, 5).join(", ") || "Unknown",
+        interest_hits: ((_u = paper.interestHits) != null ? _u : []).join(", ") || "none",
         abstract: paper.abstract,
         fulltext: htmlUrl,
         language: langStr
@@ -5050,7 +5057,7 @@ ${paper.deepReadAnalysis}`);
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_v = (_u = settings.deepRead) == null ? void 0 : _u.enabled) != null ? _v : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_w = (_v = settings.deepRead) == null ? void 0 : _v.enabled) != null ? _w : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);
@@ -5124,7 +5131,7 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   }
   await snapshotStore.writeSnapshot(date, rankedPapers, fetchError);
   log(`Step 6 SNAPSHOT: written to ${snapshotPath} (${rankedPapers.length} papers)`);
-  if (!options.skipDedup && rankedPapers.length > 0) {
+  if (dedupEnabled && rankedPapers.length > 0) {
     await dedupStore.markSeenBatch(rankedPapers.map((p) => p.id), date);
     log(`Step 7 DEDUP: marked ${rankedPapers.length} IDs as seen`);
   }

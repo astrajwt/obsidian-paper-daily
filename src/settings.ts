@@ -244,6 +244,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     { keyword: "quantization", weight: 3 },
   ],
   fetchMode: "all",
+  dedup: true,
 
   llm: {
     provider: "openai_compatible",
@@ -398,6 +399,23 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
           await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("去重 / Dedup")
+      .setDesc("跳过已在往期日报中出现过的论文，避免重复展示。关闭后每次运行都会重新处理全部拉取结果 | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.dedup ?? true)
+        .onChange(async (value) => {
+          this.plugin.settings.dedup = value;
+          await this.plugin.saveSettings();
+        }))
+      .addButton(btn => btn
+        .setButtonText("清空缓存 / Clear")
+        .setWarning()
+        .onClick(async () => {
+          await this.plugin.clearDedup();
+          new Notice("去重缓存已清空 / Dedup cache cleared.");
         }));
 
     // ── LLM ──────────────────────────────────────────────────────
@@ -1042,19 +1060,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
       });
 
     refreshDrSub();
-
-    // ── Dedup Cache ───────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "去重缓存 / Dedup Cache" });
-    new Setting(containerEl)
-      .setName("清空去重缓存 / Clear Seen IDs")
-      .setDesc("清空后下次运行会重新拉取所有论文 | After clearing, the next run will re-fetch all papers within the time window")
-      .addButton(btn => btn
-        .setButtonText("清空 / Clear")
-        .setWarning()
-        .onClick(async () => {
-          await this.plugin.clearDedup();
-          new Notice("去重缓存已清空 / Dedup cache cleared.");
-        }));
 
     // ── Backfill ──────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "历史回填 / Backfill" });

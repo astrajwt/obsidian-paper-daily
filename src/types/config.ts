@@ -30,6 +30,8 @@ export interface PaperDailySettings {
   interestKeywords: InterestKeyword[];
   /** "all" = fetch all papers in categories; "interest_only" = keep only papers with ≥1 interest keyword hit */
   fetchMode: "all" | "interest_only";
+  /** Skip papers already seen in previous runs; set false to always re-process all fetched papers */
+  dedup: boolean;
 
   // LLM
   llm: LLMConfig;

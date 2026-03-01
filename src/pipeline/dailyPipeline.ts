@@ -281,10 +281,11 @@ export async function runDailyPipeline(
 
   // ── Step 2: Dedup ─────────────────────────────────────────────
   const countBeforeDedup = papers.length;
-  if (!options.skipDedup && papers.length > 0) {
+  const dedupEnabled = (settings.dedup ?? true) && !options.skipDedup;
+  if (dedupEnabled && papers.length > 0) {
     papers = papers.filter(p => !dedupStore.hasId(p.id));
   }
-  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
+  log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length}${dedupEnabled ? "" : ", dedup disabled"})`);
 
   // ── Step 2b: Interest-only filter ────────────────────────────
   if ((settings.fetchMode ?? "all") === "interest_only" && interestKeywords.length > 0) {
@@ -509,7 +510,7 @@ ${JSON.stringify(papersForScoring)}`;
   log(`Step 6 SNAPSHOT: written to ${snapshotPath} (${rankedPapers.length} papers)`);
 
   // ── Step 7: Update dedup ──────────────────────────────────────
-  if (!options.skipDedup && rankedPapers.length > 0) {
+  if (dedupEnabled && rankedPapers.length > 0) {
     await dedupStore.markSeenBatch(rankedPapers.map(p => p.id), date);
     log(`Step 7 DEDUP: marked ${rankedPapers.length} IDs as seen`);
   }
