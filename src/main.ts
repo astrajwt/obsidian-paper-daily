@@ -188,7 +188,10 @@ export default class PaperDailyPlugin extends Plugin {
     const controller = new AbortController();
     this.activeAbortController = controller;
 
-    const fp = new FloatingProgress(() => { controller.abort(); });
+    const fp = new FloatingProgress(() => {
+      controller.abort();
+      fp.setMessage("⏹ 正在停止...");
+    });
     try {
       await this.runDaily((msg) => fp.setMessage(msg), controller.signal, (i, o) => fp.setTokens(i, o));
       fp.setMessage("✅ 完成！");
@@ -255,7 +258,10 @@ export default class PaperDailyPlugin extends Plugin {
     const controller = new AbortController();
     this.activeBackfillController = controller;
 
-    const fp = new FloatingProgress(() => { controller.abort(); }, "📅 批量生成日报");
+    const fp = new FloatingProgress(() => {
+      controller.abort();
+      fp.setMessage("⏹ 正在停止...");
+    }, "📅 批量生成日报");
     try {
       await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
       fp.setMessage("✅ 完成！");

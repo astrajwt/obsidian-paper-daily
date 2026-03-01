@@ -421,7 +421,7 @@ export async function runDailyPipeline(
       });
 
       try {
-        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens });
+        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens, signal: options.signal });
         if (result.usage) trackUsage(`Step 3b scoring batch ${batchIdx + 1}`, result.usage.inputTokens, result.usage.outputTokens);
         const jsonMatch = result.text.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
@@ -510,7 +510,7 @@ export async function runDailyPipeline(
 
       // LLM call — non-fatal
       try {
-        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens });
+        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens, signal: options.signal });
         if (result.usage) trackUsage(`Step 3f deepread [${i + 1}]`, result.usage.inputTokens, result.usage.outputTokens);
         paper.deepReadAnalysis = result.text.trim();
         analysisResults.push(`### [${i + 1}] ${paper.title}\n\n${paper.deepReadAnalysis}`);
@@ -609,7 +609,7 @@ export async function runDailyPipeline(
         interest_keywords: interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", "),
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
-      const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
+      const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens, signal: options.signal });
       llmDigest = result.text;
       if (result.usage) trackUsage("Step 4 digest", result.usage.inputTokens, result.usage.outputTokens);
       log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);

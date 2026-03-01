@@ -3,6 +3,7 @@ export interface LLMInput {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  signal?: AbortSignal;
 }
 
 export interface LLMUsage {

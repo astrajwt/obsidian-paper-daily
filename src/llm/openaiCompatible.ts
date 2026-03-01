@@ -1,6 +1,14 @@
 import { requestUrl } from "obsidian";
 import type { LLMProvider, LLMInput, LLMOutput } from "./provider";
 
+/** Returns a promise that rejects with an AbortError when the signal fires. */
+function abortRejection(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (signal.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+    signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  });
+}
+
 export class OpenAICompatibleProvider implements LLMProvider {
   constructor(
     private baseUrl: string,
@@ -25,7 +33,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
 
-    const response = await requestUrl({
+    const fetchPromise = requestUrl({
       url,
       method: "POST",
       headers: {
@@ -34,6 +42,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
       },
       body: JSON.stringify(body)
     });
+
+    // requestUrl doesn't support AbortSignal, so race against a rejection promise
+    const response = input.signal
+      ? await Promise.race([fetchPromise, abortRejection(input.signal)])
+      : await fetchPromise;
 
     const json = response.json;
     const text = json?.choices?.[0]?.message?.content ?? "";

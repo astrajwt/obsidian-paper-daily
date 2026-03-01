@@ -15,7 +15,7 @@ export class AnthropicProvider implements LLMProvider {
       temperature: input.temperature ?? 0.3,
       system: input.system,
       messages: [{ role: "user", content: input.prompt }]
-    });
+    }, input.signal ? { signal: input.signal } : undefined);
 
     const textBlock = response.content.find(b => b.type === "text");
     const text = textBlock?.type === "text" ? textBlock.text : "";

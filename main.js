@@ -1395,6 +1395,15 @@ function rankPapers(papers, interestKeywords) {
 
 // src/llm/openaiCompatible.ts
 var import_obsidian5 = require("obsidian");
+function abortRejection(signal) {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  });
+}
 var OpenAICompatibleProvider = class {
   constructor(baseUrl, apiKey, model) {
     this.baseUrl = baseUrl;
@@ -1415,7 +1424,7 @@ var OpenAICompatibleProvider = class {
       max_tokens: (_b = input.maxTokens) != null ? _b : 4096
     };
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
-    const response = await (0, import_obsidian5.requestUrl)({
+    const fetchPromise = (0, import_obsidian5.requestUrl)({
       url,
       method: "POST",
       headers: {
@@ -1424,6 +1433,7 @@ var OpenAICompatibleProvider = class {
       },
       body: JSON.stringify(body)
     });
+    const response = input.signal ? await Promise.race([fetchPromise, abortRejection(input.signal)]) : await fetchPromise;
     const json = response.json;
     const text = (_f = (_e = (_d = (_c = json == null ? void 0 : json.choices) == null ? void 0 : _c[0]) == null ? void 0 : _d.message) == null ? void 0 : _e.content) != null ? _f : "";
     const usage = (json == null ? void 0 : json.usage) ? {
@@ -4662,7 +4672,7 @@ var AnthropicProvider = class {
       temperature: (_b = input.temperature) != null ? _b : 0.3,
       system: input.system,
       messages: [{ role: "user", content: input.prompt }]
-    });
+    }, input.signal ? { signal: input.signal } : void 0);
     const textBlock = response.content.find((b) => b.type === "text");
     const text = (textBlock == null ? void 0 : textBlock.type) === "text" ? textBlock.text : "";
     const usage = {
@@ -5013,7 +5023,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
         papers_json: JSON.stringify(papersForScoring)
       });
       try {
-        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens });
+        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens, signal: options.signal });
         if (result.usage)
           trackUsage(`Step 3b scoring batch ${batchIdx + 1}`, result.usage.inputTokens, result.usage.outputTokens);
         const jsonMatch = result.text.match(/\[[\s\S]*\]/);
@@ -5098,7 +5108,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
         language: langStr
       });
       try {
-        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens });
+        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens, signal: options.signal });
         if (result.usage)
           trackUsage(`Step 3f deepread [${i + 1}]`, result.usage.inputTokens, result.usage.outputTokens);
         paper.deepReadAnalysis = result.text.trim();
@@ -5203,7 +5213,7 @@ From the HuggingFace full list, note any papers NOT already covered above. One l
         interest_keywords: interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", "),
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });
-      const result = await llm.generate({ prompt: prompt2, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
+      const result = await llm.generate({ prompt: prompt2, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens, signal: options.signal });
       llmDigest = result.text;
       if (result.usage)
         trackUsage("Step 4 digest", result.usage.inputTokens, result.usage.outputTokens);
@@ -5646,6 +5656,7 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
     this.activeAbortController = controller;
     const fp = new FloatingProgress(() => {
       controller.abort();
+      fp.setMessage("\u23F9 \u6B63\u5728\u505C\u6B62...");
     });
     try {
       await this.runDaily((msg) => fp.setMessage(msg), controller.signal, (i, o) => fp.setTokens(i, o));
@@ -5710,6 +5721,7 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
     this.activeBackfillController = controller;
     const fp = new FloatingProgress(() => {
       controller.abort();
+      fp.setMessage("\u23F9 \u6B63\u5728\u505C\u6B62...");
     }, "\u{1F4C5} \u6279\u91CF\u751F\u6210\u65E5\u62A5");
     try {
       await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
