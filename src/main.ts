@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, Setting } from "obsidian";
+import { App, Modal, normalizePath, Notice, Plugin, Setting, TFile } from "obsidian";
 import type { PaperDailySettings } from "./types/config";
 import { DEFAULT_SETTINGS, PaperDailySettingTab } from "./settings";
 import { VaultWriter } from "./storage/vaultWriter";
@@ -52,10 +52,47 @@ export default class PaperDailyPlugin extends Plugin {
       this.settings.interestKeywords = (this.settings.interestKeywords as unknown as string[])
         .map(kw => ({ keyword: kw, weight: 1 }));
     }
+    // Auto-detect language from Obsidian locale
+    const locale = (window as Window & { moment?: { locale(): string } }).moment?.locale() ?? "";
+    this.settings.language = locale.startsWith("zh") ? "zh" : "en";
+    // Load from vault config file (overrides data.json if file exists)
+    await this.loadSettingsFromVaultFile();
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    void this.saveSettingsToVaultFile();
+  }
+
+  get configFilePath(): string {
+    return `${this.settings.rootFolder}/config.json`;
+  }
+
+  private async loadSettingsFromVaultFile(): Promise<void> {
+    try {
+      const file = this.app.vault.getAbstractFileByPath(normalizePath(this.configFilePath));
+      if (!(file instanceof TFile)) return;
+      const content = await this.app.vault.read(file);
+      const vaultSettings = JSON.parse(content) as Partial<typeof this.settings>;
+      this.settings = Object.assign({}, this.settings, vaultSettings);
+      // Re-apply nested merges after override
+      this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
+      this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
+      this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
+      this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
+      console.log(`[PaperDaily] Loaded settings from vault: ${this.configFilePath}`);
+    } catch {
+      // File doesn't exist or parse error — use settings from data.json
+    }
+  }
+
+  private async saveSettingsToVaultFile(): Promise<void> {
+    try {
+      const writer = new VaultWriter(this.app);
+      await writer.writeNote(this.configFilePath, JSON.stringify(this.settings, null, 2));
+    } catch (e) {
+      console.error("[PaperDaily] Failed to write vault config file:", e);
+    }
   }
 
   private async initStorage(): Promise<void> {

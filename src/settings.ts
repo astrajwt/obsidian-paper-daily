@@ -880,38 +880,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
-      .setName("输出语言 / Language")
-      .setDesc("AI 生成内容的语言 | Output language for AI-generated content")
-      .addDropdown(drop => drop
-        .addOption("zh", "中文 (Chinese)")
-        .addOption("en", "English")
-        .setValue(this.plugin.settings.language)
-        .onChange(async (value) => {
-          this.plugin.settings.language = value as "zh" | "en";
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("包含摘要 / Include Abstract")
-      .setDesc("在原始论文列表中显示摘要 | Include paper abstracts in the raw papers list")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.includeAbstract)
-        .onChange(async (value) => {
-          this.plugin.settings.includeAbstract = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("包含 PDF 链接 / Include PDF Links")
-      .setDesc("在输出 Markdown 中包含 PDF 链接 | Include PDF links in output markdown")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.includePdfLink)
-        .onChange(async (value) => {
-          this.plugin.settings.includePdfLink = value;
-          await this.plugin.saveSettings();
-        }));
-
     // ── Scheduling ────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "定时任务 / Scheduling" });
 
@@ -1097,6 +1065,38 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.backfillMaxDays = value;
           await this.plugin.saveSettings();
+        }));
+
+    // ── Config File ───────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "配置文件 / Config File" });
+
+    const configPath = `${this.plugin.settings.rootFolder}/config.json`;
+    new Setting(containerEl)
+      .setName("配置文件路径 / Config File Path")
+      .setDesc(`所有设置自动同步到此 Vault 文件，换设备或重装插件时将优先从此文件读取。| All settings are auto-synced to this vault file and loaded on startup.`)
+      .addText(text => {
+        text.setValue(configPath);
+        text.inputEl.readOnly = true;
+        text.inputEl.style.width = "100%";
+        text.inputEl.style.color = "var(--text-muted)";
+        text.inputEl.style.fontFamily = "monospace";
+        text.inputEl.style.fontSize = "0.85em";
+      });
+
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText("立即导出 / Export Now")
+        .setCta()
+        .onClick(async () => {
+          await this.plugin.saveSettings();
+          new Notice(`配置已导出到 ${configPath}`);
+        }))
+      .addButton(btn => btn
+        .setButtonText("从文件重载 / Reload from File")
+        .onClick(async () => {
+          await this.plugin.loadSettings();
+          new Notice("已从配置文件重新加载设置。");
+          this.display();
         }));
 
     // ── Contact ───────────────────────────────────────────────────

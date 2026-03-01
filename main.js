@@ -754,18 +754,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.rootFolder = value || "PaperDaily";
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u8F93\u51FA\u8BED\u8A00 / Language").setDesc("AI \u751F\u6210\u5185\u5BB9\u7684\u8BED\u8A00 | Output language for AI-generated content").addDropdown((drop) => drop.addOption("zh", "\u4E2D\u6587 (Chinese)").addOption("en", "English").setValue(this.plugin.settings.language).onChange(async (value) => {
-      this.plugin.settings.language = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u5305\u542B\u6458\u8981 / Include Abstract").setDesc("\u5728\u539F\u59CB\u8BBA\u6587\u5217\u8868\u4E2D\u663E\u793A\u6458\u8981 | Include paper abstracts in the raw papers list").addToggle((toggle) => toggle.setValue(this.plugin.settings.includeAbstract).onChange(async (value) => {
-      this.plugin.settings.includeAbstract = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u5305\u542B PDF \u94FE\u63A5 / Include PDF Links").setDesc("\u5728\u8F93\u51FA Markdown \u4E2D\u5305\u542B PDF \u94FE\u63A5 | Include PDF links in output markdown").addToggle((toggle) => toggle.setValue(this.plugin.settings.includePdfLink).onChange(async (value) => {
-      this.plugin.settings.includePdfLink = value;
-      await this.plugin.saveSettings();
-    }));
     containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
     new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
       this.plugin.settings.schedule.dailyTime = value;
@@ -883,6 +871,24 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.backfillMaxDays = value;
       await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h2", { text: "\u914D\u7F6E\u6587\u4EF6 / Config File" });
+    const configPath = `${this.plugin.settings.rootFolder}/config.json`;
+    new import_obsidian.Setting(containerEl).setName("\u914D\u7F6E\u6587\u4EF6\u8DEF\u5F84 / Config File Path").setDesc(`\u6240\u6709\u8BBE\u7F6E\u81EA\u52A8\u540C\u6B65\u5230\u6B64 Vault \u6587\u4EF6\uFF0C\u6362\u8BBE\u5907\u6216\u91CD\u88C5\u63D2\u4EF6\u65F6\u5C06\u4F18\u5148\u4ECE\u6B64\u6587\u4EF6\u8BFB\u53D6\u3002| All settings are auto-synced to this vault file and loaded on startup.`).addText((text) => {
+      text.setValue(configPath);
+      text.inputEl.readOnly = true;
+      text.inputEl.style.width = "100%";
+      text.inputEl.style.color = "var(--text-muted)";
+      text.inputEl.style.fontFamily = "monospace";
+      text.inputEl.style.fontSize = "0.85em";
+    });
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u7ACB\u5373\u5BFC\u51FA / Export Now").setCta().onClick(async () => {
+      await this.plugin.saveSettings();
+      new import_obsidian.Notice(`\u914D\u7F6E\u5DF2\u5BFC\u51FA\u5230 ${configPath}`);
+    })).addButton((btn) => btn.setButtonText("\u4ECE\u6587\u4EF6\u91CD\u8F7D / Reload from File").onClick(async () => {
+      await this.plugin.loadSettings();
+      new import_obsidian.Notice("\u5DF2\u4ECE\u914D\u7F6E\u6587\u4EF6\u91CD\u65B0\u52A0\u8F7D\u8BBE\u7F6E\u3002");
+      this.display();
     }));
     containerEl.createEl("hr");
     const contactDiv = containerEl.createDiv({ cls: "paper-daily-contact" });
@@ -5381,6 +5387,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     console.log("Paper Daily unloaded.");
   }
   async loadSettings() {
+    var _a2, _b;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
@@ -5390,9 +5397,40 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     if (Array.isArray(this.settings.interestKeywords) && this.settings.interestKeywords.length > 0 && typeof this.settings.interestKeywords[0] === "string") {
       this.settings.interestKeywords = this.settings.interestKeywords.map((kw) => ({ keyword: kw, weight: 1 }));
     }
+    const locale = (_b = (_a2 = window.moment) == null ? void 0 : _a2.locale()) != null ? _b : "";
+    this.settings.language = locale.startsWith("zh") ? "zh" : "en";
+    await this.loadSettingsFromVaultFile();
   }
   async saveSettings() {
     await this.saveData(this.settings);
+    void this.saveSettingsToVaultFile();
+  }
+  get configFilePath() {
+    return `${this.settings.rootFolder}/config.json`;
+  }
+  async loadSettingsFromVaultFile() {
+    try {
+      const file = this.app.vault.getAbstractFileByPath((0, import_obsidian7.normalizePath)(this.configFilePath));
+      if (!(file instanceof import_obsidian7.TFile))
+        return;
+      const content = await this.app.vault.read(file);
+      const vaultSettings = JSON.parse(content);
+      this.settings = Object.assign({}, this.settings, vaultSettings);
+      this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
+      this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
+      this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
+      this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
+      console.log(`[PaperDaily] Loaded settings from vault: ${this.configFilePath}`);
+    } catch (e) {
+    }
+  }
+  async saveSettingsToVaultFile() {
+    try {
+      const writer = new VaultWriter(this.app);
+      await writer.writeNote(this.configFilePath, JSON.stringify(this.settings, null, 2));
+    } catch (e) {
+      console.error("[PaperDaily] Failed to write vault config file:", e);
+    }
   }
   async initStorage() {
     const writer = new VaultWriter(this.app);
