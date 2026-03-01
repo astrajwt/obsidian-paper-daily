@@ -295,7 +295,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     this.plugin = plugin;
   }
   display() {
-    var _a2;
+    var _a2, _b;
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h1", { text: "Paper Daily \u8BBE\u7F6E / Settings" });
@@ -314,8 +314,8 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D\u8BBA\u6587 PDF \u5E76\u5B58\u5165 Vault\uFF08papers/pdf/\u65E5\u671F/\uFF09\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.paperDownload) == null ? void 0 : _a3.savePdf) != null ? _b : false).onChange(async (value) => {
+      var _a3, _b2;
+      return toggle.setValue((_b2 = (_a3 = this.plugin.settings.paperDownload) == null ? void 0 : _a3.savePdf) != null ? _b2 : false).onChange(async (value) => {
         this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
         await this.plugin.saveSettings();
       });
@@ -335,15 +335,18 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       return toggle.setValue(((_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.enabled) !== false).onChange(async (value) => {
         this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
         await this.plugin.saveSettings();
+        this.display();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("HF \u56DE\u6EAF\u5929\u6570 / HF Lookback Days").setDesc("huggingface.co/papers \u65E0\u5F53\u65E5\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\uFF0C\u5F80\u524D\u67E5\u627E\u6700\u8FD1 N \u5929\u7684\u7CBE\u9009 | If today has no HF papers (e.g. weekend), look back up to N days").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(0, 7, 1).setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
-        await this.plugin.saveSettings();
+    if (((_a2 = this.plugin.settings.hfSource) == null ? void 0 : _a2.enabled) !== false) {
+      new import_obsidian.Setting(containerEl).setName("HuggingFace \u56DE\u6EAF\u5929\u6570 / HuggingFace Lookback Days").setDesc("huggingface.co/papers \u65E0\u5F53\u65E5\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\uFF0C\u5F80\u524D\u67E5\u627E\u6700\u8FD1 N \u5929\u7684\u7CBE\u9009 | If today has no HuggingFace papers (e.g. weekend), look back up to N days").addSlider((slider) => {
+        var _a3, _b2;
+        return slider.setLimits(0, 7, 1).setValue((_b2 = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b2 : 3).setDynamicTooltip().onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+          await this.plugin.saveSettings();
+        });
       });
-    });
+    }
     new import_obsidian.Setting(containerEl).setName("\u65F6\u95F4\u7A97\u53E3\uFF08\u5C0F\u65F6\uFF09/ Time Window (hours)").setDesc("\u6293\u53D6\u8FC7\u53BB N \u5C0F\u65F6\u5185\u53D1\u5E03\u6216\u66F4\u65B0\u7684\u8BBA\u6587\uFF0C\u9ED8\u8BA4 72 \u5C0F\u65F6\u8986\u76D6\u5468\u672B | Fetch papers published/updated within the past N hours. Default 72 covers weekends.").addSlider((slider) => {
       var _a3;
       return slider.setLimits(24, 168, 24).setValue((_a3 = this.plugin.settings.timeWindowHours) != null ? _a3 : 72).setDynamicTooltip().onChange(async (value) => {
@@ -481,10 +484,10 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     new import_obsidian.Setting(containerEl).setName("API \u5BC6\u94A5 / API Key").setDesc("\u6240\u9009\u670D\u52A1\u5546\u7684 API \u5BC6\u94A5 | Your API key for the selected provider").addText((text) => {
-      var _a3, _b;
+      var _a3, _b2;
       apiKeyInput = text.inputEl;
       text.inputEl.type = "password";
-      text.inputEl.placeholder = (_b = (_a3 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a3.keyPlaceholder) != null ? _b : "sk-...";
+      text.inputEl.placeholder = (_b2 = (_a3 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a3.keyPlaceholder) != null ? _b2 : "sk-...";
       text.inputEl.value = this.plugin.settings.llm.apiKey;
       text.inputEl.addEventListener("input", async () => {
         this.plugin.settings.llm.apiKey = text.inputEl.value;
@@ -625,14 +628,14 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       const actionsRow = containerEl.createDiv();
       actionsRow.style.cssText = "display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;";
       const renderTabs = () => {
-        var _a3, _b, _c;
+        var _a3, _b2, _c;
         tabBar.empty();
         for (const tpl of lib) {
           const tplType = (_a3 = tpl.type) != null ? _a3 : "daily";
           const activeIdForType = getActiveIdForType(tplType);
           const isSelected = tpl.id === selectedId;
           const isActiveForType = tpl.id === activeIdForType;
-          const typeColor = (_b = TYPE_COLORS[tplType]) != null ? _b : "#888";
+          const typeColor = (_b2 = TYPE_COLORS[tplType]) != null ? _b2 : "#888";
           const typeLabel = (_c = TYPE_LABELS[tplType]) != null ? _c : tplType;
           const btn = tabBar.createEl("button");
           const badge = btn.createEl("span", { text: typeLabel });
@@ -741,7 +744,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
           };
         }
       };
-      const initTpl = (_a2 = lib.find((t) => t.id === selectedId)) != null ? _a2 : lib[0];
+      const initTpl = (_b = lib.find((t) => t.id === selectedId)) != null ? _b : lib[0];
       promptTA.value = initTpl.prompt;
       renderTabs();
       renderActions();
@@ -806,16 +809,16 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       cls: "setting-item-description"
     });
     new import_obsidian.Setting(containerEl).setName("\u5F00\u542F RSS \u6E90 / Enable RSS source").setDesc("\uFF08Beta\uFF09\u5F00\u542F\u540E\u5C06\u5728\u53EF\u7528\u65F6\u5305\u542B RSS \u8BA2\u9605\u5185\u5BB9 | (Beta) Toggle on to include RSS feeds when available").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.enabled) != null ? _b : false).setDisabled(true).onChange(async (value) => {
+      var _a3, _b2;
+      return toggle.setValue((_b2 = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.enabled) != null ? _b2 : false).setDisabled(true).onChange(async (value) => {
         this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
         await this.plugin.saveSettings();
       });
     });
     new import_obsidian.Setting(containerEl).setName("\u8BA2\u9605\u5730\u5740 / Feed URLs").setDesc("\u6BCF\u884C\u4E00\u4E2A RSS/Atom URL\uFF0CBeta \u529F\u80FD\u6FC0\u6D3B\u540E\u5C06\u81EA\u52A8\u89E3\u6790 | One RSS/Atom URL per line. Will be parsed when beta feature activates.").addTextArea((area) => {
-      var _a3, _b;
+      var _a3, _b2;
       area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
-      area.setValue(((_b = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.feeds) != null ? _b : []).join("\n"));
+      area.setValue(((_b2 = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.feeds) != null ? _b2 : []).join("\n"));
       area.inputEl.rows = 4;
       area.inputEl.addEventListener("input", async () => {
         const feeds = area.inputEl.value.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -830,23 +833,23 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       drSubContainer.style.display = ((_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.enabled) ? "" : "none";
     };
     new import_obsidian.Setting(containerEl).setName("\u5F00\u542F\u7CBE\u8BFB / Enable Deep Read").setDesc("\u6293\u53D6\u6392\u540D\u6700\u9AD8\u7684 N \u7BC7\u8BBA\u6587\u7684\u5168\u6587\uFF08arxiv.org/html\uFF09\uFF0C\u6CE8\u5165 LLM prompt\uFF0C\u8BA9\u6A21\u578B\u505A\u66F4\u6DF1\u5EA6\u7684\u9010\u7BC7\u5206\u6790 | Fetch full paper text and inject into the digest prompt for richer per-paper analysis").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.enabled) != null ? _b : false).onChange(async (value) => {
+      var _a3, _b2;
+      return toggle.setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.enabled) != null ? _b2 : false).onChange(async (value) => {
         this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, enabled: value };
         await this.plugin.saveSettings();
         refreshDrSub();
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u7CBE\u8BFB\u7BC7\u6570 / Papers to fetch").setDesc("\u6BCF\u65E5\u6293\u53D6\u5168\u6587\u7684\u6700\u9AD8\u5206\u8BBA\u6587\u7BC7\u6570\uFF08\u5EFA\u8BAE 3\u20135\uFF0C\u8D8A\u591A prompt \u8D8A\u957F\uFF09| Number of top papers to fetch full text for").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(1, 10, 1).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.topN) != null ? _b : 5).setDynamicTooltip().onChange(async (value) => {
+      var _a3, _b2;
+      return slider.setLimits(1, 10, 1).setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.topN) != null ? _b2 : 5).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value };
         await this.plugin.saveSettings();
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5206\u6790 Token \u4E0A\u9650 / Max tokens per paper").setDesc("Deep Read \u6BCF\u7BC7\u8BBA\u6587 LLM \u8C03\u7528\u7684\u8F93\u51FA token \u4E0A\u9650\uFF08\u9ED8\u8BA4 1024\uFF0C\u5EFA\u8BAE 512\u20132048\uFF09").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(256, 4096, 128).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.deepReadMaxTokens) != null ? _b : 1024).setDynamicTooltip().onChange(async (value) => {
+      var _a3, _b2;
+      return slider.setLimits(256, 4096, 128).setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.deepReadMaxTokens) != null ? _b2 : 1024).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.deepRead = {
           ...this.plugin.settings.deepRead,
           deepReadMaxTokens: value
@@ -855,8 +858,8 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u8F93\u51FA\u76EE\u5F55 / Output Folder").setDesc("\u7CBE\u8BFB\u7B14\u8BB0\u4FDD\u5B58\u76EE\u5F55\uFF08Vault \u5185\u8DEF\u5F84\uFF09| Vault folder path for per-paper deep-read notes").addText((text) => {
-      var _a3, _b;
-      return text.setPlaceholder("PaperDaily/deep-read").setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.outputFolder) != null ? _b : "PaperDaily/deep-read").onChange(async (value) => {
+      var _a3, _b2;
+      return text.setPlaceholder("PaperDaily/deep-read").setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.outputFolder) != null ? _b2 : "PaperDaily/deep-read").onChange(async (value) => {
         this.plugin.settings.deepRead = {
           ...this.plugin.settings.deepRead,
           outputFolder: value.trim() || "PaperDaily/deep-read"
@@ -865,8 +868,8 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u6807\u7B7E / Tags").setDesc("\u9017\u53F7\u5206\u9694\uFF0C\u5199\u5165\u6BCF\u7BC7\u7CBE\u8BFB\u7B14\u8BB0\u7684 frontmatter tags | Comma-separated tags added to each paper note's frontmatter").addText((text) => {
-      var _a3, _b;
-      return text.setPlaceholder("paper, deep-read").setValue(((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.tags) != null ? _b : ["paper", "deep-read"]).join(", ")).onChange(async (value) => {
+      var _a3, _b2;
+      return text.setPlaceholder("paper, deep-read").setValue(((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.tags) != null ? _b2 : ["paper", "deep-read"]).join(", ")).onChange(async (value) => {
         const tags = value.split(",").map((s) => s.trim()).filter(Boolean);
         this.plugin.settings.deepRead = {
           ...this.plugin.settings.deepRead,
@@ -4768,7 +4771,7 @@ function getActiveDeepReadPrompt(settings) {
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
-function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, error) {
+function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, error) {
   var _a2, _b;
   const frontmatter = [
     "---",
@@ -4817,11 +4820,13 @@ ${aiDigest}`;
     ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | |"]
   ].join("\n");
   const sections = [frontmatter, "", header, "", digestSection];
+  if (domainSummary)
+    sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5027,6 +5032,25 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       return ((_a3 = b.llmScore) != null ? _a3 : -1) - ((_b2 = a.llmScore) != null ? _b2 : -1);
     });
     log(`Step 3b LLM SCORE: done \u2014 ${totalScored}/${rankedPapers.length} papers scored across ${totalBatches} batch(es), re-ranked`);
+    const catStats = /* @__PURE__ */ new Map();
+    for (const paper of rankedPapers) {
+      for (const cat of (_q = paper.categories) != null ? _q : []) {
+        if (!catStats.has(cat))
+          catStats.set(cat, { count: 0, totalScore: 0, scored: 0 });
+        const s = catStats.get(cat);
+        s.count++;
+        if (paper.llmScore != null) {
+          s.totalScore += paper.llmScore;
+          s.scored++;
+        }
+      }
+    }
+    const topCats = [...catStats.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    const hotnessProgressStr = topCats.map(
+      ([cat, s]) => `${cat} ${s.count}\u7BC7${s.scored > 0 ? ` avg${(s.totalScore / s.scored).toFixed(1)}` : ""}`
+    ).join(" \xB7 ");
+    progress(`\u{1F4CA} \u9886\u57DF\u70ED\u5EA6: ${hotnessProgressStr}`);
+    log(`Step 3b DOMAIN HOTNESS: ${hotnessProgressStr}`);
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
@@ -5034,9 +5058,9 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     await downloadPapersForDay(app, rankedPapers, settings, log, date);
   }
   let fulltextSection = "";
-  if (((_q = settings.deepRead) == null ? void 0 : _q.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_r = settings.deepRead.topN) != null ? _r : 5, rankedPapers.length);
-    const maxTokens = (_s = settings.deepRead.deepReadMaxTokens) != null ? _s : 1024;
+  if (((_r = settings.deepRead) == null ? void 0 : _r.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_s = settings.deepRead.topN) != null ? _s : 5, rankedPapers.length);
+    const maxTokens = (_t = settings.deepRead.deepReadMaxTokens) != null ? _t : 1024;
     const drPrompt = getActiveDeepReadPrompt(settings);
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
     progress(`[3/5] \u{1F4D6} Deep Read \u2014 \u5171 ${topN} \u7BC7...`);
@@ -5051,10 +5075,10 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       const arxivUrl = `https://arxiv.org/abs/${baseId}`;
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
-        authors: ((_t = paper.authors) != null ? _t : []).slice(0, 5).join(", ") || "Unknown",
+        authors: ((_u = paper.authors) != null ? _u : []).slice(0, 5).join(", ") || "Unknown",
         published: paper.published ? paper.published.slice(0, 10) : date,
         arxiv_url: arxivUrl,
-        interest_hits: ((_u = paper.interestHits) != null ? _u : []).join(", ") || "none",
+        interest_hits: ((_v = paper.interestHits) != null ? _v : []).join(", ") || "none",
         abstract: paper.abstract,
         fulltext: htmlUrl,
         language: langStr
@@ -5069,10 +5093,10 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 ${paper.deepReadAnalysis}`);
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
         try {
-          const outputFolder = `${(_w = (_v = settings.deepRead) == null ? void 0 : _v.outputFolder) != null ? _w : "PaperDaily/deep-read"}/${date}`;
+          const outputFolder = `${(_x = (_w = settings.deepRead) == null ? void 0 : _w.outputFolder) != null ? _x : "PaperDaily/deep-read"}/${date}`;
           const fileTags = [
-            ...(_y = (_x = settings.deepRead) == null ? void 0 : _x.tags) != null ? _y : ["paper", "deep-read"],
-            ...((_z = paper.interestHits) != null ? _z : []).map((h) => h.replace(/\s+/g, "-"))
+            ...(_z = (_y = settings.deepRead) == null ? void 0 : _y.tags) != null ? _z : ["paper", "deep-read"],
+            ...((_A = paper.interestHits) != null ? _A : []).map((h) => h.replace(/\s+/g, "-"))
           ];
           const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
           const paperFrontmatter = [
@@ -5082,7 +5106,7 @@ ${paper.deepReadAnalysis}`);
             `date: ${date}`,
             `arxivId: ${baseId}`,
             `arxivUrl: ${arxivUrl}`,
-            `authors: [${((_A = paper.authors) != null ? _A : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
+            `authors: [${((_B = paper.authors) != null ? _B : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
             `published: ${paper.published ? paper.published.slice(0, 10) : date}`,
             `tags: [${fileTags.map((t) => `"${t}"`).join(", ")}]`,
             ...paper.llmScore != null ? [`llmScore: ${paper.llmScore}`] : [],
@@ -5114,7 +5138,7 @@ ${paper.deepReadAnalysis}
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_C = (_B = settings.deepRead) == null ? void 0 : _B.enabled) != null ? _C : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_D = (_C = settings.deepRead) == null ? void 0 : _C.enabled) != null ? _D : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);
@@ -5145,7 +5169,7 @@ ${paper.deepReadAnalysis}
           ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
         };
       });
-      const hfEnabled = ((_D = settings.hfSource) == null ? void 0 : _D.enabled) !== false && hfDailyPapers.length > 0;
+      const hfEnabled = ((_E = settings.hfSource) == null ? void 0 : _E.enabled) !== false && hfDailyPapers.length > 0;
       const hfDataSection = hfEnabled ? `Note: papers with "source": "hf" are HuggingFace-only picks. Treat them identically to arXiv papers.
 
 ## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
@@ -5184,7 +5208,30 @@ From the HuggingFace full list, note any papers NOT already covered above. One l
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   progress(`[5/5] \u{1F4BE} \u5199\u5165\u6587\u4EF6...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, errorMsg);
+    const catStats2 = /* @__PURE__ */ new Map();
+    for (const paper of rankedPapers) {
+      for (const cat of (_F = paper.categories) != null ? _F : []) {
+        if (!catStats2.has(cat))
+          catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
+        const s = catStats2.get(cat);
+        s.count++;
+        if (paper.llmScore != null) {
+          s.totalScore += paper.llmScore;
+          s.scored++;
+        }
+      }
+    }
+    const topCats2 = [...catStats2.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    const domainSummary = topCats2.length > 0 ? [
+      "## \u9886\u57DF\u70ED\u5EA6 / Domain Hotness",
+      "",
+      "| \u9886\u57DF | \u8BBA\u6587\u6570 | \u5E73\u5747\u5206 |",
+      "|------|--------|--------|",
+      ...topCats2.map(
+        ([cat, s]) => `| ${cat} | ${s.count} | ${s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-"} |`
+      )
+    ].join("\n") : "";
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

@@ -69,6 +69,7 @@ function buildDailyMarkdown(
   rankedPapers: Paper[],
   aiDigest: string,
   activeSources: string[],
+  domainSummary: string,
   error?: string
 ): string {
   const frontmatter = [
@@ -118,6 +119,7 @@ function buildDailyMarkdown(
   ].join("\n");
 
   const sections = [frontmatter, "", header, "", digestSection];
+  if (domainSummary) sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
@@ -368,6 +370,23 @@ export async function runDailyPipeline(
     // Re-rank all papers by LLM score; unscored papers fall to the end
     rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
     log(`Step 3b LLM SCORE: done — ${totalScored}/${rankedPapers.length} papers scored across ${totalBatches} batch(es), re-ranked`);
+
+    // ── Domain hotness summary ────────────────────────────────────
+    const catStats = new Map<string, { count: number; totalScore: number; scored: number }>();
+    for (const paper of rankedPapers) {
+      for (const cat of (paper.categories ?? [])) {
+        if (!catStats.has(cat)) catStats.set(cat, { count: 0, totalScore: 0, scored: 0 });
+        const s = catStats.get(cat)!;
+        s.count++;
+        if (paper.llmScore != null) { s.totalScore += paper.llmScore; s.scored++; }
+      }
+    }
+    const topCats = [...catStats.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    const hotnessProgressStr = topCats.map(([cat, s]) =>
+      `${cat} ${s.count}篇${s.scored > 0 ? ` avg${(s.totalScore / s.scored).toFixed(1)}` : ""}`
+    ).join(" · ");
+    progress(`📊 领域热度: ${hotnessProgressStr}`);
+    log(`Step 3b DOMAIN HOTNESS: ${hotnessProgressStr}`);
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
@@ -532,7 +551,28 @@ export async function runDailyPipeline(
 
   progress(`[5/5] 💾 写入文件...`);
   try {
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, errorMsg);
+    // Build domain hotness table for markdown
+    const catStats2 = new Map<string, { count: number; totalScore: number; scored: number }>();
+    for (const paper of rankedPapers) {
+      for (const cat of (paper.categories ?? [])) {
+        if (!catStats2.has(cat)) catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
+        const s = catStats2.get(cat)!;
+        s.count++;
+        if (paper.llmScore != null) { s.totalScore += paper.llmScore; s.scored++; }
+      }
+    }
+    const topCats2 = [...catStats2.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    const domainSummary = topCats2.length > 0 ? [
+      "## 领域热度 / Domain Hotness",
+      "",
+      "| 领域 | 论文数 | 平均分 |",
+      "|------|--------|--------|",
+      ...topCats2.map(([cat, s]) =>
+        `| ${cat} | ${s.count} | ${s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-"} |`
+      )
+    ].join("\n") : "";
+
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

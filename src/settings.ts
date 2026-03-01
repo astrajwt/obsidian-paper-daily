@@ -362,19 +362,22 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
           await this.plugin.saveSettings();
+          this.display();
         }));
 
-    new Setting(containerEl)
-      .setName("HF 回溯天数 / HF Lookback Days")
-      .setDesc("huggingface.co/papers 无当日数据时（如周末），往前查找最近 N 天的精选 | If today has no HF papers (e.g. weekend), look back up to N days")
-      .addSlider(slider => slider
-        .setLimits(0, 7, 1)
-        .setValue(this.plugin.settings.hfSource?.lookbackDays ?? 3)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
-          await this.plugin.saveSettings();
-        }));
+    if (this.plugin.settings.hfSource?.enabled !== false) {
+      new Setting(containerEl)
+        .setName("HuggingFace 回溯天数 / HuggingFace Lookback Days")
+        .setDesc("huggingface.co/papers 无当日数据时（如周末），往前查找最近 N 天的精选 | If today has no HuggingFace papers (e.g. weekend), look back up to N days")
+        .addSlider(slider => slider
+          .setLimits(0, 7, 1)
+          .setValue(this.plugin.settings.hfSource?.lookbackDays ?? 3)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+            await this.plugin.saveSettings();
+          }));
+    }
 
     new Setting(containerEl)
       .setName("时间窗口（小时）/ Time Window (hours)")
