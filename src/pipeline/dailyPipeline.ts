@@ -615,7 +615,7 @@ export async function runDailyPipeline(
       log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);
     } catch (err) {
       llmError = String(err);
-      log(`Step 4 LLM ERROR: ${llmError}`);
+      log(`[ERROR][LLM] provider=${settings.llm.provider} model=${settings.llm.model} error=${llmError}`);
       await stateStore.setLastError("llm", llmError);
     }
   } else if (!settings.llm.apiKey) {
@@ -709,7 +709,7 @@ export async function runDailyPipeline(
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
-    log(`Step 5 WRITE ERROR: ${String(err)}`);
+    log(`[ERROR][WRITE] path=${inboxPath} error=${String(err)}`);
     await stateStore.setLastError("write", String(err));
     throw err;
   }
@@ -731,12 +731,20 @@ export async function runDailyPipeline(
 
   log(`=== Daily pipeline END date=${date} papers=${rankedPapers.length} ===`);
 
+  // ── Token summary + anomaly warning ──────────────────────────
+  if (totalInputTokens > 0) {
+    log(`Token summary: totalInput=${totalInputTokens} totalOutput=${totalOutputTokens}`);
+    if (totalInputTokens > TOTAL_TOKEN_WARN) {
+      log(`[WARN][TOKEN] total run input=${totalInputTokens} exceeds ${TOTAL_TOKEN_WARN} — consider reducing deepRead.topN or disabling deep read`);
+    }
+  }
+
   // ── Emit final progress summary ───────────────────────────────
   const tokenSummary = totalInputTokens > 0
     ? ` | tokens: ${totalInputTokens.toLocaleString()}→${totalOutputTokens.toLocaleString()}`
     : "";
   progress(`✅ 完成！${rankedPapers.length} 篇论文${tokenSummary}`);
 
-  // ── Flush log ─────────────────────────────────────────────────
-  await writer.appendToNote(logPath, logLines.join("\n") + "\n");
+  // ── Flush log (with 10MB rotation) ────────────────────────────
+  await writer.appendLogWithRotation(logPath, logLines.join("\n") + "\n", 10 * 1024 * 1024);
 }
