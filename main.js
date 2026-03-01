@@ -105,10 +105,7 @@ Today: {{date}}
 Output language: {{language}}
 
 ## Context
-Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes \u2192 direction relevance \u2192 interest keyword weight.
-
-## Today's top research directions (pre-computed):
-{{topDirections}}
+Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes \u2192 interest keyword weight.
 
 ## Papers to analyze (pre-ranked, arXiv + HF):
 {{papers_json}}
@@ -123,16 +120,12 @@ Generate the daily digest with the following sections:
 ### \u4ECA\u65E5\u8981\u70B9 / Key Takeaways
 3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
-### \u65B9\u5411\u8109\u640F / Direction Pulse
-For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
-
 ### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
 For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
-- \u{1F917} HF \u6D3B\u8DC3\u5EA6: {hfUpvotes} upvotes \u2014 {e.g. "\u793E\u533A\u9AD8\u5EA6\u5173\u6CE8" / "\u5C0F\u4F17\u4F46\u76F8\u5173"} (omit this line entirely if hfUpvotes is 0 or not present)
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
-- \u{1F9ED} \u65B9\u5411: {matched directions}  |  \u5173\u952E\u8BCD: {interest hits}
+- \u5173\u952E\u8BCD: {interest hits}
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
 - \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
 - \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, generalization, etc.
@@ -154,7 +147,7 @@ From the HuggingFace daily picks, list any papers NOT already covered above that
 ---
 Rules:
 - Do NOT hedge every sentence. State your assessment directly.
-- If hfUpvotes is high but direction relevance is low, note the discrepancy.
+- If hfUpvotes is high but interest keyword relevance is low, note the discrepancy.
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
 - \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".`;
@@ -162,9 +155,6 @@ var DEFAULT_QUICKSCAN_PROMPT = `You are a senior AI/ML research analyst. Be conc
 
 Today: {{date}}
 Output language: {{language}}
-
-## Top directions today:
-{{topDirections}}
 
 ## Papers (pre-ranked):
 {{papers_json}}
@@ -178,9 +168,6 @@ Output language: {{language}}
 For each arXiv paper, one line each \u2014 no exceptions, no skipping:
 **N. Title** \u2014 one sentence: what they did and whether it matters (be direct; say "incremental" or "skip" if warranted).
 
-### \u65B9\u5411\u4FE1\u53F7 / Direction Signal
-2\u20133 sentences total: what is today's research collectively signaling? Any emerging pattern or surprising gap?
-
 ### HF \u70ED\u70B9 / HF Highlights
 Top 3\u20135 HF picks not already covered above: title + one-line verdict on whether the community hype is warranted.
 
@@ -193,9 +180,6 @@ var DEFAULT_REVIEW_PROMPT = `You are a rigorous peer reviewer at a top AI confer
 
 Today: {{date}}
 Output language: {{language}}
-
-## Research directions active today:
-{{topDirections}}
 
 ## Papers to review:
 {{papers_json}}
@@ -222,1096 +206,40 @@ Rules:
 - Be skeptical but fair. Avoid enthusiasm not backed by evidence.
 - Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
 - Recommendations must be specific \u2014 no "interesting direction" hedging.`;
+var DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
+
+Title: {{title}}
+Authors: {{authors}}
+Interest keyword hits: {{interest_hits}}
+Abstract: {{abstract}}
+
+Full paper text (may be truncated):
+{{fulltext}}
+
+Provide a structured analysis with these sections:
+
+**\u6838\u5FC3\u8D21\u732E / Core Contribution** (2\u20133 sentences): What exactly is built, proved, or demonstrated? Be specific with method/dataset names and key numbers.
+
+**\u65B9\u6CD5\u4EAE\u70B9 / Method Highlights** (2\u20134 bullet points): Key technical choices, algorithmic novelty, or system design decisions.
+
+**\u5B9E\u9A8C\u4E0E\u7ED3\u679C / Experiments & Results** (2\u20133 sentences): Which benchmarks? Headline numbers vs baselines?
+
+**\u5DE5\u7A0B\u542F\u793A / Engineering Takeaway** (1\u20132 sentences): What can a practitioner adopt from this work?
+
+**\u5C40\u9650\u6027 / Limitations** (1\u20132 sentences): Honest scope limitations or reproducibility concerns.
+
+Keep the total under 400 words. Be direct and opinionated. Output in {{language}}.`;
 var DEFAULT_PROMPT_LIBRARY = [
   { id: "builtin_engineering", name: "\u5DE5\u7A0B\u7CBE\u8BFB", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
   { id: "builtin_quickscan", name: "\u901F\u89C8", prompt: DEFAULT_QUICKSCAN_PROMPT, builtin: true },
   { id: "builtin_review", name: "\u6280\u672F\u8BC4\u5BA1", prompt: DEFAULT_REVIEW_PROMPT, builtin: true }
 ];
-var DEFAULT_WEEKLY_PROMPT = `You are a research paper analyst.
-
-Week: {{week}}
-Papers from the past 7 days (JSON):
-{{papers_json}}
-
-Direction trends this week:
-{{directionTrends}}
-
-Generate a weekly report in {{language}} covering:
-1. **\u672C\u5468\u65B9\u5411\u8D8B\u52BF / Direction Trends** \u2014 which directions dominated, any shifts
-2. **Top Recurring Keywords** \u2014 most frequent interest keywords
-3. **\u63A8\u8350\u7CBE\u8BFB / Recommended Deep Dives** (top 5 papers worth reading in full)
-4. **\u672C\u5468\u603B\u7ED3 / Weekly Summary** \u2014 3-5 bullet points
-
-Format as clean Markdown.`;
-var DEFAULT_MONTHLY_PROMPT = `You are a research paper analyst.
-
-Month: {{month}}
-Papers collected this month (JSON):
-{{papers_json}}
-
-Direction evolution:
-{{directionEvolution}}
-
-Generate a monthly report in {{language}} covering:
-1. **\u6708\u5EA6\u65B9\u5411\u6F14\u8FDB / Direction Evolution** \u2014 stable vs emerging themes
-2. **\u5173\u952E\u8BCD\u70ED\u5EA6 / Keyword Heatmap** \u2014 top recurring keywords
-3. **\u6708\u5EA6\u7CBE\u534E / Monthly Highlights** \u2014 top 10 papers
-4. **\u8D8B\u52BF\u6D1E\u5BDF / Trend Insights** \u2014 broader observations
-5. **\u6708\u5EA6\u603B\u7ED3 / Monthly Summary**
-
-Format as clean Markdown.`;
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
-  keywords: [],
   interestKeywords: [],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
-  directions: [
-    {
-      "name": "RLHF & Post-training",
-      "weight": 1.5,
-      "match": {
-        "keywords": [
-          "rlhf",
-          "post-training",
-          "alignment",
-          "preference optimization",
-          "preference modeling",
-          "reward modeling",
-          "reward model",
-          "rm",
-          "ppo",
-          "ppg",
-          "a2c",
-          "actor-critic",
-          "gae",
-          "kl penalty",
-          "kl regularization",
-          "dpo",
-          "ipo",
-          "kto",
-          "orpo",
-          "simpo",
-          "grpo",
-          "rrhf",
-          "rlaif",
-          "constitutional ai",
-          "self-critique",
-          "verifier",
-          "process reward model",
-          "prm",
-          "outcome reward model",
-          "orm",
-          "pairwise preference",
-          "listwise preference",
-          "ranking loss",
-          "direct preference learning",
-          "rejection sampling",
-          "best-of-n",
-          "ppo clip",
-          "advantage normalization",
-          "reward hacking",
-          "over-optimization",
-          "sft",
-          "instruction tuning",
-          "chat tuning",
-          "alignment tax",
-          "post-training data pipeline",
-          "preference dataset",
-          "human feedback",
-          "synthetic preference",
-          "offline rlhf",
-          "on-policy rlhf",
-          "off-policy rlhf",
-          "replay buffer",
-          "policy lag",
-          "importance sampling",
-          "bandit feedback",
-          "implicit reward"
-        ],
-        "categories": ["cs.AI", "cs.LG", "cs.CL"]
-      }
-    },
-    {
-      "name": "Agentic RL & Tool Use",
-      "weight": 1.4,
-      "match": {
-        "keywords": [
-          "agent",
-          "agentic",
-          "agentic rl",
-          "tool use",
-          "tool calling",
-          "tool call",
-          "function calling",
-          "planner",
-          "planning",
-          "react",
-          "reasoning and acting",
-          "multi-agent",
-          "self-play",
-          "self-improvement",
-          "reflection",
-          "memory",
-          "scratchpad",
-          "verifier",
-          "judge model",
-          "critic model",
-          "tree search",
-          "mcts",
-          "best-first search",
-          "beam search agent",
-          "program of thoughts",
-          "cot",
-          "chain-of-thought",
-          "workflow agent",
-          "orchestrator",
-          "executor",
-          "sandbox",
-          "isolated execution",
-          "code interpreter",
-          "browser tool",
-          "retrieval tool",
-          "rpc tool",
-          "tool latency",
-          "tool reliability",
-          "agent evaluation",
-          "agent benchmarks",
-          "webshop",
-          "hotpotqa",
-          "alfworld",
-          "babyai",
-          "digital agents",
-          "ui agent",
-          "computer use",
-          "grounding",
-          "action space",
-          "credit assignment",
-          "long-horizon",
-          "hierarchical rl",
-          "options",
-          "skills",
-          "task decomposition",
-          "delegation",
-          "autonomous agents",
-          "multi-turn tool calling"
-        ],
-        "categories": ["cs.AI", "cs.CL", "cs.LG"]
-      }
-    },
-    {
-      "name": "Pre-training & Data Curation",
-      "weight": 1.4,
-      "match": {
-        "keywords": [
-          "pretraining",
-          "pre-training",
-          "scaling law",
-          "chinchilla",
-          "compute-optimal",
-          "data-optimal",
-          "tokenizer",
-          "bpe",
-          "sentencepiece",
-          "unigram tokenizer",
-          "vocab",
-          "data curation",
-          "data deduplication",
-          "near-duplicate",
-          "minhash",
-          "simhash",
-          "quality filtering",
-          "language id",
-          "toxicity filtering",
-          "pii filtering",
-          "data provenance",
-          "data governance",
-          "dataset mixing",
-          "mixture weights",
-          "curriculum learning",
-          "continual learning",
-          "continual pretraining",
-          "domain adaptation",
-          "instruction data",
-          "synthetic data",
-          "self-instruct",
-          "distillation data",
-          "corpus",
-          "training data",
-          "web data",
-          "common crawl",
-          "document parsing",
-          "pdf parsing",
-          "html to text",
-          "multilingual",
-          "code data",
-          "dedup at scale",
-          "data pipeline",
-          "etl",
-          "spark",
-          "ray data",
-          "mapreduce",
-          "data lake",
-          "parquet",
-          "arrow",
-          "shuffling",
-          "sampling",
-          "token counting",
-          "data skew"
-        ],
-        "categories": ["cs.LG", "cs.CL", "cs.IR", "cs.DC"]
-      }
-    },
-    {
-      "name": "Inference Serving & LLM Systems",
-      "weight": 1.3,
-      "match": {
-        "keywords": [
-          "inference serving",
-          "llm serving",
-          "serving system",
-          "throughput",
-          "latency",
-          "goodput",
-          "slo",
-          "sla",
-          "ttft",
-          "tbt",
-          "prefill",
-          "decode",
-          "prefill decode separation",
-          "pd separation",
-          "disaggregated serving",
-          "kv cache",
-          "kvcache",
-          "pagedattention",
-          "paged attention",
-          "continuous batching",
-          "dynamic batching",
-          "microbatching",
-          "chunked prefill",
-          "prefix cache",
-          "prompt cache",
-          "cache reuse",
-          "cache eviction",
-          "cache admission",
-          "hot spot migration",
-          "kv offload",
-          "cpu offload",
-          "kv compression",
-          "kv quantization",
-          "speculative decoding",
-          "draft model",
-          "verify model",
-          "eagle",
-          "medusa",
-          "lookahead decoding",
-          "rejection sampling decoding",
-          "tensor parallel inference",
-          "pipeline parallel inference",
-          "disaggregated kv",
-          "rdma kv transfer",
-          "nvlink",
-          "infiniband",
-          "gdr",
-          "gpu direct rdma",
-          "vllm",
-          "sglang",
-          "tensorrt-llm",
-          "fastertransformer",
-          "triton inference",
-          "onnx runtime",
-          "torch compile serving",
-          "cuda graphs",
-          "streaming generation",
-          "server-sent events",
-          "grpc",
-          "http streaming",
-          "load shedding",
-          "early rejection",
-          "overload control",
-          "rate limiting",
-          "token bucket",
-          "admission control",
-          "routing",
-          "request scheduling",
-          "kv-aware scheduling"
-        ],
-        "categories": ["cs.DC", "cs.AR", "cs.NI", "cs.LG"]
-      }
-    },
-    {
-      "name": "Training Systems & Distributed Optimization",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "distributed training",
-          "data parallel",
-          "dp",
-          "tensor parallel",
-          "tp",
-          "pipeline parallel",
-          "pp",
-          "sequence parallel",
-          "sp",
-          "context parallel",
-          "cp",
-          "expert parallel",
-          "ep",
-          "fsdp",
-          "zero",
-          "deepspeed",
-          "megatron",
-          "torch distributed",
-          "nccl",
-          "gloo",
-          "mpi",
-          "allreduce",
-          "reducescatter",
-          "allgather",
-          "alltoall",
-          "collective communication",
-          "communication overhead",
-          "overlap communication",
-          "gradient accumulation",
-          "microbatch",
-          "activation checkpointing",
-          "recompute",
-          "optimizer state sharding",
-          "parameter sharding",
-          "mixed precision",
-          "fp16",
-          "bf16",
-          "fp8",
-          "amp",
-          "loss scaling",
-          "gradient clipping",
-          "optimizer",
-          "adamw",
-          "lion",
-          "adafactor",
-          "shampoo",
-          "8-bit optimizer",
-          "quantized optimizer",
-          "checkpoint",
-          "checkpointing",
-          "async checkpoint",
-          "incremental checkpoint",
-          "elastic training",
-          "fault tolerance",
-          "preemption",
-          "resilience",
-          "straggler mitigation",
-          "load balancing",
-          "pipeline bubbles",
-          "schedule",
-          "1f1b",
-          "interleaved pipeline"
-        ],
-        "categories": ["cs.DC", "cs.LG", "cs.NI"]
-      }
-    },
-    {
-      "name": "MoE Systems & Sparse Training/Inference",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "moe",
-          "mixture of experts",
-          "expert",
-          "sparse",
-          "sparse activation",
-          "top-k routing",
-          "router",
-          "routing",
-          "token routing",
-          "load balancing",
-          "auxiliary loss",
-          "router z-loss",
-          "capacity factor",
-          "expert capacity",
-          "expert parallel",
-          "alltoall",
-          "dispatch",
-          "combine",
-          "expert choice",
-          "token choice",
-          "switch transformer",
-          "gshard",
-          "deepseek moe",
-          "sparse attention",
-          "moe inference",
-          "moe serving",
-          "expert cache",
-          "expert placement",
-          "expert replication",
-          "hot experts",
-          "routing collapse",
-          "router instability",
-          "communication heavy",
-          "a2a optimization",
-          "hierarchical alltoall"
-        ],
-        "categories": ["cs.LG", "cs.AI", "cs.DC"]
-      }
-    },
-    {
-      "name": "Long Context, Attention & Efficiency",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "long context",
-          "context length",
-          "context window",
-          "128k",
-          "1m context",
-          "rope",
-          "rotary position embedding",
-          "yarn",
-          "ntk",
-          "alibi",
-          "position encoding",
-          "kv cache growth",
-          "sliding window attention",
-          "windowed attention",
-          "ring attention",
-          "flash attention",
-          "flashattention",
-          "flashinfer",
-          "fused attention",
-          "gqa",
-          "mqa",
-          "mla",
-          "linear attention",
-          "performer",
-          "reformer",
-          "kernel attention",
-          "block sparse attention",
-          "paged kv",
-          "kv eviction",
-          "attention compression",
-          "token pruning",
-          "mamba",
-          "ssm",
-          "state space model",
-          "recurrent",
-          "rwkv",
-          "hyena",
-          "memory efficient attention",
-          "chunked prefill",
-          "context parallelism"
-        ],
-        "categories": ["cs.LG", "cs.CL", "cs.DC"]
-      }
-    },
-    {
-      "name": "Multimodal Systems & VLM Infrastructure",
-      "weight": 1.1,
-      "match": {
-        "keywords": [
-          "multimodal",
-          "vision language model",
-          "vlm",
-          "vision-language",
-          "image encoder",
-          "clip",
-          "vit",
-          "llava",
-          "qwen-vl",
-          "video understanding",
-          "video llm",
-          "speech",
-          "asr",
-          "tts",
-          "streaming asr",
-          "diffusion model",
-          "text-to-image",
-          "image generation",
-          "video generation",
-          "multimodal tokenization",
-          "patch embedding",
-          "vq",
-          "vq-vae",
-          "multimodal serving",
-          "multi-modal batching",
-          "prefill with vision tokens",
-          "vision kv cache"
-        ],
-        "categories": ["cs.CV", "cs.CL", "cs.LG", "cs.DC"]
-      }
-    },
-    {
-      "name": "Quantization, Distillation & Compression",
-      "weight": 1.1,
-      "match": {
-        "keywords": [
-          "quantization",
-          "ptq",
-          "qat",
-          "int8",
-          "int4",
-          "nf4",
-          "fp8",
-          "awq",
-          "gptq",
-          "smoothquant",
-          "gguf",
-          "ggml",
-          "tensor quantization",
-          "activation quantization",
-          "weight-only quantization",
-          "kv quantization",
-          "compression",
-          "pruning",
-          "structured pruning",
-          "unstructured pruning",
-          "sparsity",
-          "2:4 sparsity",
-          "model compression",
-          "knowledge distillation",
-          "distillation",
-          "teacher student",
-          "logit distillation",
-          "sequence-level distillation",
-          "speculative distillation",
-          "low rank",
-          "lora",
-          "qlora",
-          "adapters",
-          "parameter efficient fine-tuning",
-          "peft"
-        ],
-        "categories": ["cs.LG", "cs.AR", "cs.DC"]
-      }
-    },
-    {
-      "name": "Retrieval, RAG & Vector Infrastructure",
-      "weight": 1.25,
-      "match": {
-        "keywords": [
-          "retrieval augmented generation",
-          "rag",
-          "retriever",
-          "reranker",
-          "dense retrieval",
-          "sparse retrieval",
-          "bm25",
-          "splade",
-          "colbert",
-          "embedding",
-          "text embedding",
-          "vector database",
-          "vector db",
-          "faiss",
-          "hnsw",
-          "ivf",
-          "pq",
-          "ann",
-          "approximate nearest neighbor",
-          "index building",
-          "index serving",
-          "hybrid search",
-          "query rewriting",
-          "semantic search",
-          "document chunking",
-          "chunking strategy",
-          "contextual retrieval",
-          "citation",
-          "grounded generation",
-          "hallucination reduction",
-          "knowledge base",
-          "kb",
-          "retrieval latency",
-          "caching retrieval",
-          "online indexing",
-          "incremental indexing"
-        ],
-        "categories": ["cs.IR", "cs.CL", "cs.DC", "cs.AI"]
-      }
-    },
-    {
-      "name": "Evaluation, Benchmarking & E2E Quality",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "evaluation",
-          "benchmark",
-          "eval harness",
-          "offline eval",
-          "online eval",
-          "a/b testing",
-          "ab test",
-          "canary",
-          "shadow traffic",
-          "regression testing",
-          "golden set",
-          "rubric",
-          "judge model",
-          "llm-as-a-judge",
-          "pairwise eval",
-          "win rate",
-          "preference eval",
-          "calibration",
-          "reliability",
-          "toxicity eval",
-          "safety eval",
-          "latency eval",
-          "throughput eval",
-          "cost eval",
-          "prompt robustness",
-          "adversarial eval",
-          "dataset shift",
-          "drift detection",
-          "observability metrics",
-          "ttft p90",
-          "tbt p90",
-          "tail latency"
-        ],
-        "categories": ["cs.AI", "cs.LG", "cs.SE", "cs.DC"]
-      }
-    },
-    {
-      "name": "Compilers, Graph Optimization & Kernel Fusion",
-      "weight": 1.25,
-      "match": {
-        "keywords": [
-          "compiler",
-          "graph compiler",
-          "xla",
-          "tvm",
-          "mlir",
-          "llvm",
-          "torch compile",
-          "torchdynamo",
-          "aotautograd",
-          "inductor",
-          "triton",
-          "cutlass",
-          "cute",
-          "kernel fusion",
-          "operator fusion",
-          "epilogue fusion",
-          "memory planning",
-          "liveness analysis",
-          "layout optimization",
-          "tiling",
-          "autotuning",
-          "code generation",
-          "vectorization",
-          "tensor cores",
-          "wmma",
-          "mma",
-          "flash attention kernel",
-          "fused softmax",
-          "fused layernorm",
-          "quantized kernels",
-          "cuda graphs",
-          "stream capture",
-          "graph replay",
-          "nvrtc"
-        ],
-        "categories": ["cs.PL", "cs.DC", "cs.AR", "cs.LG"]
-      }
-    },
-    {
-      "name": "GPU Architecture & Performance Engineering",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "gpu architecture",
-          "sm",
-          "warp",
-          "block",
-          "occupancy",
-          "register pressure",
-          "shared memory",
-          "bank conflict",
-          "l1 cache",
-          "l2 cache",
-          "hbm",
-          "memory bandwidth",
-          "latency hiding",
-          "instruction throughput",
-          "tensor core",
-          "pipeline",
-          "async copy",
-          "cp.async",
-          "prefetch",
-          "stream",
-          "overlap compute communication",
-          "ncu",
-          "nsight compute",
-          "nsight systems",
-          "profiling",
-          "roofline",
-          "bottleneck analysis",
-          "kernel launch overhead",
-          "persistent kernel",
-          "cuda stream priority",
-          "mps",
-          "cuda mps"
-        ],
-        "categories": ["cs.AR", "cs.DC"]
-      }
-    },
-    {
-      "name": "Networking, RDMA & Collective Communication",
-      "weight": 1.25,
-      "match": {
-        "keywords": [
-          "rdma",
-          "infiniband",
-          "roce",
-          "gdr",
-          "gpudirect",
-          "gpudirect rdma",
-          "nccl",
-          "sharp",
-          "collective offload",
-          "allreduce",
-          "reducescatter",
-          "allgather",
-          "alltoall",
-          "topology",
-          "nvlink",
-          "pcie",
-          "nic",
-          "congestion control",
-          "pfc",
-          "ecmp",
-          "fat-tree",
-          "dragonfly",
-          "ring allreduce",
-          "tree allreduce",
-          "hierarchical collectives",
-          "latency jitter",
-          "tail latency networking",
-          "zero-copy",
-          "dma",
-          "rdma verbs",
-          "ibverbs",
-          "ucx"
-        ],
-        "categories": ["cs.NI", "cs.DC"]
-      }
-    },
-    {
-      "name": "Storage, Checkpointing & State Management",
-      "weight": 1.2,
-      "match": {
-        "keywords": [
-          "checkpoint",
-          "checkpointing",
-          "distributed checkpoint",
-          "sharded checkpoint",
-          "async checkpoint",
-          "incremental checkpoint",
-          "delta checkpoint",
-          "snapshot",
-          "fault tolerance",
-          "restart",
-          "preemption",
-          "elasticity",
-          "optimizer state",
-          "state dict",
-          "safetensors",
-          "tensorstore",
-          "zarr",
-          "object store",
-          "s3",
-          "oss",
-          "hdfs",
-          "nvme",
-          "ssd",
-          "io bandwidth",
-          "io pipeline",
-          "write amplification",
-          "compression",
-          "dedup",
-          "metadata scaling",
-          "manifest",
-          "commit protocol",
-          "two-phase commit"
-        ],
-        "categories": ["cs.DC", "cs.OS"]
-      }
-    },
-    {
-      "name": "Cluster Scheduling, Orchestration & Resource Management",
-      "weight": 1.25,
-      "match": {
-        "keywords": [
-          "scheduler",
-          "cluster scheduler",
-          "kubernetes",
-          "k8s",
-          "slurm",
-          "yarn",
-          "mesos",
-          "ray",
-          "placement",
-          "gang scheduling",
-          "bin packing",
-          "gpu scheduling",
-          "heterogeneous scheduling",
-          "fair scheduling",
-          "priority scheduling",
-          "quota",
-          "preemption",
-          "backfilling",
-          "elastic training",
-          "autoscaling",
-          "horizontal pod autoscaler",
-          "resource isolation",
-          "cgroups",
-          "numa",
-          "topology-aware scheduling",
-          "node affinity",
-          "pod affinity",
-          "time slicing",
-          "mig",
-          "multi-instance gpu",
-          "virtualization",
-          "container runtime",
-          "nvidia container toolkit",
-          "device plugin",
-          "capacity planning"
-        ],
-        "categories": ["cs.DC", "cs.OS", "cs.NI"]
-      }
-    },
-    {
-      "name": "MLOps, Deployment & Lifecycle Management",
-      "weight": 1.15,
-      "match": {
-        "keywords": [
-          "mlops",
-          "model deployment",
-          "ci/cd",
-          "continuous training",
-          "continuous evaluation",
-          "model registry",
-          "artifact store",
-          "experiment tracking",
-          "wandb",
-          "mlflow",
-          "feature store",
-          "data versioning",
-          "dvc",
-          "lineage",
-          "rollout",
-          "rollback",
-          "blue green deployment",
-          "canary deployment",
-          "shadow deployment",
-          "serving gateway",
-          "api gateway",
-          "rate limiting",
-          "auth",
-          "apikey rotation",
-          "secret management",
-          "vault",
-          "k8s secrets",
-          "configuration management",
-          "terraform",
-          "helm",
-          "observability"
-        ],
-        "categories": ["cs.SE", "cs.DC"]
-      }
-    },
-    {
-      "name": "Observability, Profiling & Reliability Engineering",
-      "weight": 1.15,
-      "match": {
-        "keywords": [
-          "observability",
-          "monitoring",
-          "logging",
-          "tracing",
-          "distributed tracing",
-          "opentelemetry",
-          "prometheus",
-          "grafana",
-          "jaeger",
-          "slo monitoring",
-          "tail latency",
-          "p99",
-          "p999",
-          "alerting",
-          "incident",
-          "postmortem",
-          "reliability",
-          "sre",
-          "capacity",
-          "load testing",
-          "stress testing",
-          "chaos engineering",
-          "fault injection",
-          "profiling",
-          "cpu profiling",
-          "gpu profiling",
-          "nsys",
-          "ncu",
-          "memory leak",
-          "fragmentation",
-          "oom analysis"
-        ],
-        "categories": ["cs.SE", "cs.DC", "cs.OS"]
-      }
-    },
-    {
-      "name": "Security, Privacy & Model Abuse (Infra-focused)",
-      "weight": 1.1,
-      "match": {
-        "keywords": [
-          "security",
-          "privacy",
-          "pii",
-          "data leakage",
-          "secret leakage",
-          "apikey leakage",
-          "key management",
-          "rotation",
-          "abuse detection",
-          "rate limit abuse",
-          "prompt injection",
-          "jailbreak",
-          "data exfiltration",
-          "model extraction",
-          "model stealing",
-          "distillation attack",
-          "membership inference",
-          "model inversion",
-          "watermarking",
-          "trace watermark",
-          "fingerprinting",
-          "content filtering",
-          "policy enforcement",
-          "sandboxing",
-          "isolation",
-          "secure execution"
-        ],
-        "categories": ["cs.CR", "cs.AI", "cs.SE"]
-      }
-    },
-    {
-      "name": "Edge/On-device LLM Systems",
-      "weight": 1.1,
-      "match": {
-        "keywords": [
-          "edge llm",
-          "on-device llm",
-          "mobile inference",
-          "embedded",
-          "automotive",
-          "npu",
-          "dsp",
-          "heterogeneous compute",
-          "lpddr",
-          "gddr",
-          "unified memory",
-          "kv cache tiering",
-          "cpu-gpu offload",
-          "streaming",
-          "low latency",
-          "power efficiency",
-          "thermal",
-          "quantized inference",
-          "int4 runtime",
-          "gguf runtime",
-          "onnx",
-          "tflite",
-          "coreml",
-          "tensorrt",
-          "ascend",
-          "mps",
-          "metal performance shaders"
-        ],
-        "categories": ["cs.AR", "cs.DC", "cs.OS"]
-      }
-    },
-    {
-      "name": "Data Systems for ML (ETL, Lakes, Streaming)",
-      "weight": 1.15,
-      "match": {
-        "keywords": [
-          "data systems",
-          "etl",
-          "elt",
-          "data pipeline",
-          "batch processing",
-          "stream processing",
-          "kafka",
-          "pulsar",
-          "flink",
-          "spark",
-          "ray",
-          "data lake",
-          "lakehouse",
-          "delta lake",
-          "iceberg",
-          "hudi",
-          "parquet",
-          "arrow",
-          "orc",
-          "schema evolution",
-          "data validation",
-          "great expectations",
-          "data quality",
-          "backfill",
-          "incremental processing",
-          "cdc",
-          "change data capture",
-          "feature computation",
-          "materialization",
-          "cache",
-          "online offline consistency"
-        ],
-        "categories": ["cs.DB", "cs.DC", "cs.SE"]
-      }
-    },
-    {
-      "name": "Memory Management & KVCache Engineering",
-      "weight": 1.25,
-      "match": {
-        "keywords": [
-          "memory management",
-          "allocator",
-          "fragmentation",
-          "arena allocator",
-          "paging",
-          "paged kv cache",
-          "block manager",
-          "slab allocator",
-          "cuda memory pool",
-          "unified virtual addressing",
-          "prefetching",
-          "pin memory",
-          "pinned memory",
-          "zero-copy",
-          "kv cache reuse",
-          "prefix hash",
-          "dedup",
-          "admission control cache",
-          "eviction policy",
-          "lru",
-          "lfu",
-          "clock algorithm",
-          "hotset",
-          "tiered cache",
-          "cpu dram cache",
-          "ssd cache",
-          "compression cache",
-          "kv spill",
-          "kv restore"
-        ],
-        "categories": ["cs.OS", "cs.DC", "cs.AR"]
-      }
-    }
-  ],
-  directionTopK: 5,
   llm: {
     provider: "openai_compatible",
     baseUrl: "https://api.openai.com/v1",
@@ -1319,9 +247,7 @@ var DEFAULT_SETTINGS = {
     model: "gpt-4o-mini",
     temperature: 0.3,
     maxTokens: 4096,
-    dailyPromptTemplate: DEFAULT_DAILY_PROMPT,
-    weeklyPromptTemplate: DEFAULT_WEEKLY_PROMPT,
-    monthlyPromptTemplate: DEFAULT_MONTHLY_PROMPT
+    dailyPromptTemplate: DEFAULT_DAILY_PROMPT
   },
   rootFolder: "PaperDaily",
   language: "zh",
@@ -1349,7 +275,9 @@ var DEFAULT_SETTINGS = {
     enabled: false,
     topN: 5,
     maxCharsPerPaper: 8e3,
-    cacheTTLDays: 60
+    cacheTTLDays: 60,
+    deepReadMaxTokens: 1024
+    // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t })),
   activePromptId: "builtin_review"
@@ -1369,29 +297,35 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.categories = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u67E5\u8BE2\u5173\u952E\u8BCD / Keywords").setDesc("\u4E0E\u5206\u7C7B\u53D6 AND\uFF0C\u4E3A\u7A7A\u5219\u53EA\u6309\u5206\u7C7B\u67E5\u8BE2 | Combined with categories via AND; leave empty to fetch by category only").addText((text) => text.setPlaceholder("reinforcement learning, agent").setValue(this.plugin.settings.keywords.join(",")).onChange(async (value) => {
-      this.plugin.settings.keywords = value.split(",").map((s) => s.trim()).filter(Boolean);
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords").setDesc("\u6BCF\u884C\u4E00\u4E2A\uFF0C\u683C\u5F0F\uFF1Akeyword:weight\uFF08\u6743\u91CD1-5\uFF0C\u7701\u7565\u5219\u9ED8\u8BA41\uFF09| One per line: keyword:weight (weight 1\u20135, defaults to 1 if omitted)\n\u4F8B / e.g.:\nrlhf:3\nagent:3\nkv cache:2");
-    const ikwArea = containerEl.createEl("textarea");
-    ikwArea.style.width = "100%";
-    ikwArea.style.height = "140px";
-    ikwArea.style.fontFamily = "monospace";
-    ikwArea.style.fontSize = "12px";
-    ikwArea.value = this.plugin.settings.interestKeywords.map((k) => `${k.keyword}:${k.weight}`).join("\n");
-    ikwArea.addEventListener("input", async () => {
-      this.plugin.settings.interestKeywords = ikwArea.value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
-        const idx = line.lastIndexOf(":");
-        if (idx > 0) {
-          const kw = line.slice(0, idx).trim();
-          const w = parseInt(line.slice(idx + 1).trim(), 10);
-          return { keyword: kw, weight: isNaN(w) || w < 1 ? 1 : Math.min(w, 5) };
-        }
-        return { keyword: line, weight: 1 };
-      });
-      await this.plugin.saveSettings();
+    containerEl.createEl("h2", { text: "\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords" });
+    containerEl.createEl("p", {
+      text: "\u7528\u4E8E\u8BBA\u6587\u6253\u5206\u4E0E\u9AD8\u4EAE\u663E\u793A\uFF0C\u6743\u91CD\u8D8A\u9AD8\u6392\u540D\u8D8A\u9760\u524D\u3002",
+      cls: "setting-item-description"
     });
+    const kwListEl = containerEl.createDiv();
+    const renderKwList = () => {
+      kwListEl.empty();
+      const kws = this.plugin.settings.interestKeywords;
+      kws.forEach((kw, i) => {
+        new import_obsidian.Setting(kwListEl).addText((text) => text.setPlaceholder("keyword").setValue(kw.keyword).onChange(async (val) => {
+          kws[i].keyword = val.trim();
+          await this.plugin.saveSettings();
+        })).addSlider((slider) => slider.setLimits(1, 5, 1).setValue(kw.weight).setDynamicTooltip().onChange(async (val) => {
+          kws[i].weight = val;
+          await this.plugin.saveSettings();
+        })).addExtraButton((btn) => btn.setIcon("trash").setTooltip("Remove").onClick(async () => {
+          kws.splice(i, 1);
+          await this.plugin.saveSettings();
+          renderKwList();
+        }));
+      });
+    };
+    renderKwList();
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("+ \u6DFB\u52A0\u5173\u952E\u8BCD").setCta().onClick(async () => {
+      this.plugin.settings.interestKeywords.push({ keyword: "", weight: 3 });
+      await this.plugin.saveSettings();
+      renderKwList();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6700\u5927\u7ED3\u679C\u6570 / Max Results Per Day").setDesc("\u6BCF\u65E5\u6458\u8981\u5305\u542B\u7684\u6700\u5927\u8BBA\u6587\u6570\uFF08\u6392\u540D\u540E\u622A\u53D6\uFF09| Max papers in daily digest after ranking").addSlider((slider) => slider.setLimits(5, 100, 5).setValue(this.plugin.settings.maxResultsPerDay).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.maxResultsPerDay = value;
       await this.plugin.saveSettings();
@@ -1403,33 +337,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u6392\u5E8F\u65B9\u5F0F / Sort By").setDesc("\u6309\u63D0\u4EA4\u65E5\u671F\u6216\u6700\u540E\u66F4\u65B0\u65E5\u671F\u6392\u5E8F | Sort by submission date or last updated date").addDropdown((drop) => drop.addOption("submittedDate", "Submitted Date").addOption("lastUpdatedDate", "Last Updated Date").setValue(this.plugin.settings.sortBy).onChange(async (value) => {
       this.plugin.settings.sortBy = value;
       await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("h2", { text: "\u7814\u7A76\u65B9\u5411 / Directions & Themes" });
-    new import_obsidian.Setting(containerEl).setName("\u65B9\u5411\u663E\u793A\u6570 Top-K / Direction Top-K").setDesc("\u6BCF\u65E5\u6458\u8981\u4E2D\u5C55\u793A\u7684\u6700\u591A\u65B9\u5411\u6570 | Number of top directions shown in daily digest").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.directionTopK).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.directionTopK = value;
-      await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("p", {
-      text: "\u65B9\u5411 JSON\uFF08\u9AD8\u7EA7\uFF09\u2014 \u76F4\u63A5\u7F16\u8F91\u65B9\u5411\u914D\u7F6E | Directions JSON (advanced) \u2014 edit direction config directly:",
-      cls: "setting-item-description"
-    });
-    const directionsTextArea = containerEl.createEl("textarea", {
-      cls: "paper-daily-directions-textarea"
-    });
-    directionsTextArea.style.width = "100%";
-    directionsTextArea.style.height = "200px";
-    directionsTextArea.style.fontFamily = "monospace";
-    directionsTextArea.style.fontSize = "12px";
-    directionsTextArea.value = JSON.stringify(this.plugin.settings.directions, null, 2);
-    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u4FDD\u5B58\u65B9\u5411\u914D\u7F6E / Save Directions").setCta().onClick(async () => {
-      try {
-        const parsed = JSON.parse(directionsTextArea.value);
-        this.plugin.settings.directions = parsed;
-        await this.plugin.saveSettings();
-        new import_obsidian.Notice("\u65B9\u5411\u914D\u7F6E\u5DF2\u4FDD\u5B58 / Directions saved.");
-      } catch (e) {
-        new import_obsidian.Notice("JSON \u683C\u5F0F\u9519\u8BEF / Invalid JSON for directions.");
-      }
     }));
     containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
@@ -1870,6 +777,36 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       return slider.setLimits(7, 180, 1).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.cacheTTLDays) != null ? _b : 60).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value };
         await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5206\u6790 Token \u4E0A\u9650 / Max tokens per paper").setDesc("Deep Read \u6BCF\u7BC7\u8BBA\u6587 LLM \u8C03\u7528\u7684\u8F93\u51FA token \u4E0A\u9650\uFF08\u9ED8\u8BA4 1024\uFF0C\u5EFA\u8BAE 512\u20132048\uFF09").addSlider((slider) => {
+      var _a3, _b;
+      return slider.setLimits(256, 4096, 128).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.deepReadMaxTokens) != null ? _b : 1024).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.deepRead = {
+          ...this.plugin.settings.deepRead,
+          deepReadMaxTokens: value
+        };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u7CBE\u8BFB Prompt / Per-paper Deep Read prompt").setDesc(
+      "\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\u53EF\u7528\u53D8\u91CF: {{title}}, {{authors}}, {{directions}}, {{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
+    ).addTextArea((area) => {
+      var _a3, _b;
+      const plugin = this.plugin;
+      area.setPlaceholder("(leave blank for default)");
+      area.setValue((_b = (_a3 = plugin.settings.deepRead) == null ? void 0 : _a3.deepReadPromptTemplate) != null ? _b : "");
+      area.inputEl.rows = 8;
+      area.inputEl.style.width = "100%";
+      area.inputEl.style.fontFamily = "monospace";
+      area.inputEl.style.fontSize = "0.85em";
+      area.inputEl.addEventListener("input", async () => {
+        const val = area.inputEl.value.trim();
+        plugin.settings.deepRead = {
+          ...plugin.settings.deepRead,
+          deepReadPromptTemplate: val || void 0
+        };
+        await plugin.saveSettings();
       });
     });
     refreshDrSub();
@@ -2349,66 +1286,17 @@ function computeWeightedInterestScore(paper, keywords) {
   return keywords.filter((kw) => haystack.includes(normalize(kw.keyword))).reduce((sum, kw) => sum + kw.weight, 0);
 }
 
-// src/scoring/directions.ts
-function normalize2(text) {
-  return text.toLowerCase().replace(/\s+/g, " ").trim();
-}
-function computeDirectionScores(paper, directions) {
-  const haystack = normalize2(`${paper.title} ${paper.abstract}`);
-  const scores = {};
-  for (const dir of directions) {
-    let score = 0;
-    for (const kw of dir.match.keywords) {
-      if (haystack.includes(normalize2(kw))) {
-        score += 1;
-      }
-    }
-    if (dir.match.categories && dir.match.categories.length > 0) {
-      const hasCategory = paper.categories.some(
-        (c) => dir.match.categories.includes(c)
-      );
-      if (hasCategory && score > 0) {
-        score += 0.5;
-      }
-    }
-    if (score > 0) {
-      scores[dir.name] = score * dir.weight;
-    }
-  }
-  return scores;
-}
-function getTopDirections(scores, topK) {
-  return Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, topK).map(([name]) => name);
-}
-function aggregateDirections(papers) {
-  var _a2;
-  const totals = {};
-  for (const paper of papers) {
-    if (!paper.directionScores)
-      continue;
-    for (const [dir, score] of Object.entries(paper.directionScores)) {
-      totals[dir] = ((_a2 = totals[dir]) != null ? _a2 : 0) + score;
-    }
-  }
-  return totals;
-}
-
 // src/scoring/rank.ts
-function rankPapers(papers, interestKeywords, directions, directionTopK) {
+function rankPapers(papers, interestKeywords) {
   const scored = papers.map((paper) => {
     var _a2;
     const interestHits = computeInterestHits(paper, interestKeywords);
-    const directionScores = computeDirectionScores(paper, directions);
-    const topDirections = getTopDirections(directionScores, directionTopK);
-    const totalDirectionScore = Object.values(directionScores).reduce((a, b) => a + b, 0);
     const interestScore = computeWeightedInterestScore(paper, interestKeywords);
     const hfScore = Math.log1p((_a2 = paper.hfUpvotes) != null ? _a2 : 0) * 10;
-    const rankScore = hfScore + totalDirectionScore * 2 + interestScore;
+    const rankScore = hfScore + interestScore;
     return {
       ...paper,
       interestHits,
-      directionScores,
-      topDirections,
       _rankScore: rankScore
     };
   });
@@ -5815,30 +4703,6 @@ var AnthropicProvider = class {
 function getISODate(d) {
   return d.toISOString().slice(0, 10);
 }
-function computeEffectiveQueryKeywords(settings) {
-  const fromDirections = settings.directions.flatMap((d) => {
-    var _a2;
-    return (_a2 = d.queryKeywords) != null ? _a2 : [];
-  });
-  return [.../* @__PURE__ */ new Set([...settings.keywords, ...fromDirections])];
-}
-function computeEffectiveInterestKeywords(settings) {
-  var _a2;
-  const explicit = (_a2 = settings.interestKeywords) != null ? _a2 : [];
-  const explicitSet = new Set(explicit.map((k) => k.keyword.toLowerCase()));
-  const seen = new Set(explicitSet);
-  const fromDirections = [];
-  for (const dir of settings.directions) {
-    for (const kw of dir.match.keywords) {
-      const key = kw.toLowerCase();
-      if (seen.has(key))
-        continue;
-      seen.add(key);
-      fromDirections.push({ keyword: kw, weight: Math.min(5, Math.round(dir.weight * 2)) });
-    }
-  }
-  return [...explicit, ...fromDirections];
-}
 function buildLLMProvider(settings) {
   if (settings.llm.provider === "anthropic") {
     return new AnthropicProvider(settings.llm.apiKey, settings.llm.model);
@@ -5860,13 +4724,6 @@ function getActivePrompt(settings) {
   }
   return settings.llm.dailyPromptTemplate;
 }
-function formatTopDirections(papers, topK) {
-  const dirAgg = aggregateDirections(papers);
-  const sorted = Object.entries(dirAgg).sort((a, b) => b[1] - a[1]).slice(0, topK);
-  if (sorted.length === 0)
-    return "No directions detected.";
-  return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
-}
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
@@ -5878,14 +4735,10 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
     `date: ${date}`,
     `sources: [${activeSources.join(", ")}]`,
     `categories: [${settings.categories.join(", ")}]`,
-    `keywords: [${settings.keywords.join(", ")}]`,
     `interestKeywords: [${settings.interestKeywords.map((k) => `${k.keyword}(${k.weight})`).join(", ")}]`,
     "---"
   ].join("\n");
   const header = `# Paper Daily \u2014 ${date}`;
-  const dirAgg = aggregateDirections(rankedPapers);
-  const topDirsSorted = Object.entries(dirAgg).sort((a, b) => b[1] - a[1]).slice(0, settings.directionTopK);
-  const topDirsSection = topDirsSorted.length > 0 ? "## Top Directions Today\n" + topDirsSorted.map(([n, s]) => `- **${n}** (score: ${s.toFixed(1)})`).join("\n") : "## Top Directions Today\n_No directions detected_";
   const digestSection = error ? `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
 
 > **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
@@ -5894,7 +4747,7 @@ ${aiDigest}`;
   const arxivTopK = (_a2 = settings.arxivDetailTopK) != null ? _a2 : 10;
   const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
   const arxivDetailedLines = arxivTopPapers.map((p, i) => {
-    var _a3, _b;
+    var _a3;
     const links = [];
     if (p.links.html)
       links.push(`[arXiv](${p.links.html})`);
@@ -5902,8 +4755,7 @@ ${aiDigest}`;
       links.push(`[PDF](${p.links.pdf})`);
     if (p.links.hf)
       links.push(`[HF](${p.links.hf})`);
-    const dirStr = ((_a3 = p.topDirections) != null ? _a3 : []).slice(0, 2).join(", ") || "_none_";
-    const hitsStr = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "_none_";
+    const hitsStr = ((_a3 = p.interestHits) != null ? _a3 : []).slice(0, 3).join(", ") || "_none_";
     const hfBadge = p.links.hf ? ` \u{1F917} HF${p.hfUpvotes ? ` ${p.hfUpvotes}\u2191` : ""}` : "";
     const scoreStr = p.llmScore != null ? ` \u2B50 ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
     const summaryLine = p.llmSummary ? `
@@ -5911,14 +4763,14 @@ ${aiDigest}`;
     return [
       `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
       `   - ${links.join(" \xB7 ")} | Updated: ${p.updated.slice(0, 10)}`,
-      `   - Directions: ${dirStr} | Hits: ${hitsStr}`
+      `   - Hits: ${hitsStr}`
     ].join("\n");
   });
   const arxivDetailedSection = `## Top ${arxivTopK} Papers
 
 ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b, _c;
+    var _a3, _b;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -5929,23 +4781,20 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
       linkParts.push(`[PDF](${p.links.pdf})`);
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
-    const dirs = ((_b = p.topDirections) != null ? _b : []).slice(0, 2).join(", ") || "-";
-    const hits = ((_c = p.interestHits) != null ? _c : []).slice(0, 3).join(", ") || "-";
-    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+    const hits = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "-";
+    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
   const allPapersTableSection = [
     "## All Papers",
     "",
-    "| # | Title | Links | Score | Summary | Directions | Hits |",
-    "|---|-------|-------|-------|---------|------------|------|",
-    ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | | |"]
+    "| # | Title | Links | Score | Summary | Hits |",
+    "|---|-------|-------|-------|---------|------|",
+    ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | |"]
   ].join("\n");
   const sections = [
     frontmatter,
     "",
     header,
-    "",
-    topDirsSection,
     "",
     digestSection,
     "",
@@ -5955,7 +4804,7 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5978,9 +4827,8 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
   };
   log(`=== Daily pipeline START date=${date} ===`);
-  const effectiveQueryKeywords = computeEffectiveQueryKeywords(settings);
-  const effectiveInterestKeywords = computeEffectiveInterestKeywords(settings);
-  log(`Settings: categories=[${settings.categories.join(",")}] queryKeywords=[${effectiveQueryKeywords.join(",")}] interestKeywords=${effectiveInterestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
+  const interestKeywords = (_c = settings.interestKeywords) != null ? _c : [];
+  log(`Settings: categories=[${settings.categories.join(",")}] interestKeywords=${interestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
   let papers = [];
   let hfDailyPapers = [];
   let fetchError;
@@ -5991,16 +4839,16 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   let fetchUrl = "";
   try {
     const source = new ArxivSource();
-    const windowEnd = (_c = options.windowEnd) != null ? _c : now;
-    const windowStart = (_d = options.windowStart) != null ? _d : new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1e3);
+    const windowEnd = (_d = options.windowEnd) != null ? _d : now;
+    const windowStart = (_e = options.windowStart) != null ? _e : new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1e3);
     fetchUrl = source.buildUrl(
-      { categories: settings.categories, keywords: effectiveQueryKeywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
+      { categories: settings.categories, keywords: [], maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
       settings.maxResultsPerDay * 3
     );
     log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
-      keywords: effectiveQueryKeywords,
+      keywords: [],
       maxResults: settings.maxResultsPerDay,
       sortBy: settings.sortBy,
       windowStart,
@@ -6017,11 +4865,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`Step 1 FETCH ERROR: ${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
-  if (((_e = settings.hfSource) == null ? void 0 : _e.enabled) !== false) {
+  if (((_f = settings.hfSource) == null ? void 0 : _f.enabled) !== false) {
     progress(`[1/5] \u{1F917} \u62C9\u53D6 HuggingFace \u8BBA\u6587...`);
     try {
       const hfSource = new HFSource();
-      const lookback = (_g = (_f = settings.hfSource) == null ? void 0 : _f.lookbackDays) != null ? _g : 3;
+      const lookback = (_h = (_g = settings.hfSource) == null ? void 0 : _g.lookbackDays) != null ? _h : 3;
       let hfFetchDate = date;
       for (let d = 0; d <= lookback; d++) {
         const tryDate = d === 0 ? date : getISODate(new Date(new Date(date + "T12:00:00Z").getTime() - d * 864e5));
@@ -6040,7 +4888,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
             p.hfStreak = options.hfTrackStore.track(p.id, p.title, hfFetchDate);
           }
           await options.hfTrackStore.save();
-          if ((_h = settings.hfSource) == null ? void 0 : _h.dedup) {
+          if ((_i = settings.hfSource) == null ? void 0 : _i.dedup) {
             const before = hfDailyPapers.length;
             hfDailyPapers = hfDailyPapers.filter((p) => !options.hfTrackStore.seenBefore(p.id, hfFetchDate));
             log(`Step 1b HF DEDUP: ${before} \u2192 ${hfDailyPapers.length} papers (removed ${before - hfDailyPapers.length} previously seen)`);
@@ -6058,7 +4906,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
           if (hfMatch) {
-            p.hfUpvotes = (_i = hfMatch.hfUpvotes) != null ? _i : 0;
+            p.hfUpvotes = (_j = hfMatch.hfUpvotes) != null ? _j : 0;
             if (hfMatch.links.hf)
               p.links = { ...p.links, hf: hfMatch.links.hf };
             enrichedCount++;
@@ -6082,21 +4930,20 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
-  let rankedPapers = papers.length > 0 ? rankPapers(papers, effectiveInterestKeywords, settings.directions, settings.directionTopK) : [];
+  let rankedPapers = papers.length > 0 ? rankPapers(papers, interestKeywords) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[2/5] \u2B50 LLM \u6253\u5206\u4E2D... (${rankedPapers.length} \u7BC7)`);
     try {
       const llm = buildLLMProvider(settings);
-      const kwStr = effectiveInterestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
       const papersForScoring = rankedPapers.map((p) => {
-        var _a3, _b2;
+        var _a3;
         return {
           id: p.id,
           title: p.title,
           abstract: p.abstract.slice(0, 250),
-          directions: (_a3 = p.topDirections) != null ? _a3 : [],
-          interestHits: (_b2 = p.interestHits) != null ? _b2 : [],
+          interestHits: (_a3 = p.interestHits) != null ? _a3 : [],
           ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}
         };
       });
@@ -6140,7 +4987,7 @@ ${JSON.stringify(papersForScoring)}`;
         });
         log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
         if (matched === 0) {
-          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_j = scores[0]) == null ? void 0 : _j.id}" vs paper id="${(_k = rankedPapers[0]) == null ? void 0 : _k.id}"`);
+          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_k = scores[0]) == null ? void 0 : _k.id}" vs paper id="${(_l = rankedPapers[0]) == null ? void 0 : _l.id}"`);
         }
       } else {
         log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
@@ -6155,35 +5002,57 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log);
   }
   let fulltextSection = "";
-  if (((_l = settings.deepRead) == null ? void 0 : _l.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_m = settings.deepRead.topN) != null ? _m : 5, rankedPapers.length);
-    const maxChars = (_n = settings.deepRead.maxCharsPerPaper) != null ? _n : 8e3;
-    const parts = [];
+  if (((_m = settings.deepRead) == null ? void 0 : _m.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_n = settings.deepRead.topN) != null ? _n : 5, rankedPapers.length);
+    const maxChars = (_o = settings.deepRead.maxCharsPerPaper) != null ? _o : 8e3;
+    const maxTokens = (_p = settings.deepRead.deepReadMaxTokens) != null ? _p : 1024;
+    const drPrompt = (_q = settings.deepRead.deepReadPromptTemplate) != null ? _q : DEFAULT_DEEP_READ_PROMPT;
+    const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
+    progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
+    const llm = buildLLMProvider(settings);
+    const analysisResults = [];
     for (let i = 0; i < topN; i++) {
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      log(`Step 3f FULLTEXT: fetching ${baseId}...`);
-      const text = await fetchArxivFullText(baseId, maxChars);
-      if (text) {
-        parts.push(`### [${i + 1}] ${paper.title}
+      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fetching ${baseId}...`);
+      const rawText = await fetchArxivFullText(baseId, maxChars);
+      const fulltextForPrompt = rawText != null ? rawText : paper.abstract;
+      if (!rawText)
+        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fulltext unavailable, using abstract`);
+      const paperPrompt = fillTemplate(drPrompt, {
+        title: paper.title,
+        authors: ((_r = paper.authors) != null ? _r : []).slice(0, 5).join(", ") || "Unknown",
+        directions: "",
+        interest_hits: ((_s = paper.interestHits) != null ? _s : []).join(", ") || "none",
+        abstract: paper.abstract,
+        fulltext: fulltextForPrompt,
+        language: langStr
+      });
+      try {
+        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens });
+        if (result.usage)
+          trackUsage(`Step 3f deepread [${i + 1}]`, result.usage.inputTokens, result.usage.outputTokens);
+        paper.deepReadAnalysis = result.text.trim();
+        analysisResults.push(`### [${i + 1}] ${paper.title}
 
-${text}`);
-        log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
-      } else {
-        log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+${paper.deepReadAnalysis}`);
+        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
+      } catch (err) {
+        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} \u2014 skipping`);
       }
     }
-    if (parts.length > 0) {
-      fulltextSection = `
-
-## Full Paper Text (top ${parts.length} papers \u2014 use this for deeper per-paper analysis):
-> Texts are truncated. Focus on methods, experiments, and findings.
-
-${parts.join("\n\n---\n\n")}`;
+    if (analysisResults.length > 0) {
+      fulltextSection = [
+        "",
+        `## Deep Read Analysis (top ${analysisResults.length} papers):`,
+        `> Per-paper LLM analysis based on full paper text.`,
+        "",
+        analysisResults.join("\n\n---\n\n")
+      ].join("\n");
     }
-    log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
+    log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f FULLTEXT: skipped (enabled=${(_p = (_o = settings.deepRead) == null ? void 0 : _o.enabled) != null ? _p : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_u = (_t = settings.deepRead) == null ? void 0 : _t.enabled) != null ? _u : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F916} \u751F\u6210\u6458\u8981... (${settings.llm.model})`);
@@ -6192,14 +5061,13 @@ ${parts.join("\n\n---\n\n")}`;
       const llm = buildLLMProvider(settings);
       const topK = Math.min(rankedPapers.length, 10);
       const topPapersForLLM = rankedPapers.slice(0, topK).map((p) => {
-        var _a3, _b2;
+        var _a3;
         return {
           id: p.id,
           title: p.title,
           abstract: p.abstract.slice(0, 500),
           categories: p.categories,
-          directions: (_a3 = p.topDirections) != null ? _a3 : [],
-          interestHits: (_b2 = p.interestHits) != null ? _b2 : [],
+          interestHits: (_a3 = p.interestHits) != null ? _a3 : [],
           ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {},
           source: p.source,
           published: p.published,
@@ -6207,7 +5075,6 @@ ${parts.join("\n\n---\n\n")}`;
           links: p.links
         };
       });
-      const topDirsStr = formatTopDirections(rankedPapers, settings.directionTopK);
       const hfForLLM = hfDailyPapers.slice(0, 15).map((p) => {
         var _a3;
         return {
@@ -6218,7 +5085,7 @@ ${parts.join("\n\n---\n\n")}`;
       });
       const prompt2 = fillTemplate(getActivePrompt(settings), {
         date,
-        topDirections: topDirsStr,
+        topDirections: "",
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
@@ -6364,9 +5231,13 @@ var Scheduler = class {
     const settings = this.getSettings();
     const state = this.stateStore.get();
     const dailyTime = parseTime(settings.schedule.dailyTime);
-    if (now.getHours() === dailyTime.hour && now.getMinutes() === dailyTime.minute) {
+    const scheduledToday = new Date(now);
+    scheduledToday.setHours(dailyTime.hour, dailyTime.minute, 0, 0);
+    if (now >= scheduledToday) {
       const lastRun = state.lastDailyRun ? new Date(state.lastDailyRun) : null;
-      if (!lastRun || !isSameDay(now, lastRun)) {
+      const alreadyRanToday = lastRun && isSameDay(now, lastRun);
+      const today = now.toISOString().slice(0, 10);
+      if (!alreadyRanToday || !await this.callbacks.todayFileExists(today)) {
         await this.callbacks.onDaily();
       }
     }
@@ -6381,6 +5252,9 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
+    this.app.workspace.onLayoutReady(() => {
+      void this.runTodayIfMissing();
+    });
     console.log("Paper Daily loaded.");
   }
   onunload() {
@@ -6419,7 +5293,10 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     this.scheduler = new Scheduler(
       () => this.settings,
       this.stateStore,
-      { onDaily: () => this.runDaily() }
+      {
+        onDaily: () => this.runDaily(),
+        todayFileExists: (date) => this.todayFileExists(date)
+      }
     );
     this.scheduler.start();
   }
@@ -6477,6 +5354,24 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
       { hfTrackStore: this.hfTrackStore, onProgress }
     );
   }
+  todayFileExists(date) {
+    const writer = new VaultWriter(this.app);
+    return writer.fileExists(`${this.settings.rootFolder}/inbox/${date}.md`);
+  }
+  /** Called once on startup: silently generate today's file if it is missing. */
+  async runTodayIfMissing() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (await this.todayFileExists(today))
+      return;
+    const notice = new import_obsidian8.Notice("Paper Daily: \u4ECA\u65E5\u6587\u6863\u7F3A\u5931\uFF0C\u6B63\u5728\u751F\u6210...", 0);
+    try {
+      await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
+      setTimeout(() => notice.hide(), 4e3);
+    } catch (err) {
+      notice.setMessage(`Paper Daily \u9519\u8BEF: ${String(err)}`);
+      setTimeout(() => notice.hide(), 6e3);
+    }
+  }
   async clearDedup() {
     await this.dedupStore.clear();
   }
@@ -6508,7 +5403,7 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     const now = new Date();
     const params = {
       categories: this.settings.categories,
-      keywords: this.settings.keywords,
+      keywords: [],
       maxResults: this.settings.maxResultsPerDay,
       sortBy: this.settings.sortBy,
       windowStart: new Date(now.getTime() - 72 * 3600 * 1e3),
