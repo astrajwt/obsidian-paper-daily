@@ -180,8 +180,8 @@ function buildDailyMarkdown(
 
   const sections = [frontmatter, "", header];
   if (interestHotnessSection) sections.push("", interestHotnessSection);
-  if (featuredPapersSection) sections.push("", featuredPapersSection);
   sections.push("", digestSection);
+  if (featuredPapersSection) sections.push("", featuredPapersSection);
   if (domainSummary) sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
