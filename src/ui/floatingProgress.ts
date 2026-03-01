@@ -4,18 +4,33 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
+// Slot system: each widget grabs the lowest free slot and releases on destroy.
+// Slot N sits at bottom = BASE + N * STEP px from the screen bottom.
+const BASE = 24;
+const STEP = 160;
+const usedSlots = new Set<number>();
+
+function acquireSlot(): number {
+  let s = 0;
+  while (usedSlots.has(s)) s++;
+  usedSlots.add(s);
+  return s;
+}
+
 /** Floating progress widget shown while a pipeline runs in the background. */
 export class FloatingProgress {
   private el: HTMLElement;
   private msgEl: HTMLElement;
   private tokenEl: HTMLElement;
+  private slot: number;
 
-  constructor(onStop: () => void, title = "📚 Paper Daily 运行中", side: "left" | "right" = "right") {
+  constructor(onStop: () => void, title = "📚 Paper Daily 运行中") {
+    this.slot = acquireSlot();
     this.el = document.body.createDiv();
     this.el.style.cssText = [
       "position:fixed",
-      "bottom:24px",
-      side === "left" ? "left:24px" : "right:24px",
+      `bottom:${BASE + this.slot * STEP}px`,
+      "right:24px",
       "z-index:9999",
       "background:var(--background-secondary)",
       "border:1px solid var(--background-modifier-border)",
@@ -76,6 +91,7 @@ export class FloatingProgress {
   }
 
   destroy(): void {
+    usedSlots.delete(this.slot);
     this.el.remove();
   }
 }

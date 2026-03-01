@@ -5424,13 +5424,24 @@ function fmtTokens(n) {
     return `${(n / 1e3).toFixed(1)}k`;
   return String(n);
 }
+var BASE = 24;
+var STEP = 160;
+var usedSlots = /* @__PURE__ */ new Set();
+function acquireSlot() {
+  let s = 0;
+  while (usedSlots.has(s))
+    s++;
+  usedSlots.add(s);
+  return s;
+}
 var FloatingProgress = class {
-  constructor(onStop, title = "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D", side = "right") {
+  constructor(onStop, title = "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D") {
+    this.slot = acquireSlot();
     this.el = document.body.createDiv();
     this.el.style.cssText = [
       "position:fixed",
-      "bottom:24px",
-      side === "left" ? "left:24px" : "right:24px",
+      `bottom:${BASE + this.slot * STEP}px`,
+      "right:24px",
       "z-index:9999",
       "background:var(--background-secondary)",
       "border:1px solid var(--background-modifier-border)",
@@ -5480,6 +5491,7 @@ var FloatingProgress = class {
     this.tokenEl.style.display = "";
   }
   destroy() {
+    usedSlots.delete(this.slot);
     this.el.remove();
   }
 };
@@ -5702,7 +5714,7 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
     const fp = new FloatingProgress(() => {
       controller.abort();
       fp.setMessage("\u23F9 \u6B63\u5728\u505C\u6B62...");
-    }, "\u{1F4C5} \u6279\u91CF\u751F\u6210\u65E5\u62A5", "left");
+    }, "\u{1F4C5} \u6279\u91CF\u751F\u6210\u65E5\u62A5");
     try {
       await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
       fp.setMessage("\u2705 \u5B8C\u6210\uFF01");
