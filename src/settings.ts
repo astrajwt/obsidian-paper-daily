@@ -90,10 +90,7 @@ Output language: {{language}}
 ## Papers to analyze (pre-ranked, arXiv + HuggingFace combined):
 {{papers_json}}
 
-Note: papers with a "source" field of "hf" are HuggingFace-only picks. Treat them identically to arXiv papers — same depth of analysis, same rating criteria.
-
-## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
-{{hf_papers_json}}
+{{hf_data_section}}
 
 {{fulltext_section}}
 
@@ -128,8 +125,7 @@ Value rating guide — be calibrated, not generous:
 ★★☆☆☆  Weak: narrow scope, questionable baselines, or limited novelty
 ★☆☆☆☆  Skip: below standard, off-topic, or superseded
 
-### HF 社区信号 / HF Community Signal
-From the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
+{{hf_signal_section}}
 
 ### 今日批次质量 & 结语 / Batch Quality & Closing
 2–3 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
@@ -355,6 +351,16 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onClick(async () => {
           await this.plugin.clearDedup();
           new Notice("去重缓存已清空 / Dedup cache cleared.");
+        }));
+
+    new Setting(containerEl)
+      .setName("HuggingFace 论文源 / HuggingFace Source")
+      .setDesc("开启后抓取 huggingface.co/papers 每日精选，与 arXiv 结果合并排名 | Fetch HuggingFace daily papers and merge with arXiv results")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.hfSource?.enabled !== false)
+        .onChange(async (value) => {
+          this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+          await this.plugin.saveSettings();
         }));
 
     new Setting(containerEl)
@@ -646,10 +652,10 @@ export class PaperDailySettingTab extends PluginSettingTab {
       table.style.width = "100%";
       const rows: [string, string][] = [
         ["[日报] {{date}}", "当日日期 YYYY-MM-DD"],
-        ["[日报] {{papers_json}}", "排名后论文列表 JSON（最多 10 篇）"],
-        ["[日报] {{hf_papers_json}}", "HF Daily Papers JSON（最多 15 条）"],
+        ["[日报] {{papers_json}}", "排名后论文列表 JSON（最多 20 篇，含 arXiv + HF）"],
+        ["[日报] {{hf_data_section}}", "HF 数据块（HF 开启时含标题+JSON，关闭时为空）"],
+        ["[日报] {{hf_signal_section}}", "HF 社区信号指令块（HF 开启时注入，关闭时为空）"],
         ["[日报] {{fulltext_section}}", "Deep Read 精读结果（Markdown）"],
-        ["[日报] {{local_pdfs}}", "已下载本地 PDF 列表（Markdown）"],
         ["[日报] {{interest_keywords}}", "兴趣关键词及权重"],
         ["[日报] {{language}}", "Chinese (中文) 或 English"],
         ["[评分] {{interest_keywords}}", "兴趣关键词及权重"],

@@ -112,10 +112,7 @@ Output language: {{language}}
 ## Papers to analyze (pre-ranked, arXiv + HuggingFace combined):
 {{papers_json}}
 
-Note: papers with a "source" field of "hf" are HuggingFace-only picks. Treat them identically to arXiv papers \u2014 same depth of analysis, same rating criteria.
-
-## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
-{{hf_papers_json}}
+{{hf_data_section}}
 
 {{fulltext_section}}
 
@@ -150,8 +147,7 @@ Value rating guide \u2014 be calibrated, not generous:
 \u2605\u2605\u2606\u2606\u2606  Weak: narrow scope, questionable baselines, or limited novelty
 \u2605\u2606\u2606\u2606\u2606  Skip: below standard, off-topic, or superseded
 
-### HF \u793E\u533A\u4FE1\u53F7 / HF Community Signal
-From the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
+{{hf_signal_section}}
 
 ### \u4ECA\u65E5\u6279\u6B21\u8D28\u91CF & \u7ED3\u8BED / Batch Quality & Closing
 2\u20133 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
@@ -333,6 +329,13 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.clearDedup();
       new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
     }));
+    new import_obsidian.Setting(containerEl).setName("HuggingFace \u8BBA\u6587\u6E90 / HuggingFace Source").setDesc("\u5F00\u542F\u540E\u6293\u53D6 huggingface.co/papers \u6BCF\u65E5\u7CBE\u9009\uFF0C\u4E0E arXiv \u7ED3\u679C\u5408\u5E76\u6392\u540D | Fetch HuggingFace daily papers and merge with arXiv results").addToggle((toggle) => {
+      var _a3;
+      return toggle.setValue(((_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.enabled) !== false).onChange(async (value) => {
+        this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, enabled: value };
+        await this.plugin.saveSettings();
+      });
+    });
     new import_obsidian.Setting(containerEl).setName("HF \u56DE\u6EAF\u5929\u6570 / HF Lookback Days").setDesc("huggingface.co/papers \u65E0\u5F53\u65E5\u6570\u636E\u65F6\uFF08\u5982\u5468\u672B\uFF09\uFF0C\u5F80\u524D\u67E5\u627E\u6700\u8FD1 N \u5929\u7684\u7CBE\u9009 | If today has no HF papers (e.g. weekend), look back up to N days").addSlider((slider) => {
       var _a3, _b;
       return slider.setLimits(0, 7, 1).setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
@@ -546,10 +549,10 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       table.style.width = "100%";
       const rows = [
         ["[\u65E5\u62A5] {{date}}", "\u5F53\u65E5\u65E5\u671F YYYY-MM-DD"],
-        ["[\u65E5\u62A5] {{papers_json}}", "\u6392\u540D\u540E\u8BBA\u6587\u5217\u8868 JSON\uFF08\u6700\u591A 10 \u7BC7\uFF09"],
-        ["[\u65E5\u62A5] {{hf_papers_json}}", "HF Daily Papers JSON\uFF08\u6700\u591A 15 \u6761\uFF09"],
+        ["[\u65E5\u62A5] {{papers_json}}", "\u6392\u540D\u540E\u8BBA\u6587\u5217\u8868 JSON\uFF08\u6700\u591A 20 \u7BC7\uFF0C\u542B arXiv + HF\uFF09"],
+        ["[\u65E5\u62A5] {{hf_data_section}}", "HF \u6570\u636E\u5757\uFF08HF \u5F00\u542F\u65F6\u542B\u6807\u9898+JSON\uFF0C\u5173\u95ED\u65F6\u4E3A\u7A7A\uFF09"],
+        ["[\u65E5\u62A5] {{hf_signal_section}}", "HF \u793E\u533A\u4FE1\u53F7\u6307\u4EE4\u5757\uFF08HF \u5F00\u542F\u65F6\u6CE8\u5165\uFF0C\u5173\u95ED\u65F6\u4E3A\u7A7A\uFF09"],
         ["[\u65E5\u62A5] {{fulltext_section}}", "Deep Read \u7CBE\u8BFB\u7ED3\u679C\uFF08Markdown\uFF09"],
-        ["[\u65E5\u62A5] {{local_pdfs}}", "\u5DF2\u4E0B\u8F7D\u672C\u5730 PDF \u5217\u8868\uFF08Markdown\uFF09"],
         ["[\u65E5\u62A5] {{interest_keywords}}", "\u5174\u8DA3\u5173\u952E\u8BCD\u53CA\u6743\u91CD"],
         ["[\u65E5\u62A5] {{language}}", "Chinese (\u4E2D\u6587) \u6216 English"],
         ["[\u8BC4\u5206] {{interest_keywords}}", "\u5174\u8DA3\u5173\u952E\u8BCD\u53CA\u6743\u91CD"],
@@ -4817,7 +4820,7 @@ ${aiDigest}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5141,10 +5144,19 @@ ${paper.deepReadAnalysis}
           ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
         };
       });
+      const hfEnabled = ((_D = settings.hfSource) == null ? void 0 : _D.enabled) !== false && hfDailyPapers.length > 0;
+      const hfDataSection = hfEnabled ? `Note: papers with "source": "hf" are HuggingFace-only picks. Treat them identically to arXiv papers.
+
+## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
+${JSON.stringify(hfForLLM, null, 2)}` : "";
+      const hfSignalSection = hfEnabled ? `### HF \u793E\u533A\u4FE1\u53F7 / HF Community Signal
+From the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.` : "";
       const prompt2 = fillTemplate(getActivePrompt(settings), {
         date,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
+        hf_data_section: hfDataSection,
+        hf_signal_section: hfSignalSection,
         fulltext_section: fulltextSection,
         local_pdfs: "",
         interest_keywords: interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", "),

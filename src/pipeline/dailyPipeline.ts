@@ -490,10 +490,20 @@ export async function runDailyPipeline(
         ...(p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {})
       }));
 
+      const hfEnabled = settings.hfSource?.enabled !== false && hfDailyPapers.length > 0;
+      const hfDataSection = hfEnabled
+        ? `Note: papers with "source": "hf" are HuggingFace-only picks. Treat them identically to arXiv papers.\n\n## HuggingFace Daily Papers (full list for reference, sorted by upvotes):\n${JSON.stringify(hfForLLM, null, 2)}`
+        : "";
+      const hfSignalSection = hfEnabled
+        ? `### HF 社区信号 / HF Community Signal\nFrom the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.`
+        : "";
+
       const prompt = fillTemplate(getActivePrompt(settings), {
         date,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
+        hf_data_section: hfDataSection,
+        hf_signal_section: hfSignalSection,
         fulltext_section: fulltextSection,
         local_pdfs: "",
         interest_keywords: interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", "),
