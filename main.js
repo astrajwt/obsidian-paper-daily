@@ -659,18 +659,26 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
             renderActions();
           };
         }
+        const typeSelect = tabBar.createEl("select");
+        typeSelect.style.cssText = "padding:4px 8px;border-radius:5px;font-size:0.85em;border:1px solid var(--background-modifier-border);background:var(--background-secondary);color:var(--text-normal);cursor:pointer;";
+        [["daily", "\u65E5\u62A5"], ["scoring", "\u8BC4\u5206"], ["deepread", "\u7CBE\u8BFB"]].forEach(([val, label]) => {
+          const o = typeSelect.createEl("option", { text: label });
+          o.value = val;
+        });
         const addBtn = tabBar.createEl("button", { text: "\uFF0B \u65B0\u5EFA" });
         addBtn.style.cssText = "padding:5px 12px;border-radius:5px;cursor:pointer;font-size:0.85em;border:2px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);";
         addBtn.onclick = async () => {
+          const newType = typeSelect.value;
+          const defaultPrompt = newType === "scoring" ? DEFAULT_SCORING_PROMPT : newType === "deepread" ? DEFAULT_DEEP_READ_PROMPT : DEFAULT_DAILY_PROMPT;
           const newTpl = {
             id: `custom_${Date.now()}`,
             name: `\u81EA\u5B9A\u4E49 ${lib.filter((t) => !t.builtin).length + 1}`,
-            type: "daily",
-            prompt: DEFAULT_DAILY_PROMPT
+            type: newType,
+            prompt: defaultPrompt
           };
           lib.push(newTpl);
           selectedId = newTpl.id;
-          this.plugin.settings.activePromptId = newTpl.id;
+          await setActiveIdForType(newType, newTpl.id);
           await this.plugin.saveSettings();
           promptTA.value = newTpl.prompt;
           renderTabs();
@@ -4790,7 +4798,7 @@ ${aiDigest}`;
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
-      linkParts.push(`[[${deepReadFolder}/${safeId}|Deep Read]]`);
+      linkParts.push(`[[${deepReadFolder}/${date}/${safeId}|Deep Read]]`);
     }
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
@@ -5057,7 +5065,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 ${paper.deepReadAnalysis}`);
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
         try {
-          const outputFolder = (_w = (_v = settings.deepRead) == null ? void 0 : _v.outputFolder) != null ? _w : "PaperDaily/deep-read";
+          const outputFolder = `${(_w = (_v = settings.deepRead) == null ? void 0 : _v.outputFolder) != null ? _w : "PaperDaily/deep-read"}/${date}`;
           const fileTags = [
             ...(_y = (_x = settings.deepRead) == null ? void 0 : _x.tags) != null ? _y : ["paper", "deep-read"],
             ...((_z = paper.interestHits) != null ? _z : []).map((h) => h.replace(/\s+/g, "-"))

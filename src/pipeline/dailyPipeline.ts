@@ -102,7 +102,7 @@ function buildDailyMarkdown(
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
-      linkParts.push(`[[${deepReadFolder}/${safeId}|Deep Read]]`);
+      linkParts.push(`[[${deepReadFolder}/${date}/${safeId}|Deep Read]]`);
     }
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
@@ -420,7 +420,7 @@ export async function runDailyPipeline(
 
         // Write per-paper standalone markdown file
         try {
-          const outputFolder = settings.deepRead?.outputFolder ?? "PaperDaily/deep-read";
+          const outputFolder = `${settings.deepRead?.outputFolder ?? "PaperDaily/deep-read"}/${date}`;
           const fileTags = [
             ...(settings.deepRead?.tags ?? ["paper", "deep-read"]),
             ...(paper.interestHits ?? []).map(h => h.replace(/\s+/g, "-"))

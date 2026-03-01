@@ -759,19 +759,30 @@ export class PaperDailySettingTab extends PluginSettingTab {
             renderActions();
           };
         }
-        // Add new template button
+        // Add new template: type selector + button
+        const typeSelect = tabBar.createEl("select");
+        typeSelect.style.cssText = "padding:4px 8px;border-radius:5px;font-size:0.85em;border:1px solid var(--background-modifier-border);background:var(--background-secondary);color:var(--text-normal);cursor:pointer;";
+        ([["daily", "日报"], ["scoring", "评分"], ["deepread", "精读"]] as [string, string][]).forEach(([val, label]) => {
+          const o = typeSelect.createEl("option", { text: label });
+          o.value = val;
+        });
+
         const addBtn = tabBar.createEl("button", { text: "＋ 新建" });
         addBtn.style.cssText = "padding:5px 12px;border-radius:5px;cursor:pointer;font-size:0.85em;border:2px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);";
         addBtn.onclick = async () => {
+          const newType = typeSelect.value as "daily" | "scoring" | "deepread";
+          const defaultPrompt = newType === "scoring" ? DEFAULT_SCORING_PROMPT
+            : newType === "deepread" ? DEFAULT_DEEP_READ_PROMPT
+            : DEFAULT_DAILY_PROMPT;
           const newTpl: PromptTemplate = {
             id: `custom_${Date.now()}`,
             name: `自定义 ${lib.filter(t => !t.builtin).length + 1}`,
-            type: "daily",
-            prompt: DEFAULT_DAILY_PROMPT,
+            type: newType,
+            prompt: defaultPrompt,
           };
           lib.push(newTpl);
           selectedId = newTpl.id;
-          this.plugin.settings.activePromptId = newTpl.id;
+          await setActiveIdForType(newType, newTpl.id);
           await this.plugin.saveSettings();
           promptTA.value = newTpl.prompt;
           renderTabs();
