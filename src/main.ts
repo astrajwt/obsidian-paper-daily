@@ -207,12 +207,12 @@ export default class PaperDailyPlugin extends Plugin {
     const params = {
       categories: this.settings.categories,
       keywords: [],
-      maxResults: this.settings.maxResultsPerDay,
-      sortBy: this.settings.sortBy,
+      maxResults: 200,
+      sortBy: "submittedDate" as const,
       windowStart: new Date(now.getTime() - 72 * 3600 * 1000),
       windowEnd: now
     };
-    const url = source.buildUrl(params, params.maxResults * 3);
+    const url = source.buildUrl(params, 200);
     try {
       const papers = await source.fetch(params);
       return {

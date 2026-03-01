@@ -89,6 +89,9 @@ Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes → inter
 {{papers_json}}
 {{fulltext_section}}
 {{local_pdfs}}
+## User's interest keywords (with weights, higher = more important):
+{{interest_keywords}}
+
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
@@ -140,6 +143,9 @@ Output language: {{language}}
 {{papers_json}}
 {{fulltext_section}}
 {{local_pdfs}}
+## User's interest keywords:
+{{interest_keywords}}
+
 ## HuggingFace Daily:
 {{hf_papers_json}}
 
@@ -167,6 +173,8 @@ Output language: {{language}}
 {{papers_json}}
 {{fulltext_section}}
 {{local_pdfs}}
+## User's interest keywords:
+{{interest_keywords}}
 
 ---
 
@@ -235,9 +243,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     { keyword: "distillation", weight: 3 },
     { keyword: "quantization", weight: 3 },
   ],
-  maxResultsPerDay: 20,
-  sortBy: "submittedDate",
-  timeWindowHours: 72,
+  fetchMode: "all",
 
   llm: {
     provider: "openai_compatible",
@@ -368,38 +374,29 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("每日最大结果数 / Max Results Per Day")
-      .setDesc("每日摘要包含的最大论文数（排名后截取）| Max papers in daily digest after ranking")
-      .addSlider(slider => slider
-        .setLimits(5, 100, 5)
-        .setValue(this.plugin.settings.maxResultsPerDay)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.maxResultsPerDay = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("时间窗口（小时）/ Time Window (hours)")
-      .setDesc("抓取过去 N 小时内的论文 | Fetch papers published within the past N hours")
-      .addSlider(slider => slider
-        .setLimits(12, 72, 6)
-        .setValue(this.plugin.settings.timeWindowHours)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.timeWindowHours = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("排序方式 / Sort By")
-      .setDesc("按提交日期或最后更新日期排序 | Sort by submission date or last updated date")
+      .setName("拉取方式 / Fetch Mode")
+      .setDesc(
+        "全量拉取：抓取分类下所有论文（由 LLM 打分后排序展示）\n" +
+        "仅兴趣关键词：只保留命中至少一个兴趣关键词的论文，适合关键词覆盖全面时使用。\n\n" +
+        "Fetch all: retrieve all papers in the selected categories and let LLM scoring determine relevance.\n" +
+        "Interest only: keep only papers matching at least one interest keyword — best when your keyword list is comprehensive."
+      )
       .addDropdown(drop => drop
-        .addOption("submittedDate", "Submitted Date")
-        .addOption("lastUpdatedDate", "Last Updated Date")
-        .setValue(this.plugin.settings.sortBy)
+        .addOption("all", "全量拉取 / Fetch All")
+        .addOption("interest_only", "仅兴趣关键词 / Interest Only")
+        .setValue(this.plugin.settings.fetchMode ?? "all")
         .onChange(async (value) => {
-          this.plugin.settings.sortBy = value as "submittedDate" | "lastUpdatedDate";
+          this.plugin.settings.fetchMode = value as "all" | "interest_only";
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("保存 PDF / Save PDF")
+      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/日期/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
           await this.plugin.saveSettings();
         }));
 
@@ -619,6 +616,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
         ["{{hf_papers_json}}", "HuggingFace Daily Papers 原始列表（JSON），含 title / hfUpvotes / streakDays，最多 15 条"],
         ["{{fulltext_section}}", "Deep Read 精读结果（Markdown）；每篇通过 arxiv.org/html URL 让模型直接读原文并生成分析；未开启 Deep Read 时为空"],
         ["{{local_pdfs}}", "当日已下载到本地的 PDF 列表（Markdown 链接）；未开启 PDF 下载时为空字符串"],
+        ["{{interest_keywords}}", "用户配置的兴趣关键词列表，含权重，格式如 rlhf(weight:5), agent(weight:5)，供模型参考优先级"],
         ["{{language}}", "输出语言，由设置中'语言'选项决定，值为 Chinese (中文) 或 English"],
       ];
       for (const [ph, explain] of rows) {
@@ -971,19 +969,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
-
-    // ── Paper Download ────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "PDF 下载 / PDF Download" });
-
-    new Setting(containerEl)
-      .setName("保存 PDF / Save PDF")
-      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/). Already-downloaded files are skipped.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
-          await this.plugin.saveSettings();
-        }));
 
     // ── Deep Read ────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "全文精读 / Deep Read" });

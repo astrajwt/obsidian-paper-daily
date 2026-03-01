@@ -8,6 +8,7 @@ import { SnapshotStore } from "../storage/snapshotStore";
 import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
+import { computeInterestHits } from "../scoring/interest";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
@@ -166,7 +167,7 @@ export async function runDailyPipeline(
   log(`=== Daily pipeline START date=${date} ===`);
 
   const interestKeywords = settings.interestKeywords ?? [];
-  log(`Settings: categories=[${settings.categories.join(",")}] interestKeywords=${interestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
+  log(`Settings: categories=[${settings.categories.join(",")}] interestKeywords=${interestKeywords.length} fetchMode=${settings.fetchMode ?? "all"}`);
 
   let papers: Paper[] = [];
   let hfDailyPapers: Paper[] = [];
@@ -181,17 +182,17 @@ export async function runDailyPipeline(
   try {
     const source = new ArxivSource();
     const windowEnd = options.windowEnd ?? now;
-    const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1000);
+    const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - 72 * 3600 * 1000);
     fetchUrl = source.buildUrl(
-      { categories: settings.categories, keywords: [], maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
-      settings.maxResultsPerDay * 3
+      { categories: settings.categories, keywords: [], maxResults: 200, sortBy: "submittedDate", windowStart, windowEnd },
+      200
     );
     log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
       keywords: [],
-      maxResults: settings.maxResultsPerDay,
-      sortBy: settings.sortBy,
+      maxResults: 200,
+      sortBy: "submittedDate",
       windowStart,
       windowEnd,
       targetDate: date
@@ -285,6 +286,17 @@ export async function runDailyPipeline(
   }
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length})`);
 
+  // ── Step 2b: Interest-only filter ────────────────────────────
+  if ((settings.fetchMode ?? "all") === "interest_only" && interestKeywords.length > 0) {
+    // Pre-score interest hits so the filter can use them
+    for (const p of papers) {
+      p.interestHits = computeInterestHits(p, interestKeywords);
+    }
+    const before = papers.length;
+    papers = papers.filter(p => (p.interestHits ?? []).length > 0);
+    log(`Step 2b INTEREST FILTER: ${before} → ${papers.length} papers (removed ${before - papers.length} with no keyword hits)`);
+  }
+
   // ── Step 3: Score + rank ──────────────────────────────────────
   let rankedPapers = papers.length > 0
     ? rankPapers(papers, interestKeywords)
@@ -297,9 +309,9 @@ export async function runDailyPipeline(
     try {
       const llm = buildLLMProvider(settings);
       const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
-      // Cap scoring to maxResultsPerDay to avoid token overflow; papers beyond the cap
+      // Cap scoring to 60 papers to avoid token overflow; papers beyond the cap
       // retain their keyword-based rank and fall to the end of the list.
-      const scoringCap = Math.min(rankedPapers.length, settings.maxResultsPerDay);
+      const scoringCap = Math.min(rankedPapers.length, 60);
       const papersForScoring = rankedPapers.slice(0, scoringCap).map(p => ({
         id: p.id,
         title: p.title,
@@ -457,6 +469,7 @@ ${JSON.stringify(papersForScoring)}`;
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
         local_pdfs: localPdfsSection,
+        interest_keywords: interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", "),
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });

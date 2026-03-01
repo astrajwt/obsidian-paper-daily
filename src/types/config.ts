@@ -28,9 +28,8 @@ export interface PaperDailySettings {
   // arXiv fetch
   categories: string[];
   interestKeywords: InterestKeyword[];
-  maxResultsPerDay: number;
-  sortBy: "submittedDate" | "lastUpdatedDate";
-  timeWindowHours: number;
+  /** "all" = fetch all papers in categories; "interest_only" = keep only papers with ≥1 interest keyword hit */
+  fetchMode: "all" | "interest_only";
 
   // LLM
   llm: LLMConfig;
