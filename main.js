@@ -946,6 +946,34 @@ var VaultWriter = class {
       await this.app.vault.create(normalized, content);
     }
   }
+  /**
+   * Append content to a log file, then rotate if the file exceeds maxBytes.
+   * When rotating, the oldest half is discarded so the file stays near maxBytes/2.
+   * Uses character count as a byte approximation (safe for ASCII-heavy logs).
+   */
+  async appendLogWithRotation(filePath, content, maxBytes) {
+    const normalized = (0, import_obsidian2.normalizePath)(filePath);
+    await this.ensureFolderForFile(normalized);
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    let current = "";
+    if (existing instanceof import_obsidian2.TFile) {
+      current = await this.app.vault.read(existing);
+    }
+    let next = current + content;
+    if (next.length > maxBytes) {
+      const keepFrom = next.length - Math.floor(maxBytes / 2);
+      const newlineIdx = next.indexOf("\n", keepFrom);
+      const tail = newlineIdx !== -1 ? next.slice(newlineIdx + 1) : next.slice(keepFrom);
+      const keptKB = Math.round(tail.length / 1024);
+      next = `[LOG ROTATED ${new Date().toISOString()} \u2014 older entries removed, kept last ~${keptKB}KB]
+` + tail;
+    }
+    if (existing instanceof import_obsidian2.TFile) {
+      await this.app.vault.modify(existing, next);
+    } else {
+      await this.app.vault.create(normalized, next);
+    }
+  }
   async fileExists(filePath) {
     const normalized = (0, import_obsidian2.normalizePath)(filePath);
     const file = this.app.vault.getAbstractFileByPath(normalized);
@@ -4821,11 +4849,16 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   };
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const SINGLE_CALL_TOKEN_WARN = 2e4;
+  const TOTAL_TOKEN_WARN = 5e4;
   const trackUsage = (label, inputTokens, outputTokens) => {
     var _a3;
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
+    if (inputTokens > SINGLE_CALL_TOKEN_WARN) {
+      log(`[WARN][TOKEN] ${label} single-call input=${inputTokens} exceeds threshold (${SINGLE_CALL_TOKEN_WARN}) \u2014 check prompt size`);
+    }
     (_a3 = options.onTokenUpdate) == null ? void 0 : _a3.call(options, totalInputTokens, totalOutputTokens);
   };
   log(`=== Daily pipeline START date=${date} ===`);
@@ -4864,7 +4897,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     }
   } catch (err) {
     fetchError = String(err);
-    log(`Step 1 FETCH ERROR: ${fetchError}`);
+    log(`[ERROR][FETCH] url=${fetchUrl} error=${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
   checkAbort();
@@ -4923,7 +4956,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
         }
       }
     } catch (err) {
-      log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
+      log(`[ERROR][HF_FETCH] error=${String(err)} (non-fatal, continuing)`);
     }
   } else {
     log(`Step 1b HF FETCH: skipped (disabled)`);
@@ -5007,7 +5040,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           log(`Step 3b batch ${batchIdx + 1}: could not parse JSON (response length=${result.text.length})`);
         }
       } catch (err) {
-        log(`Step 3b batch ${batchIdx + 1} ERROR: ${String(err)} (non-fatal, continuing)`);
+        log(`[ERROR][SCORING] batch=${batchIdx + 1}/${totalBatches} error=${String(err)} (non-fatal, continuing)`);
       }
     }
     rankedPapers.sort((a, b) => {
@@ -5103,10 +5136,10 @@ ${paper.deepReadAnalysis}
           await writer.writeNote(`${outputFolder}/${fileName}.md`, paperMd);
           log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${fileName}.md`);
         } catch (writeErr) {
-          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
+          log(`[ERROR][DEEP_READ_WRITE] paper=${i + 1}/${topN} id=${baseId} error=${String(writeErr)}`);
         }
       } catch (err) {
-        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} \u2014 skipping`);
+        log(`[ERROR][DEEP_READ] paper=${i + 1}/${topN} id=${baseId} error=${String(err)} \u2014 skipping`);
       }
     }
     if (analysisResults.length > 0) {
@@ -5177,7 +5210,7 @@ From the HuggingFace full list, note any papers NOT already covered above. One l
       log(`Step 4 LLM: success, response length=${llmDigest.length} chars`);
     } catch (err) {
       llmError = String(err);
-      log(`Step 4 LLM ERROR: ${llmError}`);
+      log(`[ERROR][LLM] provider=${settings.llm.provider} model=${settings.llm.model} error=${llmError}`);
       await stateStore.setLastError("llm", llmError);
     }
   } else if (!settings.llm.apiKey) {
@@ -5260,7 +5293,7 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
-    log(`Step 5 WRITE ERROR: ${String(err)}`);
+    log(`[ERROR][WRITE] path=${inboxPath} error=${String(err)}`);
     await stateStore.setLastError("write", String(err));
     throw err;
   }
@@ -5274,9 +5307,15 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
     await stateStore.setLastDailyRun(now.toISOString());
   }
   log(`=== Daily pipeline END date=${date} papers=${rankedPapers.length} ===`);
+  if (totalInputTokens > 0) {
+    log(`Token summary: totalInput=${totalInputTokens} totalOutput=${totalOutputTokens}`);
+    if (totalInputTokens > TOTAL_TOKEN_WARN) {
+      log(`[WARN][TOKEN] total run input=${totalInputTokens} exceeds ${TOTAL_TOKEN_WARN} \u2014 consider reducing deepRead.topN or disabling deep read`);
+    }
+  }
   const tokenSummary = totalInputTokens > 0 ? ` | tokens: ${totalInputTokens.toLocaleString()}\u2192${totalOutputTokens.toLocaleString()}` : "";
   progress(`\u2705 \u5B8C\u6210\uFF01${rankedPapers.length} \u7BC7\u8BBA\u6587${tokenSummary}`);
-  await writer.appendToNote(logPath, logLines.join("\n") + "\n");
+  await writer.appendLogWithRotation(logPath, logLines.join("\n") + "\n", 10 * 1024 * 1024);
 }
 
 // src/pipeline/backfillPipeline.ts
