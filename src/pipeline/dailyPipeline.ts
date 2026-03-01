@@ -9,7 +9,6 @@ import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
 import { computeInterestHits } from "../scoring/interest";
-import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -125,6 +124,34 @@ function buildDailyMarkdown(
 
   // ── All Papers Table ──────────────────────────────────────────
   const deepReadFolder = settings.deepRead?.outputFolder ?? "PaperDaily/deep-read";
+  const fnTemplate = settings.deepRead?.fileNameTemplate?.trim() || "{{title}}-deep-read-{{model}}";
+
+  // Featured Papers (deep-read subset)
+  const deepReadPapers = rankedPapers.filter(p => p.deepReadAnalysis);
+  let featuredPapersSection = "";
+  if (deepReadPapers.length > 0) {
+    const featRows = deepReadPapers.map((p, i) => {
+      const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
+      const titleLink = p.links.html
+        ? `[${escapeTableCell(p.title)}](${p.links.html})`
+        : escapeTableCell(p.title);
+      const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
+      const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
+      const drLink = `[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`;
+      return `| ${i + 1} | ${titleLink} | ${score} | ${hits} | ${drLink} |`;
+    });
+    featuredPapersSection = [
+      `## 精选论文 / Featured Papers (${deepReadPapers.length})`,
+      "",
+      "> 以下论文已完成全文精读，点击 Deep Read 查看详细分析。",
+      "",
+      "| # | Title | Score | Hits | Deep Read |",
+      "|---|-------|-------|------|-----------|",
+      ...featRows
+    ].join("\n");
+  }
+
   const tableRows = rankedPapers.map((p, i) => {
     const titleLink = p.links.html
       ? `[${escapeTableCell(p.title)}](${p.links.html})`
@@ -133,10 +160,8 @@ function buildDailyMarkdown(
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf) linkParts.push(`[[${p.links.localPdf}\\|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      const fnTemplate = settings.deepRead?.fileNameTemplate?.trim() || "{{title}}-deep-read-{{model}}";
       const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
       linkParts.push(`[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`);
     }
@@ -155,6 +180,7 @@ function buildDailyMarkdown(
 
   const sections = [frontmatter, "", header];
   if (interestHotnessSection) sections.push("", interestHotnessSection);
+  if (featuredPapersSection) sections.push("", featuredPapersSection);
   sections.push("", digestSection);
   if (domainSummary) sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
@@ -443,15 +469,10 @@ export async function runDailyPipeline(
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
 
-  // ── Step 3d: Download full text (ranked papers) ───────────────
-  if (rankedPapers.length > 0) {
-    await downloadPapersForDay(app, rankedPapers, settings, log, date);
-  }
-
   // ── Step 3f: Deep Read — per-paper LLM analysis via arxiv HTML URL ───
   let fulltextSection = "";
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN      = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
+    const topN      = Math.min(settings.deepRead.topN ?? 10, rankedPapers.length);
     const maxTokens = settings.deepRead.deepReadMaxTokens ?? 1024;
     const drPrompt  = getActiveDeepReadPrompt(settings);
     const langStr   = settings.language === "zh" ? "Chinese (中文)" : "English";

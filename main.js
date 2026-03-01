@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => PaperDailyPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -273,12 +273,9 @@ var DEFAULT_SETTINGS = {
     enabled: false,
     feeds: []
   },
-  paperDownload: {
-    savePdf: true
-  },
   deepRead: {
     enabled: false,
-    topN: 5,
+    topN: 10,
     deepReadMaxTokens: 2048,
     outputFolder: "PaperDaily/deep-read",
     tags: ["paper", "deep-read"]
@@ -310,13 +307,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       var _a3;
       return drop.addOption("all", "\u5168\u91CF\u62C9\u53D6 / Fetch All").addOption("interest_only", "\u4EC5\u5174\u8DA3\u5173\u952E\u8BCD / Interest Only").setValue((_a3 = this.plugin.settings.fetchMode) != null ? _a3 : "all").onChange(async (value) => {
         this.plugin.settings.fetchMode = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D\u8BBA\u6587 PDF \u5E76\u5B58\u5165 Vault\uFF08papers/pdf/\u65E5\u671F/\uFF09\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.").addToggle((toggle) => {
-      var _a3, _b2;
-      return toggle.setValue((_b2 = (_a3 = this.plugin.settings.paperDownload) == null ? void 0 : _a3.savePdf) != null ? _b2 : false).onChange(async (value) => {
-        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
         await this.plugin.saveSettings();
       });
     });
@@ -606,11 +596,14 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         refreshDrSub();
       });
     });
-    new import_obsidian.Setting(drSubContainer).setName("\u7CBE\u8BFB\u7BC7\u6570 / Papers to fetch").setDesc("\u6BCF\u65E5\u6293\u53D6\u5168\u6587\u7684\u6700\u9AD8\u5206\u8BBA\u6587\u7BC7\u6570\uFF08\u5EFA\u8BAE 3\u20135\uFF0C\u8D8A\u591A prompt \u8D8A\u957F\uFF09| Number of top papers to fetch full text for").addSlider((slider) => {
+    new import_obsidian.Setting(drSubContainer).setName("\u7CBE\u8BFB\u7BC7\u6570 / Papers to fetch").setDesc("\u6BCF\u65E5\u7CBE\u8BFB\u7684\u6700\u9AD8\u5206\u8BBA\u6587\u7BC7\u6570\uFF081\u2013999\uFF09| Number of top papers to deep-read per day (1\u2013999, default 10)").addText((text) => {
       var _a3, _b2;
-      return slider.setLimits(1, 10, 1).setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.topN) != null ? _b2 : 5).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value };
-        await this.plugin.saveSettings();
+      return text.setPlaceholder("10").setValue(String((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.topN) != null ? _b2 : 10)).onChange(async (value) => {
+        const n = parseInt(value, 10);
+        if (!isNaN(n) && n >= 1 && n <= 999) {
+          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: n };
+          await this.plugin.saveSettings();
+        }
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5206\u6790 Token \u4E0A\u9650 / Max tokens per paper").setDesc("Deep Read \u6BCF\u7BC7\u8BBA\u6587 LLM \u8C03\u7528\u7684\u8F93\u51FA token \u4E0A\u9650\uFF08\u9ED8\u8BA4 1024\uFF0C\u5EFA\u8BAE 512\u20132048\uFF09").addSlider((slider) => {
@@ -1372,71 +1365,8 @@ function rankPapers(papers, interestKeywords) {
   return scored.map(({ _rankScore: _r, ...paper }) => paper);
 }
 
-// src/storage/paperDownloader.ts
-var import_obsidian5 = require("obsidian");
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-function getArxivId(paperId) {
-  return paperId.replace(/^arxiv:/i, "");
-}
-function safeFilename(id) {
-  return id.replace(/[/\\:*?"<>|]/g, "_");
-}
-async function ensureFolder(app, folderPath) {
-  if (!folderPath)
-    return;
-  const normalized = (0, import_obsidian5.normalizePath)(folderPath);
-  if (app.vault.getAbstractFileByPath(normalized))
-    return;
-  const parent = normalized.split("/").slice(0, -1).join("/");
-  if (parent)
-    await ensureFolder(app, parent);
-  try {
-    await app.vault.createFolder(normalized);
-  } catch (e) {
-  }
-}
-async function downloadOne(app, paper, rootFolder, date, log) {
-  const arxivId = getArxivId(paper.id);
-  const filename = safeFilename(arxivId);
-  if (!paper.links.pdf)
-    return;
-  const pdfFolder = `${rootFolder}/papers/pdf/${date}`;
-  const pdfPath = (0, import_obsidian5.normalizePath)(`${pdfFolder}/${filename}.pdf`);
-  if (app.vault.getAbstractFileByPath(pdfPath)) {
-    paper.links.localPdf = pdfPath;
-    log(`PDF skip (exists): ${filename}`);
-  } else {
-    try {
-      const resp = await (0, import_obsidian5.requestUrl)({ url: paper.links.pdf, method: "GET" });
-      if (resp.status === 200) {
-        await ensureFolder(app, pdfFolder);
-        await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
-        paper.links.localPdf = pdfPath;
-        log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
-      } else {
-        log(`PDF skip (HTTP ${resp.status}): ${filename}`);
-      }
-    } catch (err) {
-      log(`PDF error: ${filename}: ${String(err)}`);
-    }
-    await sleep(1200);
-  }
-}
-async function downloadPapersForDay(app, papers, settings, log, date) {
-  var _a2;
-  if (!((_a2 = settings.paperDownload) == null ? void 0 : _a2.savePdf))
-    return;
-  log(`Step DOWNLOAD: ${papers.length} papers \u2192 papers/pdf/${date}/`);
-  for (const paper of papers) {
-    await downloadOne(app, paper, settings.rootFolder, date, log);
-  }
-  log(`Step DOWNLOAD: done`);
-}
-
 // src/llm/openaiCompatible.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var OpenAICompatibleProvider = class {
   constructor(baseUrl, apiKey, model) {
     this.baseUrl = baseUrl;
@@ -1457,7 +1387,7 @@ var OpenAICompatibleProvider = class {
       max_tokens: (_b = input.maxTokens) != null ? _b : 4096
     };
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
-    const response = await (0, import_obsidian6.requestUrl)({
+    const response = await (0, import_obsidian5.requestUrl)({
       url,
       method: "POST",
       headers: {
@@ -2506,7 +2436,7 @@ var APIClient = class {
       const maxRetries = (_a2 = options.maxRetries) != null ? _a2 : this.maxRetries;
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }
-    await sleep2(timeoutMillis);
+    await sleep(timeoutMillis);
     return this.makeRequest(options, retriesRemaining - 1);
   }
   calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries) {
@@ -2740,7 +2670,7 @@ var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
 var isAbsoluteURL = (url) => {
   return startsWithSchemeRegexp.test(url);
 };
-var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var validatePositiveInteger = (name, n) => {
   if (typeof n !== "number" || !Number.isInteger(n)) {
     throw new AnthropicError(`${name} must be an integer`);
@@ -4698,20 +4628,12 @@ var AnthropicProvider = class {
   }
   async generate(input) {
     var _a2, _b, _c, _d, _e, _f;
-    const userContent = [];
-    if (input.pdfBase64) {
-      userContent.push({
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 }
-      });
-    }
-    userContent.push({ type: "text", text: input.prompt });
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: (_a2 = input.maxTokens) != null ? _a2 : 4096,
       temperature: (_b = input.temperature) != null ? _b : 0.3,
       system: input.system,
-      messages: [{ role: "user", content: userContent }]
+      messages: [{ role: "user", content: input.prompt }]
     });
     const textBlock = response.content.find((b) => b.type === "text");
     const text = (textBlock == null ? void 0 : textBlock.type) === "text" ? textBlock.text : "";
@@ -4790,7 +4712,7 @@ function buildDeepReadFileName(template, paper, baseId, date, modelName) {
   return result.replace(/[/\\:*?"<>|]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || baseId;
 }
 function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, interestHotnessSection, error) {
-  var _a2, _b;
+  var _a2, _b, _c, _d;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4808,8 +4730,32 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
 
 ${aiDigest}`;
   const deepReadFolder = (_b = (_a2 = settings.deepRead) == null ? void 0 : _a2.outputFolder) != null ? _b : "PaperDaily/deep-read";
+  const fnTemplate = ((_d = (_c = settings.deepRead) == null ? void 0 : _c.fileNameTemplate) == null ? void 0 : _d.trim()) || "{{title}}-deep-read-{{model}}";
+  const deepReadPapers = rankedPapers.filter((p) => p.deepReadAnalysis);
+  let featuredPapersSection = "";
+  if (deepReadPapers.length > 0) {
+    const featRows = deepReadPapers.map((p, i) => {
+      var _a3;
+      const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
+      const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
+      const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
+      const hits = ((_a3 = p.interestHits) != null ? _a3 : []).slice(0, 3).join(", ") || "-";
+      const drLink = `[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`;
+      return `| ${i + 1} | ${titleLink} | ${score} | ${hits} | ${drLink} |`;
+    });
+    featuredPapersSection = [
+      `## \u7CBE\u9009\u8BBA\u6587 / Featured Papers (${deepReadPapers.length})`,
+      "",
+      "> \u4EE5\u4E0B\u8BBA\u6587\u5DF2\u5B8C\u6210\u5168\u6587\u7CBE\u8BFB\uFF0C\u70B9\u51FB Deep Read \u67E5\u770B\u8BE6\u7EC6\u5206\u6790\u3002",
+      "",
+      "| # | Title | Score | Hits | Deep Read |",
+      "|---|-------|-------|------|-----------|",
+      ...featRows
+    ].join("\n");
+  }
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b2, _c, _d;
+    var _a3, _b2;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -4818,17 +4764,14 @@ ${aiDigest}`;
       linkParts.push(`[\u{1F917} HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf)
       linkParts.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf)
-      linkParts.push(`[[${p.links.localPdf}\\|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      const fnTemplate = ((_b2 = (_a3 = settings.deepRead) == null ? void 0 : _a3.fileNameTemplate) == null ? void 0 : _b2.trim()) || "{{title}}-deep-read-{{model}}";
       const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
       linkParts.push(`[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`);
     }
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
-    const summary = escapeTableCell((_c = p.llmSummary) != null ? _c : "");
-    const hits = ((_d = p.interestHits) != null ? _d : []).slice(0, 3).join(", ") || "-";
+    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
+    const hits = ((_b2 = p.interestHits) != null ? _b2 : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
   const allPapersTableSection = [
@@ -4841,6 +4784,8 @@ ${aiDigest}`;
   const sections = [frontmatter, "", header];
   if (interestHotnessSection)
     sections.push("", interestHotnessSection);
+  if (featuredPapersSection)
+    sections.push("", featuredPapersSection);
   sections.push("", digestSection);
   if (domainSummary)
     sections.push("", domainSummary);
@@ -5092,12 +5037,9 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
-  if (rankedPapers.length > 0) {
-    await downloadPapersForDay(app, rankedPapers, settings, log, date);
-  }
   let fulltextSection = "";
   if (((_r = settings.deepRead) == null ? void 0 : _r.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_s = settings.deepRead.topN) != null ? _s : 5, rankedPapers.length);
+    const topN = Math.min((_s = settings.deepRead.topN) != null ? _s : 10, rankedPapers.length);
     const maxTokens = (_t = settings.deepRead.deepReadMaxTokens) != null ? _t : 1024;
     const drPrompt = getActiveDeepReadPrompt(settings);
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
@@ -5514,7 +5456,7 @@ var FloatingProgress = class {
 };
 
 // src/main.ts
-var PaperDailyPlugin = class extends import_obsidian7.Plugin {
+var PaperDailyPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.activeAbortController = null;
@@ -5542,7 +5484,6 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
     this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
-    this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
     if (Array.isArray(this.settings.interestKeywords) && this.settings.interestKeywords.length > 0 && typeof this.settings.interestKeywords[0] === "string") {
       this.settings.interestKeywords = this.settings.interestKeywords.map((kw) => ({ keyword: kw, weight: 1 }));
     }
@@ -5559,8 +5500,8 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   }
   async loadSettingsFromVaultFile() {
     try {
-      const file = this.app.vault.getAbstractFileByPath((0, import_obsidian7.normalizePath)(this.configFilePath));
-      if (!(file instanceof import_obsidian7.TFile))
+      const file = this.app.vault.getAbstractFileByPath((0, import_obsidian6.normalizePath)(this.configFilePath));
+      if (!(file instanceof import_obsidian6.TFile))
         return;
       const content = await this.app.vault.read(file);
       const vaultSettings = JSON.parse(content);
@@ -5568,7 +5509,6 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
       this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
       this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
-      this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
       console.log(`[PaperDaily] Loaded settings from vault: ${this.configFilePath}`);
     } catch (e) {
     }
@@ -5629,12 +5569,12 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       id: "rebuild-index",
       name: "Rebuild index from local cache",
       callback: async () => {
-        new import_obsidian7.Notice("Paper Daily: Rebuilding dedup index...");
+        new import_obsidian6.Notice("Paper Daily: Rebuilding dedup index...");
         try {
           await this.dedupStore.load();
-          new import_obsidian7.Notice("Paper Daily: Index rebuilt.");
+          new import_obsidian6.Notice("Paper Daily: Index rebuilt.");
         } catch (err) {
-          new import_obsidian7.Notice(`Paper Daily Error: ${String(err)}`);
+          new import_obsidian6.Notice(`Paper Daily Error: ${String(err)}`);
         }
       }
     });
@@ -5660,7 +5600,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   /** Run daily pipeline with floating UI and stop button. */
   async runDailyWithUI() {
     if (this.activeAbortController) {
-      new import_obsidian7.Notice("Paper Daily: \u4EFB\u52A1\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
+      new import_obsidian6.Notice("Paper Daily: \u4EFB\u52A1\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
       return;
     }
     const controller = new AbortController();
@@ -5724,7 +5664,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   /** Run backfill pipeline with floating UI and stop button. */
   async runBackfillWithUI(startDate, endDate) {
     if (this.activeBackfillController) {
-      new import_obsidian7.Notice("Paper Daily: \u6279\u91CF\u751F\u6210\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
+      new import_obsidian6.Notice("Paper Daily: \u6279\u91CF\u751F\u6210\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
       return;
     }
     const controller = new AbortController();
@@ -5773,7 +5713,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     }
   }
 };
-var BackfillModal = class extends import_obsidian7.Modal {
+var BackfillModal = class extends import_obsidian6.Modal {
   constructor(app, plugin) {
     super(app);
     this.startDate = "";
@@ -5784,14 +5724,14 @@ var BackfillModal = class extends import_obsidian7.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
-    new import_obsidian7.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
+    new import_obsidian6.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
       this.startDate = v;
     }));
-    new import_obsidian7.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
+    new import_obsidian6.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
       this.endDate = v;
     }));
     this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
-    new import_obsidian7.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
+    new import_obsidian6.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
       if (!this.startDate || !this.endDate) {
         this.statusEl.setText("Please enter both start and end dates.");
         return;

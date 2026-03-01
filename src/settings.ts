@@ -263,13 +263,9 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     feeds: []
   },
 
-  paperDownload: {
-    savePdf: true,
-  },
-
   deepRead: {
     enabled: false,
-    topN: 5,
+    topN: 10,
     deepReadMaxTokens: 2048,
     outputFolder: "PaperDaily/deep-read",
     tags: ["paper", "deep-read"],
@@ -324,16 +320,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.fetchMode ?? "all")
         .onChange(async (value) => {
           this.plugin.settings.fetchMode = value as "all" | "interest_only";
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("保存 PDF / Save PDF")
-      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/日期/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
           await this.plugin.saveSettings();
         }));
 
@@ -690,14 +676,16 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(drSubContainer)
       .setName("精读篇数 / Papers to fetch")
-      .setDesc("每日抓取全文的最高分论文篇数（建议 3–5，越多 prompt 越长）| Number of top papers to fetch full text for")
-      .addSlider(slider => slider
-        .setLimits(1, 10, 1)
-        .setValue(this.plugin.settings.deepRead?.topN ?? 5)
-        .setDynamicTooltip()
+      .setDesc("每日精读的最高分论文篇数（1–999）| Number of top papers to deep-read per day (1–999, default 10)")
+      .addText(text => text
+        .setPlaceholder("10")
+        .setValue(String(this.plugin.settings.deepRead?.topN ?? 10))
         .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value } as typeof this.plugin.settings.deepRead;
-          await this.plugin.saveSettings();
+          const n = parseInt(value, 10);
+          if (!isNaN(n) && n >= 1 && n <= 999) {
+            this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: n } as typeof this.plugin.settings.deepRead;
+            await this.plugin.saveSettings();
+          }
         }));
 
     // --- Max tokens slider ---
