@@ -109,6 +109,7 @@ For **each paper** in the papers list, output exactly this structure:
 **[N]. {title}**
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 关键词: {interest hits}
+- 🤗 HF 热度: {hfUpvotes} 赞  ← **only include this line if hfUpvotes > 0 for this paper; omit entirely otherwise**
 - 💡 核心贡献: one sentence — what exactly did they do / prove / build? Be specific with method names and key numbers.
 - 🔬 方法核心: key technical novelty — principled or ad hoc? any theoretical guarantees or assumptions worth noting?
   > If a Deep Read note exists for this paper (see fulltext_section above), draw directly from it here and in 工程启示 / 局限性. Prefer that analysis over the abstract.

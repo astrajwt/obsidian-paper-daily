@@ -131,6 +131,7 @@ For **each paper** in the papers list, output exactly this structure:
 **[N]. {title}**
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u5173\u952E\u8BCD: {interest hits}
+- \u{1F917} HF \u70ED\u5EA6: {hfUpvotes} \u8D5E  \u2190 **only include this line if hfUpvotes > 0 for this paper; omit entirely otherwise**
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence \u2014 what exactly did they do / prove / build? Be specific with method names and key numbers.
 - \u{1F52C} \u65B9\u6CD5\u6838\u5FC3: key technical novelty \u2014 principled or ad hoc? any theoretical guarantees or assumptions worth noting?
   > If a Deep Read note exists for this paper (see fulltext_section above), draw directly from it here and in \u5DE5\u7A0B\u542F\u793A / \u5C40\u9650\u6027. Prefer that analysis over the abstract.
