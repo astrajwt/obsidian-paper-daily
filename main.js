@@ -5020,10 +5020,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     const maxTokens = (_s = settings.deepRead.deepReadMaxTokens) != null ? _s : 1024;
     const drPrompt = getActiveDeepReadPrompt(settings);
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
-    progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
+    progress(`[3/5] \u{1F4D6} Deep Read \u2014 \u5171 ${topN} \u7BC7...`);
     const llm = buildLLMProvider(settings);
     const analysisResults = [];
     for (let i = 0; i < topN; i++) {
+      progress(`[3/5] \u{1F4D6} Deep Read (${i + 1}/${topN})...`);
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const htmlUrl = `https://arxiv.org/html/${baseId}`;

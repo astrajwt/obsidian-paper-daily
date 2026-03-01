@@ -379,11 +379,12 @@ export async function runDailyPipeline(
     const drPrompt  = getActiveDeepReadPrompt(settings);
     const langStr   = settings.language === "zh" ? "Chinese (中文)" : "English";
 
-    progress(`[3/5] 📖 Deep Read — ${topN} 篇精读中...`);
+    progress(`[3/5] 📖 Deep Read — 共 ${topN} 篇...`);
     const llm = buildLLMProvider(settings);
     const analysisResults: string[] = [];
 
     for (let i = 0; i < topN; i++) {
+      progress(`[3/5] 📖 Deep Read (${i + 1}/${topN})...`);
       const paper  = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const htmlUrl = `https://arxiv.org/html/${baseId}`;
