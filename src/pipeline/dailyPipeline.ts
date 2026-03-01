@@ -14,7 +14,7 @@ import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
 import type { HFTrackStore } from "../storage/hfTrackStore";
-import { DEFAULT_DEEP_READ_PROMPT } from "../settings";
+import { DEFAULT_DEEP_READ_PROMPT, DEFAULT_SCORING_PROMPT } from "../settings";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -295,70 +295,67 @@ export async function runDailyPipeline(
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
-  // ── Step 3b: LLM scoring (all papers) ────────────────────────
+  // ── Step 3b: LLM scoring (batched, all papers) ───────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[2/5] 🔍 快速预筛 ${rankedPapers.length} 篇...`);
-    try {
-      const llm = buildLLMProvider(settings);
-      const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
-      // Cap scoring to 60 papers to avoid token overflow; papers beyond the cap
-      // retain their keyword-based rank and fall to the end of the list.
-      const scoringCap = Math.min(rankedPapers.length, 60);
-      const papersForScoring = rankedPapers.slice(0, scoringCap).map(p => ({
+    const BATCH_SIZE = 60;
+    const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
+    const scoringTemplate = settings.scoringPromptTemplate || DEFAULT_SCORING_PROMPT;
+    const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
+    const normalizeId = (id: string) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
+    const llm = buildLLMProvider(settings);
+    let totalScored = 0;
+
+    for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+      const batchStart = batchIdx * BATCH_SIZE;
+      const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
+      progress(`[2/5] 🔍 快速预筛 (${batchIdx + 1}/${totalBatches}) ${batchPapers.length} 篇...`);
+
+      const papersForScoring = batchPapers.map(p => ({
         id: p.id,
         title: p.title,
         abstract: p.abstract.slice(0, 250),
         interestHits: p.interestHits ?? [],
         ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {})
       }));
-      // ~120 output tokens per paper (id + score + reason + summary); add headroom
-      const scoringMaxTokens = Math.min(scoringCap * 150 + 256, 8192);
-      const scoringPrompt = `Score each paper 1–10 for quality and relevance to the user's interests.
+      const batchMaxTokens = Math.min(batchPapers.length * 150 + 256, 8192);
+      const scoringPrompt = fillTemplate(scoringTemplate, {
+        interest_keywords: kwStr,
+        papers_json: JSON.stringify(papersForScoring)
+      });
 
-User's interest keywords (higher weight = more important): ${kwStr}
-
-Scoring criteria:
-- Alignment with interest keywords and their weights
-- Technical novelty and depth
-- Practical engineering value
-- Quality of evaluation / experiments
-
-Return ONLY a valid JSON array, no explanation, no markdown fence:
-[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1–2 sentence plain-language summary"},...]
-
-Papers:
-${JSON.stringify(papersForScoring)}`;
-
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: scoringMaxTokens });
-      if (result.usage) trackUsage("Step 3b scoring", result.usage.inputTokens, result.usage.outputTokens);
-      const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const scores: Array<{ id: string; score: number; reason: string; summary?: string }> = JSON.parse(jsonMatch[0]);
-        // Build a normalized lookup: strip arxiv: prefix and version suffix for fuzzy matching
-        const normalizeId = (id: string) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
-        const scoreMap = new Map(scores.map(s => [normalizeId(s.id), s]));
-        let matched = 0;
-        for (const paper of rankedPapers) {
-          const s = scoreMap.get(normalizeId(paper.id));
-          if (s) {
-            paper.llmScore = s.score;
-            paper.llmScoreReason = s.reason;
-            if (s.summary) paper.llmSummary = s.summary;
-            matched++;
+      try {
+        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens });
+        if (result.usage) trackUsage(`Step 3b scoring batch ${batchIdx + 1}`, result.usage.inputTokens, result.usage.outputTokens);
+        const jsonMatch = result.text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const scores: Array<{ id: string; score: number; reason: string; summary?: string }> = JSON.parse(jsonMatch[0]);
+          const scoreMap = new Map(scores.map(s => [normalizeId(s.id), s]));
+          let matched = 0;
+          for (const paper of batchPapers) {
+            const s = scoreMap.get(normalizeId(paper.id));
+            if (s) {
+              paper.llmScore = s.score;
+              paper.llmScoreReason = s.reason;
+              if (s.summary) paper.llmSummary = s.summary;
+              matched++;
+            }
           }
+          totalScored += matched;
+          log(`Step 3b batch ${batchIdx + 1}/${totalBatches}: scored ${matched}/${batchPapers.length} (LLM returned ${scores.length})`);
+          if (matched === 0 && scores.length > 0) {
+            log(`Step 3b batch ${batchIdx + 1} WARNING: 0 matched — ID mismatch? LLM="${scores[0]?.id}" vs paper="${batchPapers[0]?.id}"`);
+          }
+        } else {
+          log(`Step 3b batch ${batchIdx + 1}: could not parse JSON (response length=${result.text.length})`);
         }
-        // Re-rank by LLM score; papers without a score fall to the end
-        rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
-        log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
-        if (matched === 0) {
-          log(`Step 3b LLM SCORE WARNING: 0 matched — ID format mismatch? Sample LLM id="${scores[0]?.id}" vs paper id="${rankedPapers[0]?.id}"`);
-        }
-      } else {
-        log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
+      } catch (err) {
+        log(`Step 3b batch ${batchIdx + 1} ERROR: ${String(err)} (non-fatal, continuing)`);
       }
-    } catch (err) {
-      log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
     }
+
+    // Re-rank all papers by LLM score; unscored papers fall to the end
+    rankedPapers.sort((a, b) => (b.llmScore ?? -1) - (a.llmScore ?? -1));
+    log(`Step 3b LLM SCORE: done — ${totalScored}/${rankedPapers.length} papers scored across ${totalBatches} batch(es), re-ranked`);
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }

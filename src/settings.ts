@@ -139,6 +139,22 @@ Rules:
 - 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific — no "interesting direction" hedging.`;
 
+export const DEFAULT_SCORING_PROMPT = `Score each paper 1–10 for quality and relevance to the user's interests.
+
+User's interest keywords (higher weight = more important): {{interest_keywords}}
+
+Scoring criteria:
+- Alignment with interest keywords and their weights
+- Technical novelty and depth
+- Practical engineering value
+- Quality of evaluation / experiments
+
+Return ONLY a valid JSON array, no explanation, no markdown fence:
+[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1–2 sentence plain-language summary"},...]
+
+Papers:
+{{papers_json}}`;
+
 export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
 
 Title: {{title}}
@@ -885,6 +901,39 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    // ── Scoring Prompt ────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "批量评分 Prompt / Scoring Prompt" });
+
+    new Setting(containerEl)
+      .setName("评分 Prompt / Scoring Prompt")
+      .setDesc(
+        "每批论文的快速打分 Prompt。留空使用默认模板。\n" +
+        "可用占位符：{{interest_keywords}}（兴趣关键词+权重），{{papers_json}}（本批论文 JSON）\n" +
+        "必须要求模型返回 JSON 数组，格式：[{\"id\":\"arxiv:...\",\"score\":1-10,\"reason\":\"...\",\"summary\":\"...\"}]"
+      )
+      .addTextArea(area => {
+        area.setPlaceholder("(leave blank for default)");
+        area.setValue(this.plugin.settings.scoringPromptTemplate ?? "");
+        area.inputEl.rows = 10;
+        area.inputEl.style.width = "100%";
+        area.inputEl.style.fontFamily = "monospace";
+        area.inputEl.style.fontSize = "0.85em";
+        area.inputEl.addEventListener("input", async () => {
+          const val = area.inputEl.value.trim();
+          this.plugin.settings.scoringPromptTemplate = val || undefined;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText("重置默认 / Reset to Default")
+        .onClick(async () => {
+          this.plugin.settings.scoringPromptTemplate = undefined;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
 
     // ── Deep Read ────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "全文精读 / Deep Read" });

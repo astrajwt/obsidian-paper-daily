@@ -160,6 +160,21 @@ Rules:
 - Keep engineering perspective front and center.
 - \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific \u2014 no "interesting direction" hedging.`;
+var DEFAULT_SCORING_PROMPT = `Score each paper 1\u201310 for quality and relevance to the user's interests.
+
+User's interest keywords (higher weight = more important): {{interest_keywords}}
+
+Scoring criteria:
+- Alignment with interest keywords and their weights
+- Technical novelty and depth
+- Practical engineering value
+- Quality of evaluation / experiments
+
+Return ONLY a valid JSON array, no explanation, no markdown fence:
+[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1\u20132 sentence plain-language summary"},...]
+
+Papers:
+{{papers_json}}`;
 var DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
 
 Title: {{title}}
@@ -707,6 +722,28 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    containerEl.createEl("h2", { text: "\u6279\u91CF\u8BC4\u5206 Prompt / Scoring Prompt" });
+    new import_obsidian.Setting(containerEl).setName("\u8BC4\u5206 Prompt / Scoring Prompt").setDesc(
+      '\u6BCF\u6279\u8BBA\u6587\u7684\u5FEB\u901F\u6253\u5206 Prompt\u3002\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\n\u53EF\u7528\u5360\u4F4D\u7B26\uFF1A{{interest_keywords}}\uFF08\u5174\u8DA3\u5173\u952E\u8BCD+\u6743\u91CD\uFF09\uFF0C{{papers_json}}\uFF08\u672C\u6279\u8BBA\u6587 JSON\uFF09\n\u5FC5\u987B\u8981\u6C42\u6A21\u578B\u8FD4\u56DE JSON \u6570\u7EC4\uFF0C\u683C\u5F0F\uFF1A[{"id":"arxiv:...","score":1-10,"reason":"...","summary":"..."}]'
+    ).addTextArea((area) => {
+      var _a3;
+      area.setPlaceholder("(leave blank for default)");
+      area.setValue((_a3 = this.plugin.settings.scoringPromptTemplate) != null ? _a3 : "");
+      area.inputEl.rows = 10;
+      area.inputEl.style.width = "100%";
+      area.inputEl.style.fontFamily = "monospace";
+      area.inputEl.style.fontSize = "0.85em";
+      area.inputEl.addEventListener("input", async () => {
+        const val = area.inputEl.value.trim();
+        this.plugin.settings.scoringPromptTemplate = val || void 0;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u91CD\u7F6E\u9ED8\u8BA4 / Reset to Default").onClick(async () => {
+      this.plugin.settings.scoringPromptTemplate = void 0;
+      await this.plugin.saveSettings();
+      this.display();
+    }));
     containerEl.createEl("h2", { text: "\u5168\u6587\u7CBE\u8BFB / Deep Read" });
     const drSubContainer = containerEl.createDiv();
     const refreshDrSub = () => {
@@ -4835,12 +4872,18 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   let rankedPapers = papers.length > 0 ? rankPapers(papers, interestKeywords) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[2/5] \u{1F50D} \u5FEB\u901F\u9884\u7B5B ${rankedPapers.length} \u7BC7...`);
-    try {
-      const llm = buildLLMProvider(settings);
-      const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
-      const scoringCap = Math.min(rankedPapers.length, 60);
-      const papersForScoring = rankedPapers.slice(0, scoringCap).map((p) => {
+    const BATCH_SIZE = 60;
+    const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
+    const scoringTemplate = settings.scoringPromptTemplate || DEFAULT_SCORING_PROMPT;
+    const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
+    const normalizeId = (id) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
+    const llm = buildLLMProvider(settings);
+    let totalScored = 0;
+    for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+      const batchStart = batchIdx * BATCH_SIZE;
+      const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
+      progress(`[2/5] \u{1F50D} \u5FEB\u901F\u9884\u7B5B (${batchIdx + 1}/${totalBatches}) ${batchPapers.length} \u7BC7...`);
+      const papersForScoring = batchPapers.map((p) => {
         var _a3;
         return {
           id: p.id,
@@ -4850,55 +4893,47 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}
         };
       });
-      const scoringMaxTokens = Math.min(scoringCap * 150 + 256, 8192);
-      const scoringPrompt = `Score each paper 1\u201310 for quality and relevance to the user's interests.
-
-User's interest keywords (higher weight = more important): ${kwStr}
-
-Scoring criteria:
-- Alignment with interest keywords and their weights
-- Technical novelty and depth
-- Practical engineering value
-- Quality of evaluation / experiments
-
-Return ONLY a valid JSON array, no explanation, no markdown fence:
-[{"id":"arxiv:...","score":8,"reason":"one short phrase","summary":"1\u20132 sentence plain-language summary"},...]
-
-Papers:
-${JSON.stringify(papersForScoring)}`;
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: scoringMaxTokens });
-      if (result.usage)
-        trackUsage("Step 3b scoring", result.usage.inputTokens, result.usage.outputTokens);
-      const jsonMatch = result.text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const scores = JSON.parse(jsonMatch[0]);
-        const normalizeId = (id) => id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "").toLowerCase().trim();
-        const scoreMap = new Map(scores.map((s) => [normalizeId(s.id), s]));
-        let matched = 0;
-        for (const paper of rankedPapers) {
-          const s = scoreMap.get(normalizeId(paper.id));
-          if (s) {
-            paper.llmScore = s.score;
-            paper.llmScoreReason = s.reason;
-            if (s.summary)
-              paper.llmSummary = s.summary;
-            matched++;
+      const batchMaxTokens = Math.min(batchPapers.length * 150 + 256, 8192);
+      const scoringPrompt = fillTemplate(scoringTemplate, {
+        interest_keywords: kwStr,
+        papers_json: JSON.stringify(papersForScoring)
+      });
+      try {
+        const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: batchMaxTokens });
+        if (result.usage)
+          trackUsage(`Step 3b scoring batch ${batchIdx + 1}`, result.usage.inputTokens, result.usage.outputTokens);
+        const jsonMatch = result.text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const scores = JSON.parse(jsonMatch[0]);
+          const scoreMap = new Map(scores.map((s) => [normalizeId(s.id), s]));
+          let matched = 0;
+          for (const paper of batchPapers) {
+            const s = scoreMap.get(normalizeId(paper.id));
+            if (s) {
+              paper.llmScore = s.score;
+              paper.llmScoreReason = s.reason;
+              if (s.summary)
+                paper.llmSummary = s.summary;
+              matched++;
+            }
           }
+          totalScored += matched;
+          log(`Step 3b batch ${batchIdx + 1}/${totalBatches}: scored ${matched}/${batchPapers.length} (LLM returned ${scores.length})`);
+          if (matched === 0 && scores.length > 0) {
+            log(`Step 3b batch ${batchIdx + 1} WARNING: 0 matched \u2014 ID mismatch? LLM="${(_o = scores[0]) == null ? void 0 : _o.id}" vs paper="${(_p = batchPapers[0]) == null ? void 0 : _p.id}"`);
+          }
+        } else {
+          log(`Step 3b batch ${batchIdx + 1}: could not parse JSON (response length=${result.text.length})`);
         }
-        rankedPapers.sort((a, b) => {
-          var _a3, _b2;
-          return ((_a3 = b.llmScore) != null ? _a3 : -1) - ((_b2 = a.llmScore) != null ? _b2 : -1);
-        });
-        log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
-        if (matched === 0) {
-          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_o = scores[0]) == null ? void 0 : _o.id}" vs paper id="${(_p = rankedPapers[0]) == null ? void 0 : _p.id}"`);
-        }
-      } else {
-        log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
+      } catch (err) {
+        log(`Step 3b batch ${batchIdx + 1} ERROR: ${String(err)} (non-fatal, continuing)`);
       }
-    } catch (err) {
-      log(`Step 3b LLM SCORE ERROR: ${String(err)} (non-fatal, using keyword ranking)`);
     }
+    rankedPapers.sort((a, b) => {
+      var _a3, _b2;
+      return ((_a3 = b.llmScore) != null ? _a3 : -1) - ((_b2 = a.llmScore) != null ? _b2 : -1);
+    });
+    log(`Step 3b LLM SCORE: done \u2014 ${totalScored}/${rankedPapers.length} papers scored across ${totalBatches} batch(es), re-ranked`);
   } else {
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }

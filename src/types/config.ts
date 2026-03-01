@@ -80,6 +80,9 @@ export interface PaperDailySettings {
     deepReadPromptTemplate?: string;  // if empty, falls back to DEFAULT_DEEP_READ_PROMPT
   };
 
+  // Scoring prompt (Step 3b): if empty falls back to DEFAULT_SCORING_PROMPT
+  scoringPromptTemplate?: string;
+
   // Settings UI language (does not affect AI output language)
   uiLanguage?: "zh" | "en";
 }
