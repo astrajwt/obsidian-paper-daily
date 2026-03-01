@@ -746,6 +746,21 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // --- File name template ---
+    new Setting(drSubContainer)
+      .setName("文件名模板 / File Name Template")
+      .setDesc("精读笔记的文件名（不含 .md）。可用变量：{{title}} {{arxivId}} {{date}} {{model}} {{year}} {{month}} {{day}} | File name (without .md). Variables: {{title}} {{arxivId}} {{date}} {{model}} {{year}} {{month}} {{day}}")
+      .addText(text => text
+        .setPlaceholder("{{title}}-deep-read-{{model}}")
+        .setValue(this.plugin.settings.deepRead?.fileNameTemplate ?? "")
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = {
+            ...this.plugin.settings.deepRead,
+            fileNameTemplate: value.trim()
+          } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
     refreshDrSub();
 
     // ── LLM ──────────────────────────────────────────────────────

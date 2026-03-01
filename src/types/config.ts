@@ -83,6 +83,7 @@ export interface PaperDailySettings {
     deepReadPromptTemplate?: string;   // if empty, falls back to DEFAULT_DEEP_READ_PROMPT
     outputFolder?: string;             // vault folder for per-paper markdown files; default "{rootFolder}/deep-read"
     tags?: string[];                   // extra tags written to each paper's frontmatter
+    fileNameTemplate?: string;         // filename template, supports {{title}} {{arxivId}} {{date}} {{model}} {{year}} {{month}} {{day}}
   };
 
   // Scoring prompt (Step 3b): if empty falls back to DEFAULT_SCORING_PROMPT

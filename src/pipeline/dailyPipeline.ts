@@ -63,6 +63,39 @@ function escapeTableCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
 
+/** Build a safe filename (no extension) for a deep-read note using the configured template. */
+function buildDeepReadFileName(
+  template: string,
+  paper: Paper,
+  baseId: string,
+  date: string,
+  modelName: string
+): string {
+  const safeStr = (s: string, maxLen = 60) =>
+    s.replace(/[/\\:*?"<>|]/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, maxLen);
+
+  const [year, month, day] = date.split("-");
+  // Use just the last path segment of the model name (e.g. "deepseek/deepseek-chat" → "deepseek-chat")
+  const modelShort = modelName.split("/").pop() ?? modelName;
+
+  const vars: Record<string, string> = {
+    title:   safeStr(paper.title),
+    arxivId: baseId,
+    date,
+    model:   safeStr(modelShort, 40),
+    year,
+    month,
+    day,
+  };
+
+  let result = template;
+  for (const [k, v] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
+  }
+  // Final sanitize: strip remaining invalid chars, collapse dashes
+  return result.replace(/[/\\:*?"<>|]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || baseId;
+}
+
 function buildDailyMarkdown(
   date: string,
   settings: PaperDailySettings,
@@ -102,8 +135,9 @@ function buildDailyMarkdown(
     if (p.links.localPdf) linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
-      linkParts.push(`[[${deepReadFolder}/${date}/${safeId}|Deep Read]]`);
+      const fnTemplate = settings.deepRead?.fileNameTemplate?.trim() || "{{title}}-deep-read-{{model}}";
+      const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
+      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}|Deep Read]]`);
     }
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
@@ -457,7 +491,8 @@ export async function runDailyPipeline(
             ...(settings.deepRead?.tags ?? ["paper", "deep-read"]),
             ...(paper.interestHits ?? []).map(h => h.replace(/\s+/g, "-"))
           ];
-          const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const fnTemplate = settings.deepRead?.fileNameTemplate?.trim() || "{{title}}-deep-read-{{model}}";
+          const fileName = buildDeepReadFileName(fnTemplate, paper, baseId, date, settings.llm.model);
           const paperFrontmatter = [
             "---",
             `type: deep-read`,
@@ -473,8 +508,8 @@ export async function runDailyPipeline(
           ].join("\n");
 
           const paperMd = `${paperFrontmatter}\n\n# ${paper.title}\n\n${paper.deepReadAnalysis}\n`;
-          await writer.writeNote(`${outputFolder}/${safeId}.md`, paperMd);
-          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${safeId}.md`);
+          await writer.writeNote(`${outputFolder}/${fileName}.md`, paperMd);
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${fileName}.md`);
         } catch (writeErr) {
           log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
         }

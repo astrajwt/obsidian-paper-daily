@@ -644,6 +644,16 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(drSubContainer).setName("\u6587\u4EF6\u540D\u6A21\u677F / File Name Template").setDesc("\u7CBE\u8BFB\u7B14\u8BB0\u7684\u6587\u4EF6\u540D\uFF08\u4E0D\u542B .md\uFF09\u3002\u53EF\u7528\u53D8\u91CF\uFF1A{{title}} {{arxivId}} {{date}} {{model}} {{year}} {{month}} {{day}} | File name (without .md). Variables: {{title}} {{arxivId}} {{date}} {{model}} {{year}} {{month}} {{day}}").addText((text) => {
+      var _a3, _b2;
+      return text.setPlaceholder("{{title}}-deep-read-{{model}}").setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.fileNameTemplate) != null ? _b2 : "").onChange(async (value) => {
+        this.plugin.settings.deepRead = {
+          ...this.plugin.settings.deepRead,
+          fileNameTemplate: value.trim()
+        };
+        await this.plugin.saveSettings();
+      });
+    });
     refreshDrSub();
     containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
@@ -4759,6 +4769,26 @@ function getActiveDeepReadPrompt(settings) {
 function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
+function buildDeepReadFileName(template, paper, baseId, date, modelName) {
+  var _a2;
+  const safeStr = (s, maxLen = 60) => s.replace(/[/\\:*?"<>|]/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, maxLen);
+  const [year, month, day] = date.split("-");
+  const modelShort = (_a2 = modelName.split("/").pop()) != null ? _a2 : modelName;
+  const vars = {
+    title: safeStr(paper.title),
+    arxivId: baseId,
+    date,
+    model: safeStr(modelShort, 40),
+    year,
+    month,
+    day
+  };
+  let result = template;
+  for (const [k, v] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
+  }
+  return result.replace(/[/\\:*?"<>|]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || baseId;
+}
 function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, error) {
   var _a2, _b;
   const frontmatter = [
@@ -4779,7 +4809,7 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
 ${aiDigest}`;
   const deepReadFolder = (_b = (_a2 = settings.deepRead) == null ? void 0 : _a2.outputFolder) != null ? _b : "PaperDaily/deep-read";
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b2;
+    var _a3, _b2, _c, _d;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -4792,12 +4822,13 @@ ${aiDigest}`;
       linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
-      linkParts.push(`[[${deepReadFolder}/${date}/${safeId}|Deep Read]]`);
+      const fnTemplate = ((_b2 = (_a3 = settings.deepRead) == null ? void 0 : _a3.fileNameTemplate) == null ? void 0 : _b2.trim()) || "{{title}}-deep-read-{{model}}";
+      const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
+      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}|Deep Read]]`);
     }
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
-    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
-    const hits = ((_b2 = p.interestHits) != null ? _b2 : []).slice(0, 3).join(", ") || "-";
+    const summary = escapeTableCell((_c = p.llmSummary) != null ? _c : "");
+    const hits = ((_d = p.interestHits) != null ? _d : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
   const allPapersTableSection = [
@@ -4820,7 +4851,7 @@ var PipelineAbortError = class extends Error {
   }
 };
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5101,7 +5132,8 @@ ${paper.deepReadAnalysis}`);
             ...(_z = (_y = settings.deepRead) == null ? void 0 : _y.tags) != null ? _z : ["paper", "deep-read"],
             ...((_A = paper.interestHits) != null ? _A : []).map((h) => h.replace(/\s+/g, "-"))
           ];
-          const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const fnTemplate = ((_C = (_B = settings.deepRead) == null ? void 0 : _B.fileNameTemplate) == null ? void 0 : _C.trim()) || "{{title}}-deep-read-{{model}}";
+          const fileName = buildDeepReadFileName(fnTemplate, paper, baseId, date, settings.llm.model);
           const paperFrontmatter = [
             "---",
             `type: deep-read`,
@@ -5109,7 +5141,7 @@ ${paper.deepReadAnalysis}`);
             `date: ${date}`,
             `arxivId: ${baseId}`,
             `arxivUrl: ${arxivUrl}`,
-            `authors: [${((_B = paper.authors) != null ? _B : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
+            `authors: [${((_D = paper.authors) != null ? _D : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
             `published: ${paper.published ? paper.published.slice(0, 10) : date}`,
             `tags: [${fileTags.map((t) => `"${t}"`).join(", ")}]`,
             ...paper.llmScore != null ? [`llmScore: ${paper.llmScore}`] : [],
@@ -5121,8 +5153,8 @@ ${paper.deepReadAnalysis}`);
 
 ${paper.deepReadAnalysis}
 `;
-          await writer.writeNote(`${outputFolder}/${safeId}.md`, paperMd);
-          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${safeId}.md`);
+          await writer.writeNote(`${outputFolder}/${fileName}.md`, paperMd);
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${fileName}.md`);
         } catch (writeErr) {
           log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
         }
@@ -5141,7 +5173,7 @@ ${paper.deepReadAnalysis}
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_D = (_C = settings.deepRead) == null ? void 0 : _C.enabled) != null ? _D : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_F = (_E = settings.deepRead) == null ? void 0 : _E.enabled) != null ? _F : false})`);
   }
   checkAbort();
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
@@ -5173,7 +5205,7 @@ ${paper.deepReadAnalysis}
           ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
         };
       });
-      const hfEnabled = ((_E = settings.hfSource) == null ? void 0 : _E.enabled) !== false && hfDailyPapers.length > 0;
+      const hfEnabled = ((_G = settings.hfSource) == null ? void 0 : _G.enabled) !== false && hfDailyPapers.length > 0;
       const hfDataSection = hfEnabled ? `Note: papers with "source": "hf" are HuggingFace-only picks. Treat them identically to arXiv papers.
 
 ## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
@@ -5214,7 +5246,7 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   try {
     const catStats2 = /* @__PURE__ */ new Map();
     for (const paper of rankedPapers) {
-      for (const cat of (_F = paper.categories) != null ? _F : []) {
+      for (const cat of (_H = paper.categories) != null ? _H : []) {
         if (!catStats2.has(cat))
           catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
         const s = catStats2.get(cat);
