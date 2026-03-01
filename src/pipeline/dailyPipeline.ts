@@ -9,7 +9,6 @@ import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
-import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
@@ -78,6 +77,7 @@ function buildDailyMarkdown(
     const links: string[] = [];
     if (p.links.html) links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
+    if (p.links.localPdf) links.push(`[Local PDF](${p.links.localPdf})`);
     if (p.links.hf) links.push(`[HF](${p.links.hf})`);
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ") || "_none_";
     const hfBadge = p.links.hf ? ` 🤗 HF${p.hfUpvotes ? ` ${p.hfUpvotes}↑` : ""}` : "";
@@ -102,7 +102,7 @@ function buildDailyMarkdown(
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
+    if (p.links.localPdf) linkParts.push(`[Local](${p.links.localPdf})`);    const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
     const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
@@ -293,17 +293,22 @@ export async function runDailyPipeline(
 
   // ── Step 3b: LLM scoring (all papers) ────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[2/5] ⭐ LLM 打分中... (${rankedPapers.length} 篇)`);
+    progress(`[2/5] 🔍 快速预筛 ${rankedPapers.length} 篇...`);
     try {
       const llm = buildLLMProvider(settings);
       const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
-      const papersForScoring = rankedPapers.map(p => ({
+      // Cap scoring to maxResultsPerDay to avoid token overflow; papers beyond the cap
+      // retain their keyword-based rank and fall to the end of the list.
+      const scoringCap = Math.min(rankedPapers.length, settings.maxResultsPerDay);
+      const papersForScoring = rankedPapers.slice(0, scoringCap).map(p => ({
         id: p.id,
         title: p.title,
         abstract: p.abstract.slice(0, 250),
         interestHits: p.interestHits ?? [],
         ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {})
       }));
+      // ~120 output tokens per paper (id + score + reason + summary); add headroom
+      const scoringMaxTokens = Math.min(scoringCap * 150 + 256, 8192);
       const scoringPrompt = `Score each paper 1–10 for quality and relevance to the user's interests.
 
 User's interest keywords (higher weight = more important): ${kwStr}
@@ -320,7 +325,7 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 Papers:
 ${JSON.stringify(papersForScoring)}`;
 
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 4096 });
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: scoringMaxTokens });
       if (result.usage) trackUsage("Step 3b scoring", result.usage.inputTokens, result.usage.outputTokens);
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -356,14 +361,13 @@ ${JSON.stringify(papersForScoring)}`;
 
   // ── Step 3d: Download full text (ranked papers) ───────────────
   if (rankedPapers.length > 0) {
-    await downloadPapersForDay(app, rankedPapers, settings, log);
+    await downloadPapersForDay(app, rankedPapers, settings, log, date);
   }
 
-  // ── Step 3f: Deep Read — per-paper LLM analysis ───────────────
+  // ── Step 3f: Deep Read — per-paper LLM analysis via arxiv HTML URL ───
   let fulltextSection = "";
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN      = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
-    const maxChars  = settings.deepRead.maxCharsPerPaper ?? 8000;
     const maxTokens = settings.deepRead.deepReadMaxTokens ?? 1024;
     const drPrompt  = settings.deepRead.deepReadPromptTemplate ?? DEFAULT_DEEP_READ_PROMPT;
     const langStr   = settings.language === "zh" ? "Chinese (中文)" : "English";
@@ -375,25 +379,21 @@ ${JSON.stringify(papersForScoring)}`;
     for (let i = 0; i < topN; i++) {
       const paper  = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      const htmlUrl = `https://arxiv.org/html/${baseId}`;
 
-      // 1. Fetch full text (fallback to abstract)
-      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fetching ${baseId}...`);
-      const rawText = await fetchArxivFullText(baseId, maxChars);
-      const fulltextForPrompt = rawText ?? paper.abstract;
-      if (!rawText) log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fulltext unavailable, using abstract`);
+      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} → ${htmlUrl}`);
 
-      // 2. Build per-paper prompt
+      // Build per-paper prompt — pass the arxiv HTML URL so the LLM can read it directly
       const paperPrompt = fillTemplate(drPrompt, {
         title:         paper.title,
         authors:       (paper.authors ?? []).slice(0, 5).join(", ") || "Unknown",
-        directions:    "",
         interest_hits: (paper.interestHits ?? []).join(", ") || "none",
         abstract:      paper.abstract,
-        fulltext:      fulltextForPrompt,
+        fulltext:      htmlUrl,
         language:      langStr,
       });
 
-      // 3. LLM call — non-fatal
+      // LLM call — non-fatal
       try {
         const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens });
         if (result.usage) trackUsage(`Step 3f deepread [${i + 1}]`, result.usage.inputTokens, result.usage.outputTokens);
@@ -408,8 +408,8 @@ ${JSON.stringify(papersForScoring)}`;
     if (analysisResults.length > 0) {
       fulltextSection = [
         "",
-        `## Deep Read Analysis (top ${analysisResults.length} papers):`,
-        `> Per-paper LLM analysis based on full paper text.`,
+        `## Deep Read Analysis (top ${analysisResults.length} papers)`,
+        `> Per-paper LLM analysis — model reads full paper from arxiv.org/html directly.`,
         "",
         analysisResults.join("\n\n---\n\n"),
       ].join("\n");
@@ -421,7 +421,7 @@ ${JSON.stringify(papersForScoring)}`;
 
   // ── Step 4: LLM ───────────────────────────────────────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[4/5] 🤖 生成摘要... (${settings.llm.model})`);
+    progress(`[4/5] 📝 正在生成日报...`);
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
@@ -443,12 +443,20 @@ ${JSON.stringify(papersForScoring)}`;
         hfUpvotes: p.hfUpvotes ?? 0,
         ...(p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {})
       }));
+      // Build local_pdfs section: list of papers that have a locally downloaded PDF
+      const localPdfEntries = rankedPapers
+        .filter(p => p.links.localPdf)
+        .map(p => `- [${p.title}](${p.links.localPdf})`);
+      const localPdfsSection = localPdfEntries.length > 0
+        ? `## Local PDFs (${date})\n${localPdfEntries.join("\n")}`
+        : "";
+
       const prompt = fillTemplate(getActivePrompt(settings), {
         date,
-        topDirections: "",
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
+        local_pdfs: localPdfsSection,
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
       const result = await llm.generate({ prompt, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });

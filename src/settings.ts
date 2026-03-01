@@ -88,6 +88,7 @@ Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes → inter
 ## Papers to analyze (pre-ranked, arXiv + HF):
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
@@ -138,6 +139,7 @@ Output language: {{language}}
 ## Papers (pre-ranked):
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 ## HuggingFace Daily:
 {{hf_papers_json}}
 
@@ -164,6 +166,7 @@ Output language: {{language}}
 ## Papers to review:
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 
 ---
 
@@ -194,8 +197,7 @@ Authors: {{authors}}
 Interest keyword hits: {{interest_hits}}
 Abstract: {{abstract}}
 
-Full paper text (may be truncated):
-{{fulltext}}
+Full paper HTML (read directly if you can access URLs): {{fulltext}}
 
 Provide a structured analysis with these sections:
 
@@ -220,7 +222,19 @@ export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
 
 export const DEFAULT_SETTINGS: PaperDailySettings = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
-  interestKeywords: [],
+  // Matching is case-insensitive (keywords are lowercased before comparison)
+  interestKeywords: [
+    { keyword: "rlhf", weight: 5 },
+    { keyword: "agent", weight: 5 },
+    { keyword: "kv cache", weight: 4 },
+    { keyword: "speculative decoding", weight: 4 },
+    { keyword: "moe", weight: 4 },
+    { keyword: "inference serving", weight: 4 },
+    { keyword: "reasoning", weight: 3 },
+    { keyword: "post-training", weight: 3 },
+    { keyword: "distillation", weight: 3 },
+    { keyword: "quantization", weight: 3 },
+  ],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -267,8 +281,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   deepRead: {
     enabled: false,
     topN: 5,
-    maxCharsPerPaper: 8000,
-    cacheTTLDays: 60,
     deepReadMaxTokens: 1024,
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
@@ -308,7 +320,7 @@ export class PaperDailySettingTab extends PluginSettingTab {
     // ── Interest Keywords ─────────────────────────────────────────
     containerEl.createEl("h2", { text: "兴趣关键词 / Interest Keywords" });
     containerEl.createEl("p", {
-      text: "用于论文打分与高亮显示，权重越高排名越靠前。",
+      text: "用于论文打分与高亮显示，权重越高排名越靠前。匹配不区分大小写。",
       cls: "setting-item-description"
     });
 
@@ -595,10 +607,33 @@ export class PaperDailySettingTab extends PluginSettingTab {
     // ── Prompt Templates (tabbed library) ────────────────────────
     containerEl.createEl("h3", { text: "Prompt 模板库 / Prompt Library" });
     {
-      const desc = containerEl.createEl("p", {
-        text: "点击 Tab 切换并激活模板。占位符：{{date}} {{topDirections}} {{papers_json}} {{hf_papers_json}} {{fulltext_section}} {{language}}",
-        cls: "setting-item-description"
-      });
+      const desc = containerEl.createEl("div", { cls: "setting-item-description" });
+      desc.createEl("p", { text: "点击 Tab 切换并激活模板。可用占位符：" });
+      const table = desc.createEl("table");
+      table.style.fontSize = "11px";
+      table.style.borderCollapse = "collapse";
+      table.style.width = "100%";
+      const rows: [string, string][] = [
+        ["{{date}}", "当日日期，格式 YYYY-MM-DD"],
+        ["{{papers_json}}", "排名后的 arXiv + HF 论文列表（JSON），每篇含 id / title / abstract / interestHits / hfUpvotes / links 等字段，最多 10 篇"],
+        ["{{hf_papers_json}}", "HuggingFace Daily Papers 原始列表（JSON），含 title / hfUpvotes / streakDays，最多 15 条"],
+        ["{{fulltext_section}}", "Deep Read 精读结果（Markdown）；每篇通过 arxiv.org/html URL 让模型直接读原文并生成分析；未开启 Deep Read 时为空"],
+        ["{{local_pdfs}}", "当日已下载到本地的 PDF 列表（Markdown 链接）；未开启 PDF 下载时为空字符串"],
+        ["{{language}}", "输出语言，由设置中'语言'选项决定，值为 Chinese (中文) 或 English"],
+      ];
+      for (const [ph, explain] of rows) {
+        const tr = table.createEl("tr");
+        const td1 = tr.createEl("td");
+        td1.style.padding = "2px 8px 2px 0";
+        td1.style.whiteSpace = "nowrap";
+        td1.style.fontFamily = "monospace";
+        td1.style.color = "var(--text-accent)";
+        td1.setText(ph);
+        const td2 = tr.createEl("td");
+        td2.style.padding = "2px 0";
+        td2.style.color = "var(--text-muted)";
+        td2.setText(explain);
+      }
       desc.style.marginBottom = "10px";
 
       // Ensure library is initialized
@@ -978,30 +1013,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value } as typeof this.plugin.settings.deepRead;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(drSubContainer)
-      .setName("每篇字符上限 / Max chars per paper")
-      .setDesc("全文截断长度，越大越丰富但 prompt 更长（默认 8000）| Truncation limit per paper in characters")
-      .addSlider(slider => slider
-        .setLimits(3000, 20000, 1000)
-        .setValue(this.plugin.settings.deepRead?.maxCharsPerPaper ?? 8000)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, maxCharsPerPaper: value } as typeof this.plugin.settings.deepRead;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(drSubContainer)
-      .setName("全文缓存保留天数 / Cache TTL (days)")
-      .setDesc("全文缓存在 cache/fulltext/ 下保留多少天后自动清理 | Days to keep cached full texts before pruning")
-      .addSlider(slider => slider
-        .setLimits(7, 180, 1)
-        .setValue(this.plugin.settings.deepRead?.cacheTTLDays ?? 60)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value } as typeof this.plugin.settings.deepRead;
           await this.plugin.saveSettings();
         }));
 

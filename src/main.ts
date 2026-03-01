@@ -80,7 +80,15 @@ export default class PaperDailyPlugin extends Plugin {
       () => this.settings,
       this.stateStore,
       {
-        onDaily: () => this.runDaily(),
+        onDaily: () => {
+          const notice = new Notice("Paper Daily: 定时任务启动中...", 0);
+          return this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`))
+            .then(() => { setTimeout(() => notice.hide(), 4000); })
+            .catch((err) => {
+              notice.setMessage(`Paper Daily 错误: ${String(err)}`);
+              setTimeout(() => notice.hide(), 6000);
+            });
+        },
         todayFileExists: (date) => this.todayFileExists(date)
       }
     );

@@ -77,8 +77,6 @@ export interface PaperDailySettings {
   deepRead?: {
     enabled: boolean;
     topN: number;             // how many top-ranked papers to fetch (default 5)
-    maxCharsPerPaper: number; // truncation limit per paper (default 8000)
-    cacheTTLDays: number;     // days before cached full texts are pruned (default 60)
     deepReadMaxTokens?: number;       // per-paper output token limit, default 1024
     deepReadPromptTemplate?: string;  // if empty, falls back to DEFAULT_DEEP_READ_PROMPT
   };

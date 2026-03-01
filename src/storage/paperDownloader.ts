@@ -32,21 +32,26 @@ async function downloadOne(
   app: App,
   paper: Paper,
   rootFolder: string,
+  date: string,
   log: (msg: string) => void
 ): Promise<void> {
   const arxivId = getArxivId(paper.id);
   const filename = safeFilename(arxivId);
 
   if (!paper.links.pdf) return;
-  const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  const pdfFolder = `${rootFolder}/papers/pdf/${date}`;
+  const pdfPath = normalizePath(`${pdfFolder}/${filename}.pdf`);
+
   if (app.vault.getAbstractFileByPath(pdfPath)) {
+    paper.links.localPdf = pdfPath;
     log(`PDF skip (exists): ${filename}`);
   } else {
     try {
       const resp = await requestUrl({ url: paper.links.pdf, method: "GET" });
       if (resp.status === 200) {
-        await ensureFolder(app, `${rootFolder}/papers/pdf`);
+        await ensureFolder(app, pdfFolder);
         await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
+        paper.links.localPdf = pdfPath;
         log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
       } else {
         log(`PDF skip (HTTP ${resp.status}): ${filename}`);
@@ -62,13 +67,14 @@ export async function downloadPapersForDay(
   app: App,
   papers: Paper[],
   settings: PaperDailySettings,
-  log: (msg: string) => void
+  log: (msg: string) => void,
+  date: string
 ): Promise<void> {
   if (!settings.paperDownload?.savePdf) return;
 
-  log(`Step DOWNLOAD: ${papers.length} papers`);
+  log(`Step DOWNLOAD: ${papers.length} papers → papers/pdf/${date}/`);
   for (const paper of papers) {
-    await downloadOne(app, paper, settings.rootFolder, log);
+    await downloadOne(app, paper, settings.rootFolder, date, log);
   }
   log(`Step DOWNLOAD: done`);
 }
@@ -81,11 +87,12 @@ export async function downloadPapersForDay(
 export async function readPaperPdfAsBase64(
   app: App,
   rootFolder: string,
-  paperId: string
+  paperId: string,
+  date: string
 ): Promise<string | null> {
   const arxivId = paperId.replace(/^arxiv:/i, "");
   const filename = arxivId.replace(/[/\\:*?"<>|]/g, "_");
-  const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  const pdfPath = normalizePath(`${rootFolder}/papers/pdf/${date}/${filename}.pdf`);
   const abstractFile = app.vault.getAbstractFileByPath(pdfPath);
   if (!(abstractFile instanceof TFile)) return null;
   try {

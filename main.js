@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => PaperDailyPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -110,6 +110,7 @@ Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes \u2192 in
 ## Papers to analyze (pre-ranked, arXiv + HF):
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
@@ -159,6 +160,7 @@ Output language: {{language}}
 ## Papers (pre-ranked):
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 ## HuggingFace Daily:
 {{hf_papers_json}}
 
@@ -184,6 +186,7 @@ Output language: {{language}}
 ## Papers to review:
 {{papers_json}}
 {{fulltext_section}}
+{{local_pdfs}}
 
 ---
 
@@ -213,8 +216,7 @@ Authors: {{authors}}
 Interest keyword hits: {{interest_hits}}
 Abstract: {{abstract}}
 
-Full paper text (may be truncated):
-{{fulltext}}
+Full paper HTML (read directly if you can access URLs): {{fulltext}}
 
 Provide a structured analysis with these sections:
 
@@ -236,7 +238,19 @@ var DEFAULT_PROMPT_LIBRARY = [
 ];
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
-  interestKeywords: [],
+  // Matching is case-insensitive (keywords are lowercased before comparison)
+  interestKeywords: [
+    { keyword: "rlhf", weight: 5 },
+    { keyword: "agent", weight: 5 },
+    { keyword: "kv cache", weight: 4 },
+    { keyword: "speculative decoding", weight: 4 },
+    { keyword: "moe", weight: 4 },
+    { keyword: "inference serving", weight: 4 },
+    { keyword: "reasoning", weight: 3 },
+    { keyword: "post-training", weight: 3 },
+    { keyword: "distillation", weight: 3 },
+    { keyword: "quantization", weight: 3 }
+  ],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
@@ -274,8 +288,6 @@ var DEFAULT_SETTINGS = {
   deepRead: {
     enabled: false,
     topN: 5,
-    maxCharsPerPaper: 8e3,
-    cacheTTLDays: 60,
     deepReadMaxTokens: 1024
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
@@ -299,7 +311,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     }));
     containerEl.createEl("h2", { text: "\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords" });
     containerEl.createEl("p", {
-      text: "\u7528\u4E8E\u8BBA\u6587\u6253\u5206\u4E0E\u9AD8\u4EAE\u663E\u793A\uFF0C\u6743\u91CD\u8D8A\u9AD8\u6392\u540D\u8D8A\u9760\u524D\u3002",
+      text: "\u7528\u4E8E\u8BBA\u6587\u6253\u5206\u4E0E\u9AD8\u4EAE\u663E\u793A\uFF0C\u6743\u91CD\u8D8A\u9AD8\u6392\u540D\u8D8A\u9760\u524D\u3002\u5339\u914D\u4E0D\u533A\u5206\u5927\u5C0F\u5199\u3002",
       cls: "setting-item-description"
     });
     const kwListEl = containerEl.createDiv();
@@ -498,10 +510,33 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     }));
     containerEl.createEl("h3", { text: "Prompt \u6A21\u677F\u5E93 / Prompt Library" });
     {
-      const desc = containerEl.createEl("p", {
-        text: "\u70B9\u51FB Tab \u5207\u6362\u5E76\u6FC0\u6D3B\u6A21\u677F\u3002\u5360\u4F4D\u7B26\uFF1A{{date}} {{topDirections}} {{papers_json}} {{hf_papers_json}} {{fulltext_section}} {{language}}",
-        cls: "setting-item-description"
-      });
+      const desc = containerEl.createEl("div", { cls: "setting-item-description" });
+      desc.createEl("p", { text: "\u70B9\u51FB Tab \u5207\u6362\u5E76\u6FC0\u6D3B\u6A21\u677F\u3002\u53EF\u7528\u5360\u4F4D\u7B26\uFF1A" });
+      const table = desc.createEl("table");
+      table.style.fontSize = "11px";
+      table.style.borderCollapse = "collapse";
+      table.style.width = "100%";
+      const rows = [
+        ["{{date}}", "\u5F53\u65E5\u65E5\u671F\uFF0C\u683C\u5F0F YYYY-MM-DD"],
+        ["{{papers_json}}", "\u6392\u540D\u540E\u7684 arXiv + HF \u8BBA\u6587\u5217\u8868\uFF08JSON\uFF09\uFF0C\u6BCF\u7BC7\u542B id / title / abstract / interestHits / hfUpvotes / links \u7B49\u5B57\u6BB5\uFF0C\u6700\u591A 10 \u7BC7"],
+        ["{{hf_papers_json}}", "HuggingFace Daily Papers \u539F\u59CB\u5217\u8868\uFF08JSON\uFF09\uFF0C\u542B title / hfUpvotes / streakDays\uFF0C\u6700\u591A 15 \u6761"],
+        ["{{fulltext_section}}", "Deep Read \u7CBE\u8BFB\u7ED3\u679C\uFF08Markdown\uFF09\uFF1B\u6BCF\u7BC7\u901A\u8FC7 arxiv.org/html URL \u8BA9\u6A21\u578B\u76F4\u63A5\u8BFB\u539F\u6587\u5E76\u751F\u6210\u5206\u6790\uFF1B\u672A\u5F00\u542F Deep Read \u65F6\u4E3A\u7A7A"],
+        ["{{local_pdfs}}", "\u5F53\u65E5\u5DF2\u4E0B\u8F7D\u5230\u672C\u5730\u7684 PDF \u5217\u8868\uFF08Markdown \u94FE\u63A5\uFF09\uFF1B\u672A\u5F00\u542F PDF \u4E0B\u8F7D\u65F6\u4E3A\u7A7A\u5B57\u7B26\u4E32"],
+        ["{{language}}", "\u8F93\u51FA\u8BED\u8A00\uFF0C\u7531\u8BBE\u7F6E\u4E2D'\u8BED\u8A00'\u9009\u9879\u51B3\u5B9A\uFF0C\u503C\u4E3A Chinese (\u4E2D\u6587) \u6216 English"]
+      ];
+      for (const [ph, explain] of rows) {
+        const tr = table.createEl("tr");
+        const td1 = tr.createEl("td");
+        td1.style.padding = "2px 8px 2px 0";
+        td1.style.whiteSpace = "nowrap";
+        td1.style.fontFamily = "monospace";
+        td1.style.color = "var(--text-accent)";
+        td1.setText(ph);
+        const td2 = tr.createEl("td");
+        td2.style.padding = "2px 0";
+        td2.style.color = "var(--text-muted)";
+        td2.setText(explain);
+      }
       desc.style.marginBottom = "10px";
       if (!this.plugin.settings.promptLibrary || this.plugin.settings.promptLibrary.length === 0) {
         this.plugin.settings.promptLibrary = DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t }));
@@ -762,20 +797,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       var _a3, _b;
       return slider.setLimits(1, 10, 1).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.topN) != null ? _b : 5).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, topN: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5B57\u7B26\u4E0A\u9650 / Max chars per paper").setDesc("\u5168\u6587\u622A\u65AD\u957F\u5EA6\uFF0C\u8D8A\u5927\u8D8A\u4E30\u5BCC\u4F46 prompt \u66F4\u957F\uFF08\u9ED8\u8BA4 8000\uFF09| Truncation limit per paper in characters").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(3e3, 2e4, 1e3).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.maxCharsPerPaper) != null ? _b : 8e3).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, maxCharsPerPaper: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(drSubContainer).setName("\u5168\u6587\u7F13\u5B58\u4FDD\u7559\u5929\u6570 / Cache TTL (days)").setDesc("\u5168\u6587\u7F13\u5B58\u5728 cache/fulltext/ \u4E0B\u4FDD\u7559\u591A\u5C11\u5929\u540E\u81EA\u52A8\u6E05\u7406 | Days to keep cached full texts before pruning").addSlider((slider) => {
-      var _a3, _b;
-      return slider.setLimits(7, 180, 1).setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.cacheTTLDays) != null ? _b : 60).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value };
         await this.plugin.saveSettings();
       });
     });
@@ -1335,20 +1356,23 @@ async function ensureFolder(app, folderPath) {
   } catch (e) {
   }
 }
-async function downloadOne(app, paper, rootFolder, log) {
+async function downloadOne(app, paper, rootFolder, date, log) {
   const arxivId = getArxivId(paper.id);
   const filename = safeFilename(arxivId);
   if (!paper.links.pdf)
     return;
-  const pdfPath = (0, import_obsidian5.normalizePath)(`${rootFolder}/papers/pdf/${filename}.pdf`);
+  const pdfFolder = `${rootFolder}/papers/pdf/${date}`;
+  const pdfPath = (0, import_obsidian5.normalizePath)(`${pdfFolder}/${filename}.pdf`);
   if (app.vault.getAbstractFileByPath(pdfPath)) {
+    paper.links.localPdf = pdfPath;
     log(`PDF skip (exists): ${filename}`);
   } else {
     try {
       const resp = await (0, import_obsidian5.requestUrl)({ url: paper.links.pdf, method: "GET" });
       if (resp.status === 200) {
-        await ensureFolder(app, `${rootFolder}/papers/pdf`);
+        await ensureFolder(app, pdfFolder);
         await app.vault.adapter.writeBinary(pdfPath, resp.arrayBuffer);
+        paper.links.localPdf = pdfPath;
         log(`PDF saved: ${filename}.pdf (${Math.round(resp.arrayBuffer.byteLength / 1024)} KB)`);
       } else {
         log(`PDF skip (HTTP ${resp.status}): ${filename}`);
@@ -1359,60 +1383,19 @@ async function downloadOne(app, paper, rootFolder, log) {
     await sleep(1200);
   }
 }
-async function downloadPapersForDay(app, papers, settings, log) {
+async function downloadPapersForDay(app, papers, settings, log, date) {
   var _a2;
   if (!((_a2 = settings.paperDownload) == null ? void 0 : _a2.savePdf))
     return;
-  log(`Step DOWNLOAD: ${papers.length} papers`);
+  log(`Step DOWNLOAD: ${papers.length} papers \u2192 papers/pdf/${date}/`);
   for (const paper of papers) {
-    await downloadOne(app, paper, settings.rootFolder, log);
+    await downloadOne(app, paper, settings.rootFolder, date, log);
   }
   log(`Step DOWNLOAD: done`);
 }
 
-// src/sources/ar5ivFetcher.ts
-var import_obsidian6 = require("obsidian");
-async function fetchArxivFullText(baseId, maxChars) {
-  const urls = [
-    `https://arxiv.org/html/${baseId}`,
-    `https://ar5iv.labs.arxiv.org/html/${baseId}`
-  ];
-  for (const url of urls) {
-    try {
-      const resp = await (0, import_obsidian6.requestUrl)({ url, method: "GET" });
-      if (resp.status === 200 && resp.text.length > 500) {
-        return extractText(resp.text, maxChars);
-      }
-    } catch (e) {
-    }
-  }
-  return null;
-}
-function extractText(html, maxChars) {
-  var _a2, _b;
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  for (const sel of [
-    "math",
-    "figure",
-    "figcaption",
-    ".ltx_bibliography",
-    ".ltx_page_footer",
-    "nav",
-    "header",
-    "script",
-    "style",
-    "svg"
-  ]) {
-    doc.querySelectorAll(sel).forEach((el) => el.remove());
-  }
-  const root = (_a2 = doc.querySelector("article")) != null ? _a2 : doc.body;
-  const raw = ((_b = root.textContent) != null ? _b : "").replace(/\s+/g, " ").trim();
-  return raw.slice(0, maxChars);
-}
-
 // src/llm/openaiCompatible.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var OpenAICompatibleProvider = class {
   constructor(baseUrl, apiKey, model) {
     this.baseUrl = baseUrl;
@@ -1433,7 +1416,7 @@ var OpenAICompatibleProvider = class {
       max_tokens: (_b = input.maxTokens) != null ? _b : 4096
     };
     const url = this.baseUrl.replace(/\/$/, "") + "/chat/completions";
-    const response = await (0, import_obsidian7.requestUrl)({
+    const response = await (0, import_obsidian6.requestUrl)({
       url,
       method: "POST",
       headers: {
@@ -4753,6 +4736,8 @@ ${aiDigest}`;
       links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf)
       links.push(`[PDF](${p.links.pdf})`);
+    if (p.links.localPdf)
+      links.push(`[Local PDF](${p.links.localPdf})`);
     if (p.links.hf)
       links.push(`[HF](${p.links.hf})`);
     const hitsStr = ((_a3 = p.interestHits) != null ? _a3 : []).slice(0, 3).join(", ") || "_none_";
@@ -4779,6 +4764,8 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
       linkParts.push(`[\u{1F917} HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf)
       linkParts.push(`[PDF](${p.links.pdf})`);
+    if (p.links.localPdf)
+      linkParts.push(`[Local](${p.links.localPdf})`);
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
     const hits = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "-";
@@ -4804,7 +4791,7 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4933,11 +4920,12 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   let rankedPapers = papers.length > 0 ? rankPapers(papers, interestKeywords) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[2/5] \u2B50 LLM \u6253\u5206\u4E2D... (${rankedPapers.length} \u7BC7)`);
+    progress(`[2/5] \u{1F50D} \u5FEB\u901F\u9884\u7B5B ${rankedPapers.length} \u7BC7...`);
     try {
       const llm = buildLLMProvider(settings);
       const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");
-      const papersForScoring = rankedPapers.map((p) => {
+      const scoringCap = Math.min(rankedPapers.length, settings.maxResultsPerDay);
+      const papersForScoring = rankedPapers.slice(0, scoringCap).map((p) => {
         var _a3;
         return {
           id: p.id,
@@ -4947,6 +4935,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           ...p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}
         };
       });
+      const scoringMaxTokens = Math.min(scoringCap * 150 + 256, 8192);
       const scoringPrompt = `Score each paper 1\u201310 for quality and relevance to the user's interests.
 
 User's interest keywords (higher weight = more important): ${kwStr}
@@ -4962,7 +4951,7 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 
 Papers:
 ${JSON.stringify(papersForScoring)}`;
-      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: 4096 });
+      const result = await llm.generate({ prompt: scoringPrompt, temperature: 0.1, maxTokens: scoringMaxTokens });
       if (result.usage)
         trackUsage("Step 3b scoring", result.usage.inputTokens, result.usage.outputTokens);
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
@@ -4999,14 +4988,13 @@ ${JSON.stringify(papersForScoring)}`;
     log(`Step 3b LLM SCORE: skipped (${rankedPapers.length === 0 ? "0 papers" : "no API key"})`);
   }
   if (rankedPapers.length > 0) {
-    await downloadPapersForDay(app, rankedPapers, settings, log);
+    await downloadPapersForDay(app, rankedPapers, settings, log, date);
   }
   let fulltextSection = "";
   if (((_m = settings.deepRead) == null ? void 0 : _m.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
     const topN = Math.min((_n = settings.deepRead.topN) != null ? _n : 5, rankedPapers.length);
-    const maxChars = (_o = settings.deepRead.maxCharsPerPaper) != null ? _o : 8e3;
-    const maxTokens = (_p = settings.deepRead.deepReadMaxTokens) != null ? _p : 1024;
-    const drPrompt = (_q = settings.deepRead.deepReadPromptTemplate) != null ? _q : DEFAULT_DEEP_READ_PROMPT;
+    const maxTokens = (_o = settings.deepRead.deepReadMaxTokens) != null ? _o : 1024;
+    const drPrompt = (_p = settings.deepRead.deepReadPromptTemplate) != null ? _p : DEFAULT_DEEP_READ_PROMPT;
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
     progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
     const llm = buildLLMProvider(settings);
@@ -5014,18 +5002,14 @@ ${JSON.stringify(papersForScoring)}`;
     for (let i = 0; i < topN; i++) {
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fetching ${baseId}...`);
-      const rawText = await fetchArxivFullText(baseId, maxChars);
-      const fulltextForPrompt = rawText != null ? rawText : paper.abstract;
-      if (!rawText)
-        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fulltext unavailable, using abstract`);
+      const htmlUrl = `https://arxiv.org/html/${baseId}`;
+      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} \u2192 ${htmlUrl}`);
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
-        authors: ((_r = paper.authors) != null ? _r : []).slice(0, 5).join(", ") || "Unknown",
-        directions: "",
-        interest_hits: ((_s = paper.interestHits) != null ? _s : []).join(", ") || "none",
+        authors: ((_q = paper.authors) != null ? _q : []).slice(0, 5).join(", ") || "Unknown",
+        interest_hits: ((_r = paper.interestHits) != null ? _r : []).join(", ") || "none",
         abstract: paper.abstract,
-        fulltext: fulltextForPrompt,
+        fulltext: htmlUrl,
         language: langStr
       });
       try {
@@ -5044,18 +5028,18 @@ ${paper.deepReadAnalysis}`);
     if (analysisResults.length > 0) {
       fulltextSection = [
         "",
-        `## Deep Read Analysis (top ${analysisResults.length} papers):`,
-        `> Per-paper LLM analysis based on full paper text.`,
+        `## Deep Read Analysis (top ${analysisResults.length} papers)`,
+        `> Per-paper LLM analysis \u2014 model reads full paper from arxiv.org/html directly.`,
         "",
         analysisResults.join("\n\n---\n\n")
       ].join("\n");
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_u = (_t = settings.deepRead) == null ? void 0 : _t.enabled) != null ? _u : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_t = (_s = settings.deepRead) == null ? void 0 : _s.enabled) != null ? _t : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    progress(`[4/5] \u{1F916} \u751F\u6210\u6458\u8981... (${settings.llm.model})`);
+    progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
@@ -5083,12 +5067,15 @@ ${paper.deepReadAnalysis}`);
           ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
         };
       });
+      const localPdfEntries = rankedPapers.filter((p) => p.links.localPdf).map((p) => `- [${p.title}](${p.links.localPdf})`);
+      const localPdfsSection = localPdfEntries.length > 0 ? `## Local PDFs (${date})
+${localPdfEntries.join("\n")}` : "";
       const prompt2 = fillTemplate(getActivePrompt(settings), {
         date,
-        topDirections: "",
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
+        local_pdfs: localPdfsSection,
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });
       const result = await llm.generate({ prompt: prompt2, temperature: settings.llm.temperature, maxTokens: settings.llm.maxTokens });
@@ -5245,7 +5232,7 @@ var Scheduler = class {
 };
 
 // src/main.ts
-var PaperDailyPlugin = class extends import_obsidian8.Plugin {
+var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   async onload() {
     await this.loadSettings();
     await this.initStorage();
@@ -5294,7 +5281,15 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
       () => this.settings,
       this.stateStore,
       {
-        onDaily: () => this.runDaily(),
+        onDaily: () => {
+          const notice = new import_obsidian7.Notice("Paper Daily: \u5B9A\u65F6\u4EFB\u52A1\u542F\u52A8\u4E2D...", 0);
+          return this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`)).then(() => {
+            setTimeout(() => notice.hide(), 4e3);
+          }).catch((err) => {
+            notice.setMessage(`Paper Daily \u9519\u8BEF: ${String(err)}`);
+            setTimeout(() => notice.hide(), 6e3);
+          });
+        },
         todayFileExists: (date) => this.todayFileExists(date)
       }
     );
@@ -5305,7 +5300,7 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
       callback: async () => {
-        const notice = new import_obsidian8.Notice("Paper Daily: \u542F\u52A8\u4E2D...", 0);
+        const notice = new import_obsidian7.Notice("Paper Daily: \u542F\u52A8\u4E2D...", 0);
         try {
           await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
           setTimeout(() => notice.hide(), 4e3);
@@ -5326,12 +5321,12 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
       id: "rebuild-index",
       name: "Rebuild index from local cache",
       callback: async () => {
-        new import_obsidian8.Notice("Paper Daily: Rebuilding dedup index...");
+        new import_obsidian7.Notice("Paper Daily: Rebuilding dedup index...");
         try {
           await this.dedupStore.load();
-          new import_obsidian8.Notice("Paper Daily: Index rebuilt.");
+          new import_obsidian7.Notice("Paper Daily: Index rebuilt.");
         } catch (err) {
-          new import_obsidian8.Notice(`Paper Daily Error: ${String(err)}`);
+          new import_obsidian7.Notice(`Paper Daily Error: ${String(err)}`);
         }
       }
     });
@@ -5363,7 +5358,7 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     const today = new Date().toISOString().slice(0, 10);
     if (await this.todayFileExists(today))
       return;
-    const notice = new import_obsidian8.Notice("Paper Daily: \u4ECA\u65E5\u6587\u6863\u7F3A\u5931\uFF0C\u6B63\u5728\u751F\u6210...", 0);
+    const notice = new import_obsidian7.Notice("Paper Daily: \u4ECA\u65E5\u6587\u6863\u7F3A\u5931\uFF0C\u6B63\u5728\u751F\u6210...", 0);
     try {
       await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
       setTimeout(() => notice.hide(), 4e3);
@@ -5422,7 +5417,7 @@ var PaperDailyPlugin = class extends import_obsidian8.Plugin {
     }
   }
 };
-var BackfillModal = class extends import_obsidian8.Modal {
+var BackfillModal = class extends import_obsidian7.Modal {
   constructor(app, plugin) {
     super(app);
     this.startDate = "";
@@ -5433,14 +5428,14 @@ var BackfillModal = class extends import_obsidian8.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "Backfill Daily Summaries" });
-    new import_obsidian8.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
+    new import_obsidian7.Setting(contentEl).setName("Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
       this.startDate = v;
     }));
-    new import_obsidian8.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
+    new import_obsidian7.Setting(contentEl).setName("End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
       this.endDate = v;
     }));
     this.statusEl = contentEl.createEl("p", { text: "", cls: "paper-daily-backfill-status" });
-    new import_obsidian8.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
+    new import_obsidian7.Setting(contentEl).addButton((btn) => btn.setButtonText("Run Backfill").setCta().onClick(async () => {
       if (!this.startDate || !this.endDate) {
         this.statusEl.setText("Please enter both start and end dates.");
         return;
