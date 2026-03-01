@@ -8,7 +8,7 @@ export interface Paper {
   categories: string[];
   published: string;        // ISO
   updated: string;          // ISO
-  links: { html?: string; pdf?: string; hf?: string; localPdf?: string };
+  links: { html?: string; pdf?: string; hf?: string };
   source: PaperSource;
 
   // HuggingFace enrichment

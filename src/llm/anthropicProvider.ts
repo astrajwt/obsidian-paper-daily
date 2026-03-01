@@ -9,23 +9,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async generate(input: LLMInput): Promise<LLMOutput> {
-    // Build user content: optional PDF document block + text prompt
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userContent: any[] = [];
-    if (input.pdfBase64) {
-      userContent.push({
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 }
-      });
-    }
-    userContent.push({ type: "text", text: input.prompt });
-
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: input.maxTokens ?? 4096,
       temperature: input.temperature ?? 0.3,
       system: input.system,
-      messages: [{ role: "user", content: userContent }]
+      messages: [{ role: "user", content: input.prompt }]
     });
 
     const textBlock = response.content.find(b => b.type === "text");

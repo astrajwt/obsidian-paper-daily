@@ -234,10 +234,15 @@ export async function runDailyPipeline(
   // Token usage accumulator
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const SINGLE_CALL_TOKEN_WARN = 20_000;
+  const TOTAL_TOKEN_WARN = 50_000;
   const trackUsage = (label: string, inputTokens: number, outputTokens: number) => {
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
+    if (inputTokens > SINGLE_CALL_TOKEN_WARN) {
+      log(`[WARN][TOKEN] ${label} single-call input=${inputTokens} exceeds threshold (${SINGLE_CALL_TOKEN_WARN}) — check prompt size`);
+    }
     options.onTokenUpdate?.(totalInputTokens, totalOutputTokens);
   };
 
@@ -281,7 +286,7 @@ export async function runDailyPipeline(
     }
   } catch (err) {
     fetchError = String(err);
-    log(`Step 1 FETCH ERROR: ${fetchError}`);
+    log(`[ERROR][FETCH] url=${fetchUrl} error=${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
 
@@ -351,7 +356,7 @@ export async function runDailyPipeline(
         }
       }
     } catch (err) {
-      log(`Step 1b HF FETCH ERROR: ${String(err)} (non-fatal, continuing)`);
+      log(`[ERROR][HF_FETCH] error=${String(err)} (non-fatal, continuing)`);
     }
   } else {
     log(`Step 1b HF FETCH: skipped (disabled)`);
@@ -441,7 +446,7 @@ export async function runDailyPipeline(
           log(`Step 3b batch ${batchIdx + 1}: could not parse JSON (response length=${result.text.length})`);
         }
       } catch (err) {
-        log(`Step 3b batch ${batchIdx + 1} ERROR: ${String(err)} (non-fatal, continuing)`);
+        log(`[ERROR][SCORING] batch=${batchIdx + 1}/${totalBatches} error=${String(err)} (non-fatal, continuing)`);
       }
     }
 
@@ -538,10 +543,10 @@ export async function runDailyPipeline(
           await writer.writeNote(`${outputFolder}/${fileName}.md`, paperMd);
           log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${fileName}.md`);
         } catch (writeErr) {
-          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
+          log(`[ERROR][DEEP_READ_WRITE] paper=${i + 1}/${topN} id=${baseId} error=${String(writeErr)}`);
         }
       } catch (err) {
-        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} — skipping`);
+        log(`[ERROR][DEEP_READ] paper=${i + 1}/${topN} id=${baseId} error=${String(err)} — skipping`);
       }
     }
 

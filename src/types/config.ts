@@ -64,11 +64,6 @@ export interface PaperDailySettings {
     feeds: string[];   // one URL per entry
   };
 
-  // Paper full-text download
-  paperDownload: {
-    savePdf: boolean;
-  };
-
   // Prompt template library
   promptLibrary?: PromptTemplate[];
   activePromptId?: string;       // daily

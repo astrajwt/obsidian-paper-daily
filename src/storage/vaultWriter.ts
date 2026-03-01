@@ -51,6 +51,39 @@ export class VaultWriter {
     }
   }
 
+  /**
+   * Append content to a log file, then rotate if the file exceeds maxBytes.
+   * When rotating, the oldest half is discarded so the file stays near maxBytes/2.
+   * Uses character count as a byte approximation (safe for ASCII-heavy logs).
+   */
+  async appendLogWithRotation(filePath: string, content: string, maxBytes: number): Promise<void> {
+    const normalized = normalizePath(filePath);
+    await this.ensureFolderForFile(normalized);
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+
+    let current = "";
+    if (existing instanceof TFile) {
+      current = await this.app.vault.read(existing);
+    }
+
+    let next = current + content;
+
+    if (next.length > maxBytes) {
+      // Keep the last half, aligned to a newline boundary
+      const keepFrom = next.length - Math.floor(maxBytes / 2);
+      const newlineIdx = next.indexOf("\n", keepFrom);
+      const tail = newlineIdx !== -1 ? next.slice(newlineIdx + 1) : next.slice(keepFrom);
+      const keptKB = Math.round(tail.length / 1024);
+      next = `[LOG ROTATED ${new Date().toISOString()} — older entries removed, kept last ~${keptKB}KB]\n` + tail;
+    }
+
+    if (existing instanceof TFile) {
+      await this.app.vault.modify(existing, next);
+    } else {
+      await this.app.vault.create(normalized, next);
+    }
+  }
+
   async fileExists(filePath: string): Promise<boolean> {
     const normalized = normalizePath(filePath);
     const file = this.app.vault.getAbstractFileByPath(normalized);

@@ -47,7 +47,6 @@ export default class PaperDailyPlugin extends Plugin {
     this.settings.schedule = Object.assign({}, DEFAULT_SETTINGS.schedule, this.settings.schedule);
     this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
     this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
-    this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
     // Migrate interestKeywords from legacy string[] to InterestKeyword[]
     if (Array.isArray(this.settings.interestKeywords) &&
         this.settings.interestKeywords.length > 0 &&
@@ -82,7 +81,6 @@ export default class PaperDailyPlugin extends Plugin {
       this.settings.llm = Object.assign({}, DEFAULT_SETTINGS.llm, this.settings.llm);
       this.settings.hfSource = Object.assign({}, DEFAULT_SETTINGS.hfSource, this.settings.hfSource);
       this.settings.rssSource = Object.assign({}, DEFAULT_SETTINGS.rssSource, this.settings.rssSource);
-      this.settings.paperDownload = Object.assign({}, DEFAULT_SETTINGS.paperDownload, this.settings.paperDownload);
       console.log(`[PaperDaily] Loaded settings from vault: ${this.configFilePath}`);
     } catch {
       // File doesn't exist or parse error — use settings from data.json
