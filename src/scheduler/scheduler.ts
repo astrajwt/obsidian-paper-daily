@@ -3,6 +3,8 @@ import type { StateStore } from "../storage/stateStore";
 
 interface SchedulerCallbacks {
   onDaily: () => Promise<void>;
+  /** Returns true if today's inbox file already exists on disk. */
+  todayFileExists: (date: string) => Promise<boolean>;
 }
 
 function parseTime(hhmm: string): { hour: number; minute: number } {
@@ -55,10 +57,18 @@ export class Scheduler {
     const state = this.stateStore.get();
 
     // ── Daily ────────────────────────────────────────────────────
+    // Check if the scheduled time has passed today and hasn't run yet today.
+    // Using >= instead of exact-minute equality avoids missed triggers due to
+    // setInterval drift or computer sleep/wake cycles.
     const dailyTime = parseTime(settings.schedule.dailyTime);
-    if (now.getHours() === dailyTime.hour && now.getMinutes() === dailyTime.minute) {
+    const scheduledToday = new Date(now);
+    scheduledToday.setHours(dailyTime.hour, dailyTime.minute, 0, 0);
+    if (now >= scheduledToday) {
       const lastRun = state.lastDailyRun ? new Date(state.lastDailyRun) : null;
-      if (!lastRun || !isSameDay(now, lastRun)) {
+      const alreadyRanToday = lastRun && isSameDay(now, lastRun);
+      const today = now.toISOString().slice(0, 10);
+      // Run if not run today, or if the output file was deleted since last run.
+      if (!alreadyRanToday || !(await this.callbacks.todayFileExists(today))) {
         await this.callbacks.onDaily();
       }
     }

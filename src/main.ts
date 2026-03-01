@@ -26,6 +26,10 @@ export default class PaperDailyPlugin extends Plugin {
     this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
+
+    // On startup: generate today's document immediately if it doesn't exist yet.
+    this.app.workspace.onLayoutReady(() => { void this.runTodayIfMissing(); });
+
     console.log("Paper Daily loaded.");
   }
 
@@ -75,7 +79,10 @@ export default class PaperDailyPlugin extends Plugin {
     this.scheduler = new Scheduler(
       () => this.settings,
       this.stateStore,
-      { onDaily: () => this.runDaily() }
+      {
+        onDaily: () => this.runDaily(),
+        todayFileExists: (date) => this.todayFileExists(date)
+      }
     );
     this.scheduler.start();
   }
@@ -138,6 +145,25 @@ export default class PaperDailyPlugin extends Plugin {
       this.snapshotStore,
       { hfTrackStore: this.hfTrackStore, onProgress }
     );
+  }
+
+  private todayFileExists(date: string): Promise<boolean> {
+    const writer = new VaultWriter(this.app);
+    return writer.fileExists(`${this.settings.rootFolder}/inbox/${date}.md`);
+  }
+
+  /** Called once on startup: silently generate today's file if it is missing. */
+  private async runTodayIfMissing(): Promise<void> {
+    const today = new Date().toISOString().slice(0, 10);
+    if (await this.todayFileExists(today)) return;
+    const notice = new Notice("Paper Daily: 今日文档缺失，正在生成...", 0);
+    try {
+      await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
+      setTimeout(() => notice.hide(), 4000);
+    } catch (err) {
+      notice.setMessage(`Paper Daily 错误: ${String(err)}`);
+      setTimeout(() => notice.hide(), 6000);
+    }
   }
 
   async clearDedup(): Promise<void> {
