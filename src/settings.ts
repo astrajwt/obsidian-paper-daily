@@ -77,7 +77,7 @@ function detectPreset(baseUrl: string): string {
   return baseUrl ? "custom" : "deepseek";
 }
 
-export const DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst with deep expertise in LLM systems, RL, and AI infrastructure. You are opinionated, precise, and engineering-focused.
+export const DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst and critical peer reviewer. You combine deep engineering insight with academic rigor. Be direct and opinionated.
 
 Today: {{date}}
 Output language: {{language}}
@@ -108,9 +108,12 @@ For **each paper** in the list, output exactly this structure:
 **[N]. {title}**
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 关键词: {interest hits}
-- 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
-- 🔧 工程启示: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
-- ⚠️ 局限性: honest weaknesses — scope, baselines, reproducibility, generalization, etc.
+- 💡 核心贡献: one sentence — what exactly did they do / prove / build? Be specific with method names and key numbers.
+- 🔬 方法核心: key technical novelty — principled or ad hoc? any theoretical guarantees or assumptions worth noting?
+- 📊 实验严谨性: are baselines fair and up-to-date? ablations sufficient? any obvious cherry-picking or missing controls?
+- 🔧 工程启示: what can a practitioner adopt? Be concrete — "use X to achieve Y", not "this is interesting". If full text is available above, draw from methods/experiments.
+- ⚠️ 局限性 & 可复现性: scope limitations + code availability + compute requirements. Can a grad student replicate this?
+- 📚 建议: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
 - 🔗 {links from the paper data}
 
 Value rating guide — be calibrated, not generous:
@@ -123,79 +126,17 @@ Value rating guide — be calibrated, not generous:
 ### HF 社区信号 / HF Community Signal
 From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
-### 今日结语 / Closing
-2–3 sentences: the most important thing to keep an eye on from today's batch.
+### 今日批次质量 & 结语 / Batch Quality & Closing
+2–3 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
 
 ---
 Rules:
 - Do NOT hedge every sentence. State your assessment directly.
+- Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
 - If hfUpvotes is high but interest keyword relevance is low, note the discrepancy.
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
-- 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".`;
-
-export const DEFAULT_QUICKSCAN_PROMPT = `You are a senior AI/ML research analyst. Be concise and opinionated. No fluff.
-
-Today: {{date}}
-Output language: {{language}}
-
-## Papers (pre-ranked):
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
-## User's interest keywords:
-{{interest_keywords}}
-
-## HuggingFace Daily:
-{{hf_papers_json}}
-
----
-
-### 今日速览 / Quick Scan
-For each arXiv paper, one line each — no exceptions, no skipping:
-**N. Title** — one sentence: what they did and whether it matters (be direct; say "incremental" or "skip" if warranted).
-
-### HF 热点 / HF Highlights
-Top 3–5 HF picks not already covered above: title + one-line verdict on whether the community hype is warranted.
-
-### 今日结语 / Closing
-One sentence. The single most important thing from today.
-
----
-Rules: Be blunt. Shorter is better. No per-paper section breakdowns.`;
-
-export const DEFAULT_REVIEW_PROMPT = `You are a rigorous peer reviewer at a top AI conference (NeurIPS/ICML/ICLR). Evaluate research quality critically and fairly.
-
-Today: {{date}}
-Output language: {{language}}
-
-## Papers to review:
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
-## User's interest keywords:
-{{interest_keywords}}
-
----
-
-### 技术评审 / Technical Review
-
-For **each paper** in the list:
-
-**[N]. {title}**
-- 🔬 方法核心 / Method: What is the key technical novelty? Is it principled or ad hoc? Any theoretical guarantees?
-- 📊 实验严谨性 / Rigor: Are baselines fair and up-to-date? Are ablations sufficient? Any obvious cherry-picking?
-- 📈 结果可信度 / Credibility: How strong is the evidence? What controls are missing? Is the gain meaningful in practice?
-- 🔁 可复现性 / Reproducibility: Code released? Compute requirements? Can a grad student replicate this in a week?
-- 📚 建议 / Recommendation: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-
-### 今日批次质量评估 / Batch Quality Assessment
-2–3 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? Any standout outliers?
-
----
-Rules:
-- Be skeptical but fair. Avoid enthusiasm not backed by evidence.
-- Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
+- 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific — no "interesting direction" hedging.`;
 
 export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
@@ -223,8 +164,6 @@ Keep the total under 400 words. Be direct and opinionated. Output in {{language}
 
 export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
   { id: "builtin_engineering", name: "工程精读", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
-  { id: "builtin_quickscan",   name: "速览",     prompt: DEFAULT_QUICKSCAN_PROMPT, builtin: true },
-  { id: "builtin_review",      name: "技术评审", prompt: DEFAULT_REVIEW_PROMPT, builtin: true },
 ];
 
 
@@ -282,9 +221,6 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     savePdf: true,
   },
 
-  arxivDetailTopK: 10,
-  hfDetailTopK: 10,
-
   deepRead: {
     enabled: false,
     topN: 5,
@@ -293,7 +229,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   },
 
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t })),
-  activePromptId: "builtin_review",
+  activePromptId: "builtin_engineering",
 };
 
 export class PaperDailySettingTab extends PluginSettingTab {
@@ -322,6 +258,50 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.categories = value.split(",").map(s => s.trim()).filter(Boolean);
           await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("拉取方式 / Fetch Mode")
+      .setDesc(
+        "全量拉取：抓取分类下所有论文（由 LLM 打分后排序展示）\n" +
+        "仅兴趣关键词：只保留命中至少一个兴趣关键词的论文，适合关键词覆盖全面时使用。\n\n" +
+        "Fetch all: retrieve all papers in the selected categories and let LLM scoring determine relevance.\n" +
+        "Interest only: keep only papers matching at least one interest keyword — best when your keyword list is comprehensive."
+      )
+      .addDropdown(drop => drop
+        .addOption("all", "全量拉取 / Fetch All")
+        .addOption("interest_only", "仅兴趣关键词 / Interest Only")
+        .setValue(this.plugin.settings.fetchMode ?? "all")
+        .onChange(async (value) => {
+          this.plugin.settings.fetchMode = value as "all" | "interest_only";
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("保存 PDF / Save PDF")
+      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/日期/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
+        .onChange(async (value) => {
+          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("去重 / Dedup")
+      .setDesc("跳过已在往期日报中出现过的论文，避免重复展示。关闭后每次运行都会重新处理全部拉取结果 | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.dedup ?? true)
+        .onChange(async (value) => {
+          this.plugin.settings.dedup = value;
+          await this.plugin.saveSettings();
+        }))
+      .addButton(btn => btn
+        .setButtonText("清空缓存 / Clear")
+        .setWarning()
+        .onClick(async () => {
+          await this.plugin.clearDedup();
+          new Notice("去重缓存已清空 / Dedup cache cleared.");
         }));
 
     // ── Interest Keywords ─────────────────────────────────────────
@@ -372,50 +352,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.interestKeywords.push({ keyword: "", weight: 3 });
           await this.plugin.saveSettings();
           renderKwList();
-        }));
-
-    new Setting(containerEl)
-      .setName("拉取方式 / Fetch Mode")
-      .setDesc(
-        "全量拉取：抓取分类下所有论文（由 LLM 打分后排序展示）\n" +
-        "仅兴趣关键词：只保留命中至少一个兴趣关键词的论文，适合关键词覆盖全面时使用。\n\n" +
-        "Fetch all: retrieve all papers in the selected categories and let LLM scoring determine relevance.\n" +
-        "Interest only: keep only papers matching at least one interest keyword — best when your keyword list is comprehensive."
-      )
-      .addDropdown(drop => drop
-        .addOption("all", "全量拉取 / Fetch All")
-        .addOption("interest_only", "仅兴趣关键词 / Interest Only")
-        .setValue(this.plugin.settings.fetchMode ?? "all")
-        .onChange(async (value) => {
-          this.plugin.settings.fetchMode = value as "all" | "interest_only";
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("保存 PDF / Save PDF")
-      .setDesc("下载论文 PDF 并存入 Vault（papers/pdf/日期/），已下载的文件自动跳过 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.paperDownload?.savePdf ?? false)
-        .onChange(async (value) => {
-          this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("去重 / Dedup")
-      .setDesc("跳过已在往期日报中出现过的论文，避免重复展示。关闭后每次运行都会重新处理全部拉取结果 | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.dedup ?? true)
-        .onChange(async (value) => {
-          this.plugin.settings.dedup = value;
-          await this.plugin.saveSettings();
-        }))
-      .addButton(btn => btn
-        .setButtonText("清空缓存 / Clear")
-        .setWarning()
-        .onClick(async () => {
-          await this.plugin.clearDedup();
-          new Notice("去重缓存已清空 / Dedup cache cleared.");
         }));
 
     // ── LLM ──────────────────────────────────────────────────────
@@ -829,30 +765,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.includePdfLink)
         .onChange(async (value) => {
           this.plugin.settings.includePdfLink = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("arXiv 详解论文数 / arXiv Detail Top-K")
-      .setDesc("每日摘要 arXiv 详解部分展示的论文数 | Number of arXiv papers shown in the detailed section")
-      .addSlider(slider => slider
-        .setLimits(1, 30, 1)
-        .setValue(this.plugin.settings.arxivDetailTopK ?? 10)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.arxivDetailTopK = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("HuggingFace 详解论文数 / HF Detail Top-K")
-      .setDesc("每日摘要 HuggingFace 详解部分展示的论文数 | Number of HF papers shown in the detailed section")
-      .addSlider(slider => slider
-        .setLimits(1, 30, 1)
-        .setValue(this.plugin.settings.hfDetailTopK ?? 10)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.hfDetailTopK = value;
           await this.plugin.saveSettings();
         }));
 

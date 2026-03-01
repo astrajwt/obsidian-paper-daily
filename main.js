@@ -99,7 +99,7 @@ function detectPreset(baseUrl) {
   }
   return baseUrl ? "custom" : "deepseek";
 }
-var DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst with deep expertise in LLM systems, RL, and AI infrastructure. You are opinionated, precise, and engineering-focused.
+var DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst and critical peer reviewer. You combine deep engineering insight with academic rigor. Be direct and opinionated.
 
 Today: {{date}}
 Output language: {{language}}
@@ -130,9 +130,12 @@ For **each paper** in the list, output exactly this structure:
 **[N]. {title}**
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u5173\u952E\u8BCD: {interest hits}
-- \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence, technically specific \u2014 what exactly did they do / prove / build?
-- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
-- \u26A0\uFE0F \u5C40\u9650\u6027: honest weaknesses \u2014 scope, baselines, reproducibility, generalization, etc.
+- \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence \u2014 what exactly did they do / prove / build? Be specific with method names and key numbers.
+- \u{1F52C} \u65B9\u6CD5\u6838\u5FC3: key technical novelty \u2014 principled or ad hoc? any theoretical guarantees or assumptions worth noting?
+- \u{1F4CA} \u5B9E\u9A8C\u4E25\u8C28\u6027: are baselines fair and up-to-date? ablations sufficient? any obvious cherry-picking or missing controls?
+- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner adopt? Be concrete \u2014 "use X to achieve Y", not "this is interesting". If full text is available above, draw from methods/experiments.
+- \u26A0\uFE0F \u5C40\u9650\u6027 & \u53EF\u590D\u73B0\u6027: scope limitations + code availability + compute requirements. Can a grad student replicate this?
+- \u{1F4DA} \u5EFA\u8BAE: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
 - \u{1F517} {links from the paper data}
 
 Value rating guide \u2014 be calibrated, not generous:
@@ -145,77 +148,17 @@ Value rating guide \u2014 be calibrated, not generous:
 ### HF \u793E\u533A\u4FE1\u53F7 / HF Community Signal
 From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
-### \u4ECA\u65E5\u7ED3\u8BED / Closing
-2\u20133 sentences: the most important thing to keep an eye on from today's batch.
+### \u4ECA\u65E5\u6279\u6B21\u8D28\u91CF & \u7ED3\u8BED / Batch Quality & Closing
+2\u20133 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
 
 ---
 Rules:
 - Do NOT hedge every sentence. State your assessment directly.
+- Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
 - If hfUpvotes is high but interest keyword relevance is low, note the discrepancy.
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
-- \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".`;
-var DEFAULT_QUICKSCAN_PROMPT = `You are a senior AI/ML research analyst. Be concise and opinionated. No fluff.
-
-Today: {{date}}
-Output language: {{language}}
-
-## Papers (pre-ranked):
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
-## User's interest keywords:
-{{interest_keywords}}
-
-## HuggingFace Daily:
-{{hf_papers_json}}
-
----
-
-### \u4ECA\u65E5\u901F\u89C8 / Quick Scan
-For each arXiv paper, one line each \u2014 no exceptions, no skipping:
-**N. Title** \u2014 one sentence: what they did and whether it matters (be direct; say "incremental" or "skip" if warranted).
-
-### HF \u70ED\u70B9 / HF Highlights
-Top 3\u20135 HF picks not already covered above: title + one-line verdict on whether the community hype is warranted.
-
-### \u4ECA\u65E5\u7ED3\u8BED / Closing
-One sentence. The single most important thing from today.
-
----
-Rules: Be blunt. Shorter is better. No per-paper section breakdowns.`;
-var DEFAULT_REVIEW_PROMPT = `You are a rigorous peer reviewer at a top AI conference (NeurIPS/ICML/ICLR). Evaluate research quality critically and fairly.
-
-Today: {{date}}
-Output language: {{language}}
-
-## Papers to review:
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
-## User's interest keywords:
-{{interest_keywords}}
-
----
-
-### \u6280\u672F\u8BC4\u5BA1 / Technical Review
-
-For **each paper** in the list:
-
-**[N]. {title}**
-- \u{1F52C} \u65B9\u6CD5\u6838\u5FC3 / Method: What is the key technical novelty? Is it principled or ad hoc? Any theoretical guarantees?
-- \u{1F4CA} \u5B9E\u9A8C\u4E25\u8C28\u6027 / Rigor: Are baselines fair and up-to-date? Are ablations sufficient? Any obvious cherry-picking?
-- \u{1F4C8} \u7ED3\u679C\u53EF\u4FE1\u5EA6 / Credibility: How strong is the evidence? What controls are missing? Is the gain meaningful in practice?
-- \u{1F501} \u53EF\u590D\u73B0\u6027 / Reproducibility: Code released? Compute requirements? Can a grad student replicate this in a week?
-- \u{1F4DA} \u5EFA\u8BAE / Recommendation: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-
-### \u4ECA\u65E5\u6279\u6B21\u8D28\u91CF\u8BC4\u4F30 / Batch Quality Assessment
-2\u20133 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? Any standout outliers?
-
----
-Rules:
-- Be skeptical but fair. Avoid enthusiasm not backed by evidence.
-- Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
+- \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific \u2014 no "interesting direction" hedging.`;
 var DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
 
@@ -240,9 +183,7 @@ Provide a structured analysis with these sections:
 
 Keep the total under 400 words. Be direct and opinionated. Output in {{language}}.`;
 var DEFAULT_PROMPT_LIBRARY = [
-  { id: "builtin_engineering", name: "\u5DE5\u7A0B\u7CBE\u8BFB", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
-  { id: "builtin_quickscan", name: "\u901F\u89C8", prompt: DEFAULT_QUICKSCAN_PROMPT, builtin: true },
-  { id: "builtin_review", name: "\u6280\u672F\u8BC4\u5BA1", prompt: DEFAULT_REVIEW_PROMPT, builtin: true }
+  { id: "builtin_engineering", name: "\u5DE5\u7A0B\u7CBE\u8BFB", prompt: DEFAULT_DAILY_PROMPT, builtin: true }
 ];
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
@@ -290,8 +231,6 @@ var DEFAULT_SETTINGS = {
   paperDownload: {
     savePdf: true
   },
-  arxivDetailTopK: 10,
-  hfDetailTopK: 10,
   deepRead: {
     enabled: false,
     topN: 5,
@@ -299,7 +238,7 @@ var DEFAULT_SETTINGS = {
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t })),
-  activePromptId: "builtin_review"
+  activePromptId: "builtin_engineering"
 };
 var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
@@ -315,6 +254,32 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u5206\u7C7B / Categories").setDesc("arXiv \u5206\u7C7B\uFF0C\u9017\u53F7\u5206\u9694 | Comma-separated arXiv categories (e.g. cs.AI,cs.LG,cs.CL)").addText((text) => text.setPlaceholder("cs.AI,cs.LG,cs.CL").setValue(this.plugin.settings.categories.join(",")).onChange(async (value) => {
       this.plugin.settings.categories = value.split(",").map((s) => s.trim()).filter(Boolean);
       await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u62C9\u53D6\u65B9\u5F0F / Fetch Mode").setDesc(
+      "\u5168\u91CF\u62C9\u53D6\uFF1A\u6293\u53D6\u5206\u7C7B\u4E0B\u6240\u6709\u8BBA\u6587\uFF08\u7531 LLM \u6253\u5206\u540E\u6392\u5E8F\u5C55\u793A\uFF09\n\u4EC5\u5174\u8DA3\u5173\u952E\u8BCD\uFF1A\u53EA\u4FDD\u7559\u547D\u4E2D\u81F3\u5C11\u4E00\u4E2A\u5174\u8DA3\u5173\u952E\u8BCD\u7684\u8BBA\u6587\uFF0C\u9002\u5408\u5173\u952E\u8BCD\u8986\u76D6\u5168\u9762\u65F6\u4F7F\u7528\u3002\n\nFetch all: retrieve all papers in the selected categories and let LLM scoring determine relevance.\nInterest only: keep only papers matching at least one interest keyword \u2014 best when your keyword list is comprehensive."
+    ).addDropdown((drop) => {
+      var _a3;
+      return drop.addOption("all", "\u5168\u91CF\u62C9\u53D6 / Fetch All").addOption("interest_only", "\u4EC5\u5174\u8DA3\u5173\u952E\u8BCD / Interest Only").setValue((_a3 = this.plugin.settings.fetchMode) != null ? _a3 : "all").onChange(async (value) => {
+        this.plugin.settings.fetchMode = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D\u8BBA\u6587 PDF \u5E76\u5B58\u5165 Vault\uFF08papers/pdf/\u65E5\u671F/\uFF09\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.").addToggle((toggle) => {
+      var _a3, _b;
+      return toggle.setValue((_b = (_a3 = this.plugin.settings.paperDownload) == null ? void 0 : _a3.savePdf) != null ? _b : false).onChange(async (value) => {
+        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("\u53BB\u91CD / Dedup").setDesc("\u8DF3\u8FC7\u5DF2\u5728\u5F80\u671F\u65E5\u62A5\u4E2D\u51FA\u73B0\u8FC7\u7684\u8BBA\u6587\uFF0C\u907F\u514D\u91CD\u590D\u5C55\u793A\u3002\u5173\u95ED\u540E\u6BCF\u6B21\u8FD0\u884C\u90FD\u4F1A\u91CD\u65B0\u5904\u7406\u5168\u90E8\u62C9\u53D6\u7ED3\u679C | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.").addToggle((toggle) => {
+      var _a3;
+      return toggle.setValue((_a3 = this.plugin.settings.dedup) != null ? _a3 : true).onChange(async (value) => {
+        this.plugin.settings.dedup = value;
+        await this.plugin.saveSettings();
+      });
+    }).addButton((btn) => btn.setButtonText("\u6E05\u7A7A\u7F13\u5B58 / Clear").setWarning().onClick(async () => {
+      await this.plugin.clearDedup();
+      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
     }));
     containerEl.createEl("h2", { text: "\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords" });
     containerEl.createEl("p", {
@@ -344,32 +309,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.interestKeywords.push({ keyword: "", weight: 3 });
       await this.plugin.saveSettings();
       renderKwList();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u62C9\u53D6\u65B9\u5F0F / Fetch Mode").setDesc(
-      "\u5168\u91CF\u62C9\u53D6\uFF1A\u6293\u53D6\u5206\u7C7B\u4E0B\u6240\u6709\u8BBA\u6587\uFF08\u7531 LLM \u6253\u5206\u540E\u6392\u5E8F\u5C55\u793A\uFF09\n\u4EC5\u5174\u8DA3\u5173\u952E\u8BCD\uFF1A\u53EA\u4FDD\u7559\u547D\u4E2D\u81F3\u5C11\u4E00\u4E2A\u5174\u8DA3\u5173\u952E\u8BCD\u7684\u8BBA\u6587\uFF0C\u9002\u5408\u5173\u952E\u8BCD\u8986\u76D6\u5168\u9762\u65F6\u4F7F\u7528\u3002\n\nFetch all: retrieve all papers in the selected categories and let LLM scoring determine relevance.\nInterest only: keep only papers matching at least one interest keyword \u2014 best when your keyword list is comprehensive."
-    ).addDropdown((drop) => {
-      var _a3;
-      return drop.addOption("all", "\u5168\u91CF\u62C9\u53D6 / Fetch All").addOption("interest_only", "\u4EC5\u5174\u8DA3\u5173\u952E\u8BCD / Interest Only").setValue((_a3 = this.plugin.settings.fetchMode) != null ? _a3 : "all").onChange(async (value) => {
-        this.plugin.settings.fetchMode = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u4FDD\u5B58 PDF / Save PDF").setDesc("\u4E0B\u8F7D\u8BBA\u6587 PDF \u5E76\u5B58\u5165 Vault\uFF08papers/pdf/\u65E5\u671F/\uFF09\uFF0C\u5DF2\u4E0B\u8F7D\u7684\u6587\u4EF6\u81EA\u52A8\u8DF3\u8FC7 | Download paper PDFs into the vault (papers/pdf/date/). Already-downloaded files are skipped.").addToggle((toggle) => {
-      var _a3, _b;
-      return toggle.setValue((_b = (_a3 = this.plugin.settings.paperDownload) == null ? void 0 : _a3.savePdf) != null ? _b : false).onChange(async (value) => {
-        this.plugin.settings.paperDownload = { ...this.plugin.settings.paperDownload, savePdf: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u53BB\u91CD / Dedup").setDesc("\u8DF3\u8FC7\u5DF2\u5728\u5F80\u671F\u65E5\u62A5\u4E2D\u51FA\u73B0\u8FC7\u7684\u8BBA\u6587\uFF0C\u907F\u514D\u91CD\u590D\u5C55\u793A\u3002\u5173\u95ED\u540E\u6BCF\u6B21\u8FD0\u884C\u90FD\u4F1A\u91CD\u65B0\u5904\u7406\u5168\u90E8\u62C9\u53D6\u7ED3\u679C | Skip papers already shown in a previous daily report. Disable to reprocess all fetched papers every run.").addToggle((toggle) => {
-      var _a3;
-      return toggle.setValue((_a3 = this.plugin.settings.dedup) != null ? _a3 : true).onChange(async (value) => {
-        this.plugin.settings.dedup = value;
-        await this.plugin.saveSettings();
-      });
-    }).addButton((btn) => btn.setButtonText("\u6E05\u7A7A\u7F13\u5B58 / Clear").setWarning().onClick(async () => {
-      await this.plugin.clearDedup();
-      new import_obsidian.Notice("\u53BB\u91CD\u7F13\u5B58\u5DF2\u6E05\u7A7A / Dedup cache cleared.");
     }));
     containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
     const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
@@ -693,20 +632,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.includePdfLink = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("arXiv \u8BE6\u89E3\u8BBA\u6587\u6570 / arXiv Detail Top-K").setDesc("\u6BCF\u65E5\u6458\u8981 arXiv \u8BE6\u89E3\u90E8\u5206\u5C55\u793A\u7684\u8BBA\u6587\u6570 | Number of arXiv papers shown in the detailed section").addSlider((slider) => {
-      var _a3;
-      return slider.setLimits(1, 30, 1).setValue((_a3 = this.plugin.settings.arxivDetailTopK) != null ? _a3 : 10).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.arxivDetailTopK = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("HuggingFace \u8BE6\u89E3\u8BBA\u6587\u6570 / HF Detail Top-K").setDesc("\u6BCF\u65E5\u6458\u8981 HuggingFace \u8BE6\u89E3\u90E8\u5206\u5C55\u793A\u7684\u8BBA\u6587\u6570 | Number of HF papers shown in the detailed section").addSlider((slider) => {
-      var _a3;
-      return slider.setLimits(1, 30, 1).setValue((_a3 = this.plugin.settings.hfDetailTopK) != null ? _a3 : 10).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.hfDetailTopK = value;
-        await this.plugin.saveSettings();
-      });
-    });
     containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
     new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
       this.plugin.settings.schedule.dailyTime = value;
@@ -4720,7 +4645,6 @@ function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
 function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, error) {
-  var _a2;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4731,40 +4655,14 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
     "---"
   ].join("\n");
   const header = `# Paper Daily \u2014 ${date}`;
+  const modelAttr = error ? "" : ` | by ${settings.llm.model} \u8001\u5E08 \u{1F916}`;
   const digestSection = error ? `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
 
-> **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09
+> **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09${modelAttr}
 
 ${aiDigest}`;
-  const arxivTopK = (_a2 = settings.arxivDetailTopK) != null ? _a2 : 10;
-  const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
-  const arxivDetailedLines = arxivTopPapers.map((p, i) => {
-    var _a3;
-    const links = [];
-    if (p.links.html)
-      links.push(`[arXiv](${p.links.html})`);
-    if (settings.includePdfLink && p.links.pdf)
-      links.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf)
-      links.push(`[Local PDF](${p.links.localPdf})`);
-    if (p.links.hf)
-      links.push(`[HF](${p.links.hf})`);
-    const hitsStr = ((_a3 = p.interestHits) != null ? _a3 : []).slice(0, 3).join(", ") || "_none_";
-    const hfBadge = p.links.hf ? ` \u{1F917} HF${p.hfUpvotes ? ` ${p.hfUpvotes}\u2191` : ""}` : "";
-    const scoreStr = p.llmScore != null ? ` \u2B50 ${p.llmScore}/10${p.llmScoreReason ? ` \u2014 ${p.llmScoreReason}` : ""}` : "";
-    const summaryLine = p.llmSummary ? `
-   > ${p.llmSummary}` : "";
-    return [
-      `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
-      `   - ${links.join(" \xB7 ")} | Updated: ${p.updated.slice(0, 10)}`,
-      `   - Hits: ${hitsStr}`
-    ].join("\n");
-  });
-  const arxivDetailedSection = `## Top ${arxivTopK} Papers
-
-${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b;
+    var _a2, _b;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -4776,7 +4674,7 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
     if (p.links.localPdf)
       linkParts.push(`[Local](${p.links.localPdf})`);
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
-    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
+    const summary = escapeTableCell((_a2 = p.llmSummary) != null ? _a2 : "");
     const hits = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
@@ -4794,9 +4692,8 @@ ${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
     "",
     digestSection,
     "",
-    arxivDetailedSection
+    allPapersTableSection
   ];
-  sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
