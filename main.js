@@ -5442,6 +5442,13 @@ var Scheduler = class {
 };
 
 // src/ui/floatingProgress.ts
+function fmtTokens(n) {
+  if (n >= 1e6)
+    return `${(n / 1e6).toFixed(1)}m`;
+  if (n >= 1e3)
+    return `${(n / 1e3).toFixed(1)}k`;
+  return String(n);
+}
 var FloatingProgress = class {
   constructor(onStop, title = "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D") {
     this.el = document.body.createDiv();
@@ -5494,9 +5501,7 @@ var FloatingProgress = class {
   }
   setTokens(inputTokens, outputTokens) {
     const total = inputTokens + outputTokens;
-    this.tokenEl.setText(
-      `Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${total.toLocaleString()}`
-    );
+    this.tokenEl.setText(`tokens: ${fmtTokens(total)}`);
     this.tokenEl.style.display = "";
   }
   destroy() {

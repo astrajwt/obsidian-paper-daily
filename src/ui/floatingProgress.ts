@@ -1,3 +1,9 @@
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}m`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 /** Floating progress widget shown while a pipeline runs in the background. */
 export class FloatingProgress {
   private el: HTMLElement;
@@ -49,7 +55,7 @@ export class FloatingProgress {
     this.msgEl.style.cssText = "font-size:0.83em;color:var(--text-muted);word-break:break-word;line-height:1.4;";
     this.msgEl.setText("初始化中...");
 
-    // Token usage display (hidden until first update)
+    // Token counter — hidden until first LLM call completes
     this.tokenEl = this.el.createEl("div");
     this.tokenEl.style.cssText = [
       "font-size:0.78em",
@@ -65,9 +71,7 @@ export class FloatingProgress {
 
   setTokens(inputTokens: number, outputTokens: number): void {
     const total = inputTokens + outputTokens;
-    this.tokenEl.setText(
-      `Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${total.toLocaleString()}`
-    );
+    this.tokenEl.setText(`tokens: ${fmtTokens(total)}`);
     this.tokenEl.style.display = "";
   }
 
