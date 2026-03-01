@@ -132,12 +132,12 @@ function buildDailyMarkdown(
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf) linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
+    if (p.links.localPdf) linkParts.push(`[[${p.links.localPdf}\\|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const fnTemplate = settings.deepRead?.fileNameTemplate?.trim() || "{{title}}-deep-read-{{model}}";
       const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
-      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}|Deep Read]]`);
+      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`);
     }
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");

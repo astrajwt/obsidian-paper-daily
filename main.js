@@ -4819,12 +4819,12 @@ ${aiDigest}`;
     if (settings.includePdfLink && p.links.pdf)
       linkParts.push(`[PDF](${p.links.pdf})`);
     if (p.links.localPdf)
-      linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
+      linkParts.push(`[[${p.links.localPdf}\\|Local PDF]]`);
     if (p.deepReadAnalysis) {
       const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const fnTemplate = ((_b2 = (_a3 = settings.deepRead) == null ? void 0 : _a3.fileNameTemplate) == null ? void 0 : _b2.trim()) || "{{title}}-deep-read-{{model}}";
       const fileName = buildDeepReadFileName(fnTemplate, p, baseId, date, settings.llm.model);
-      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}|Deep Read]]`);
+      linkParts.push(`[[${deepReadFolder}/${date}/${fileName}\\|Deep Read]]`);
     }
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
     const summary = escapeTableCell((_c = p.llmSummary) != null ? _c : "");
