@@ -17,8 +17,6 @@ export interface Paper {
 
   // computed fields
   interestHits?: string[];
-  directionScores?: Record<string, number>;
-  topDirections?: string[];
   llmScore?: number;
   llmScoreReason?: string;
   llmSummary?: string;

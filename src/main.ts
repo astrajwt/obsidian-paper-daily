@@ -198,7 +198,7 @@ export default class PaperDailyPlugin extends Plugin {
     const now = new Date();
     const params = {
       categories: this.settings.categories,
-      keywords: this.settings.keywords,
+      keywords: [],
       maxResults: this.settings.maxResultsPerDay,
       sortBy: this.settings.sortBy,
       windowStart: new Date(now.getTime() - 72 * 3600 * 1000),

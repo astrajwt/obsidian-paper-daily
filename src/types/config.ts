@@ -5,19 +5,6 @@ export interface PromptTemplate {
   builtin?: boolean;
 }
 
-export interface DirectionConfig {
-  name: string;
-  weight: number;
-  match: {
-    keywords: string[];
-    categories?: string[];
-  };
-  /** Keywords sent to arXiv API query for this direction (OR-ed together).
-   *  If empty/omitted, this direction does not add API-level filters.
-   *  Use sparingly — these narrow what arXiv returns before local scoring. */
-  queryKeywords?: string[];
-}
-
 export interface InterestKeyword {
   keyword: string;
   weight: number;  // 1–5, default 1
@@ -40,15 +27,10 @@ export interface ScheduleConfig {
 export interface PaperDailySettings {
   // arXiv fetch
   categories: string[];
-  keywords: string[];
   interestKeywords: InterestKeyword[];
   maxResultsPerDay: number;
   sortBy: "submittedDate" | "lastUpdatedDate";
   timeWindowHours: number;
-
-  // Directions
-  directions: DirectionConfig[];
-  directionTopK: number;
 
   // LLM
   llm: LLMConfig;

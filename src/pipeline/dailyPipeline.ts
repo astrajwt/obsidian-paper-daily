@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import type { PaperDailySettings, InterestKeyword } from "../types/config";
+import type { PaperDailySettings } from "../types/config";
 import type { Paper } from "../types/paper";
 import { VaultWriter } from "../storage/vaultWriter";
 import { StateStore } from "../storage/stateStore";
@@ -8,7 +8,6 @@ import { SnapshotStore } from "../storage/snapshotStore";
 import { ArxivSource } from "../sources/arxivSource";
 import { HFSource } from "../sources/hfSource";
 import { rankPapers } from "../scoring/rank";
-import { aggregateDirections } from "../scoring/directions";
 import { downloadPapersForDay, readPaperPdfAsBase64 } from "../storage/paperDownloader";
 import { fetchArxivFullText } from "../sources/ar5ivFetcher";
 import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
@@ -19,30 +18,6 @@ import { DEFAULT_DEEP_READ_PROMPT } from "../settings";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
-}
-
-/** Merge settings.keywords with per-direction queryKeywords (deduped). */
-function computeEffectiveQueryKeywords(settings: PaperDailySettings): string[] {
-  const fromDirections = settings.directions.flatMap(d => d.queryKeywords ?? []);
-  return [...new Set([...settings.keywords, ...fromDirections])];
-}
-
-/** Derive interest keywords from direction match.keywords (weighted by direction.weight),
- *  merged with any explicit settings.interestKeywords (explicit takes priority). */
-function computeEffectiveInterestKeywords(settings: PaperDailySettings): InterestKeyword[] {
-  const explicit = settings.interestKeywords ?? [];
-  const explicitSet = new Set(explicit.map(k => k.keyword.toLowerCase()));
-  const seen = new Set<string>(explicitSet);
-  const fromDirections: InterestKeyword[] = [];
-  for (const dir of settings.directions) {
-    for (const kw of dir.match.keywords) {
-      const key = kw.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      fromDirections.push({ keyword: kw, weight: Math.min(5, Math.round(dir.weight * 2)) });
-    }
-  }
-  return [...explicit, ...fromDirections];
 }
 
 function buildLLMProvider(settings: PaperDailySettings): LLMProvider {
@@ -68,15 +43,6 @@ function getActivePrompt(settings: PaperDailySettings): string {
   return settings.llm.dailyPromptTemplate; // fallback for existing users
 }
 
-function formatTopDirections(papers: Paper[], topK: number): string {
-  const dirAgg = aggregateDirections(papers);
-  const sorted = Object.entries(dirAgg)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, topK);
-  if (sorted.length === 0) return "No directions detected.";
-  return sorted.map(([name, score]) => `- ${name}: ${score.toFixed(1)}`).join("\n");
-}
-
 function escapeTableCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
@@ -95,20 +61,11 @@ function buildDailyMarkdown(
     `date: ${date}`,
     `sources: [${activeSources.join(", ")}]`,
     `categories: [${settings.categories.join(", ")}]`,
-    `keywords: [${settings.keywords.join(", ")}]`,
     `interestKeywords: [${settings.interestKeywords.map(k => `${k.keyword}(${k.weight})`).join(", ")}]`,
     "---"
   ].join("\n");
 
   const header = `# Paper Daily — ${date}`;
-
-  const dirAgg = aggregateDirections(rankedPapers);
-  const topDirsSorted = Object.entries(dirAgg)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, settings.directionTopK);
-  const topDirsSection = topDirsSorted.length > 0
-    ? "## Top Directions Today\n" + topDirsSorted.map(([n, s]) => `- **${n}** (score: ${s.toFixed(1)})`).join("\n")
-    : "## Top Directions Today\n_No directions detected_";
 
   const digestSection = error
     ? `## 今日要点（AI 总结）\n\n> **Error**: ${error}`
@@ -122,7 +79,6 @@ function buildDailyMarkdown(
     if (p.links.html) links.push(`[arXiv](${p.links.html})`);
     if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
     if (p.links.hf) links.push(`[HF](${p.links.hf})`);
-    const dirStr = (p.topDirections ?? []).slice(0, 2).join(", ") || "_none_";
     const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ") || "_none_";
     const hfBadge = p.links.hf ? ` 🤗 HF${p.hfUpvotes ? ` ${p.hfUpvotes}↑` : ""}` : "";
     const scoreStr = p.llmScore != null
@@ -132,7 +88,7 @@ function buildDailyMarkdown(
     return [
       `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
       `   - ${links.join(" · ")} | Updated: ${p.updated.slice(0, 10)}`,
-      `   - Directions: ${dirStr} | Hits: ${hitsStr}`,
+      `   - Hits: ${hitsStr}`,
     ].join("\n");
   });
   const arxivDetailedSection = `## Top ${arxivTopK} Papers\n\n${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
@@ -148,19 +104,18 @@ function buildDailyMarkdown(
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
-    const dirs = (p.topDirections ?? []).slice(0, 2).join(", ") || "-";
     const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
-    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${dirs} | ${hits} |`;
+    return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
   const allPapersTableSection = [
     "## All Papers",
     "",
-    "| # | Title | Links | Score | Summary | Directions | Hits |",
-    "|---|-------|-------|-------|---------|------------|------|",
-    ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | | |"])
+    "| # | Title | Links | Score | Summary | Hits |",
+    "|---|-------|-------|-------|---------|------|",
+    ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | |"])
   ].join("\n");
 
-  const sections = [frontmatter, "", header, "", topDirsSection, "", digestSection,
+  const sections = [frontmatter, "", header, "", digestSection,
     "", arxivDetailedSection];
   sections.push("", allPapersTableSection);
   return sections.join("\n");
@@ -210,9 +165,8 @@ export async function runDailyPipeline(
 
   log(`=== Daily pipeline START date=${date} ===`);
 
-  const effectiveQueryKeywords = computeEffectiveQueryKeywords(settings);
-  const effectiveInterestKeywords = computeEffectiveInterestKeywords(settings);
-  log(`Settings: categories=[${settings.categories.join(",")}] queryKeywords=[${effectiveQueryKeywords.join(",")}] interestKeywords=${effectiveInterestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
+  const interestKeywords = settings.interestKeywords ?? [];
+  log(`Settings: categories=[${settings.categories.join(",")}] interestKeywords=${interestKeywords.length} maxResults=${settings.maxResultsPerDay}`);
 
   let papers: Paper[] = [];
   let hfDailyPapers: Paper[] = [];
@@ -229,13 +183,13 @@ export async function runDailyPipeline(
     const windowEnd = options.windowEnd ?? now;
     const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - settings.timeWindowHours * 3600 * 1000);
     fetchUrl = source.buildUrl(
-      { categories: settings.categories, keywords: effectiveQueryKeywords, maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
+      { categories: settings.categories, keywords: [], maxResults: settings.maxResultsPerDay, sortBy: settings.sortBy, windowStart, windowEnd },
       settings.maxResultsPerDay * 3
     );
     log(`Step 1 FETCH: url=${fetchUrl}`);
     papers = await source.fetch({
       categories: settings.categories,
-      keywords: effectiveQueryKeywords,
+      keywords: [],
       maxResults: settings.maxResultsPerDay,
       sortBy: settings.sortBy,
       windowStart,
@@ -333,7 +287,7 @@ export async function runDailyPipeline(
 
   // ── Step 3: Score + rank ──────────────────────────────────────
   let rankedPapers = papers.length > 0
-    ? rankPapers(papers, effectiveInterestKeywords, settings.directions, settings.directionTopK)
+    ? rankPapers(papers, interestKeywords)
     : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
@@ -342,12 +296,11 @@ export async function runDailyPipeline(
     progress(`[2/5] ⭐ LLM 打分中... (${rankedPapers.length} 篇)`);
     try {
       const llm = buildLLMProvider(settings);
-      const kwStr = effectiveInterestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
+      const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
       const papersForScoring = rankedPapers.map(p => ({
         id: p.id,
         title: p.title,
         abstract: p.abstract.slice(0, 250),
-        directions: p.topDirections ?? [],
         interestHits: p.interestHits ?? [],
         ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {})
       }));
@@ -433,7 +386,7 @@ ${JSON.stringify(papersForScoring)}`;
       const paperPrompt = fillTemplate(drPrompt, {
         title:         paper.title,
         authors:       (paper.authors ?? []).slice(0, 5).join(", ") || "Unknown",
-        directions:    (paper.topDirections ?? []).join(", ") || "none",
+        directions:    "",
         interest_hits: (paper.interestHits ?? []).join(", ") || "none",
         abstract:      paper.abstract,
         fulltext:      fulltextForPrompt,
@@ -478,7 +431,6 @@ ${JSON.stringify(papersForScoring)}`;
         title: p.title,
         abstract: p.abstract.slice(0, 500),
         categories: p.categories,
-        directions: p.topDirections ?? [],
         interestHits: p.interestHits ?? [],
         ...(p.hfUpvotes ? { hfUpvotes: p.hfUpvotes } : {}),
         source: p.source,
@@ -486,7 +438,6 @@ ${JSON.stringify(papersForScoring)}`;
         updated: p.updated,
         links: p.links
       }));
-      const topDirsStr = formatTopDirections(rankedPapers, settings.directionTopK);
       const hfForLLM = hfDailyPapers.slice(0, 15).map(p => ({
         title: p.title,
         hfUpvotes: p.hfUpvotes ?? 0,
@@ -494,7 +445,7 @@ ${JSON.stringify(papersForScoring)}`;
       }));
       const prompt = fillTemplate(getActivePrompt(settings), {
         date,
-        topDirections: topDirsStr,
+        topDirections: "",
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,

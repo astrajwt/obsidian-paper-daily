@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import type PaperDailyPlugin from "./main";
-import type { PaperDailySettings, DirectionConfig, PromptTemplate } from "./types/config";
+import type { PaperDailySettings, PromptTemplate } from "./types/config";
 
 interface ProviderPreset {
   label: string;
@@ -83,10 +83,7 @@ Today: {{date}}
 Output language: {{language}}
 
 ## Context
-Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes → direction relevance → interest keyword weight.
-
-## Today's top research directions (pre-computed):
-{{topDirections}}
+Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes → interest keyword weight.
 
 ## Papers to analyze (pre-ranked, arXiv + HF):
 {{papers_json}}
@@ -101,15 +98,12 @@ Generate the daily digest with the following sections:
 ### 今日要点 / Key Takeaways
 3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
-### 方向脉搏 / Direction Pulse
-For each active direction above, one sentence: what are today's papers collectively pushing forward, and is the direction accelerating or plateauing?
-
 ### 精选论文 / Curated Papers
 For **each paper** in the list, output exactly this structure:
 
 **[N]. {title}**
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
-- 🧭 方向: {matched directions}  |  关键词: {interest hits}
+- 关键词: {interest hits}
 - 💡 核心贡献: one sentence, technically specific — what exactly did they do / prove / build?
 - 🔧 工程启示: what can a practitioner/engineer take away or act on? Be concrete. If full paper text is available above, draw from methods/experiments rather than just the abstract.
 - ⚠️ 局限性: honest weaknesses — scope, baselines, reproducibility, generalization, etc.
@@ -131,7 +125,7 @@ From the HuggingFace daily picks, list any papers NOT already covered above that
 ---
 Rules:
 - Do NOT hedge every sentence. State your assessment directly.
-- If hfUpvotes is high but direction relevance is low, note the discrepancy.
+- If hfUpvotes is high but interest keyword relevance is low, note the discrepancy.
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
 - 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".`;
@@ -140,9 +134,6 @@ export const DEFAULT_QUICKSCAN_PROMPT = `You are a senior AI/ML research analyst
 
 Today: {{date}}
 Output language: {{language}}
-
-## Top directions today:
-{{topDirections}}
 
 ## Papers (pre-ranked):
 {{papers_json}}
@@ -155,9 +146,6 @@ Output language: {{language}}
 ### 今日速览 / Quick Scan
 For each arXiv paper, one line each — no exceptions, no skipping:
 **N. Title** — one sentence: what they did and whether it matters (be direct; say "incremental" or "skip" if warranted).
-
-### 方向信号 / Direction Signal
-2–3 sentences total: what is today's research collectively signaling? Any emerging pattern or surprising gap?
 
 ### HF 热点 / HF Highlights
 Top 3–5 HF picks not already covered above: title + one-line verdict on whether the community hype is warranted.
@@ -172,9 +160,6 @@ export const DEFAULT_REVIEW_PROMPT = `You are a rigorous peer reviewer at a top 
 
 Today: {{date}}
 Output language: {{language}}
-
-## Research directions active today:
-{{topDirections}}
 
 ## Papers to review:
 {{papers_json}}
@@ -206,7 +191,6 @@ export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst
 
 Title: {{title}}
 Authors: {{authors}}
-Directions: {{directions}}
 Interest keyword hits: {{interest_hits}}
 Abstract: {{abstract}}
 
@@ -236,1058 +220,10 @@ export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
 
 export const DEFAULT_SETTINGS: PaperDailySettings = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],
-  keywords: [],
   interestKeywords: [],
   maxResultsPerDay: 20,
   sortBy: "submittedDate",
   timeWindowHours: 72,
-
-  directions: [
-  {
-    "name": "RLHF & Post-training",
-    "weight": 1.5,
-    "match": {
-      "keywords": [
-        "rlhf",
-        "post-training",
-        "alignment",
-        "preference optimization",
-        "preference modeling",
-        "reward modeling",
-        "reward model",
-        "rm",
-        "ppo",
-        "ppg",
-        "a2c",
-        "actor-critic",
-        "gae",
-        "kl penalty",
-        "kl regularization",
-        "dpo",
-        "ipo",
-        "kto",
-        "orpo",
-        "simpo",
-        "grpo",
-        "rrhf",
-        "rlaif",
-        "constitutional ai",
-        "self-critique",
-        "verifier",
-        "process reward model",
-        "prm",
-        "outcome reward model",
-        "orm",
-        "pairwise preference",
-        "listwise preference",
-        "ranking loss",
-        "direct preference learning",
-        "rejection sampling",
-        "best-of-n",
-        "ppo clip",
-        "advantage normalization",
-        "reward hacking",
-        "over-optimization",
-        "sft",
-        "instruction tuning",
-        "chat tuning",
-        "alignment tax",
-        "post-training data pipeline",
-        "preference dataset",
-        "human feedback",
-        "synthetic preference",
-        "offline rlhf",
-        "on-policy rlhf",
-        "off-policy rlhf",
-        "replay buffer",
-        "policy lag",
-        "importance sampling",
-        "bandit feedback",
-        "implicit reward"
-      ],
-      "categories": ["cs.AI", "cs.LG", "cs.CL"]
-    }
-  },
-  {
-    "name": "Agentic RL & Tool Use",
-    "weight": 1.4,
-    "match": {
-      "keywords": [
-        "agent",
-        "agentic",
-        "agentic rl",
-        "tool use",
-        "tool calling",
-        "tool call",
-        "function calling",
-        "planner",
-        "planning",
-        "react",
-        "reasoning and acting",
-        "multi-agent",
-        "self-play",
-        "self-improvement",
-        "reflection",
-        "memory",
-        "scratchpad",
-        "verifier",
-        "judge model",
-        "critic model",
-        "tree search",
-        "mcts",
-        "best-first search",
-        "beam search agent",
-        "program of thoughts",
-        "cot",
-        "chain-of-thought",
-        "workflow agent",
-        "orchestrator",
-        "executor",
-        "sandbox",
-        "isolated execution",
-        "code interpreter",
-        "browser tool",
-        "retrieval tool",
-        "rpc tool",
-        "tool latency",
-        "tool reliability",
-        "agent evaluation",
-        "agent benchmarks",
-        "webshop",
-        "hotpotqa",
-        "alfworld",
-        "babyai",
-        "digital agents",
-        "ui agent",
-        "computer use",
-        "grounding",
-        "action space",
-        "credit assignment",
-        "long-horizon",
-        "hierarchical rl",
-        "options",
-        "skills",
-        "task decomposition",
-        "delegation",
-        "autonomous agents",
-        "multi-turn tool calling"
-      ],
-      "categories": ["cs.AI", "cs.CL", "cs.LG"]
-    }
-  },
-  {
-    "name": "Pre-training & Data Curation",
-    "weight": 1.4,
-    "match": {
-      "keywords": [
-        "pretraining",
-        "pre-training",
-        "scaling law",
-        "chinchilla",
-        "compute-optimal",
-        "data-optimal",
-        "tokenizer",
-        "bpe",
-        "sentencepiece",
-        "unigram tokenizer",
-        "vocab",
-        "data curation",
-        "data deduplication",
-        "near-duplicate",
-        "minhash",
-        "simhash",
-        "quality filtering",
-        "language id",
-        "toxicity filtering",
-        "pii filtering",
-        "data provenance",
-        "data governance",
-        "dataset mixing",
-        "mixture weights",
-        "curriculum learning",
-        "continual learning",
-        "continual pretraining",
-        "domain adaptation",
-        "instruction data",
-        "synthetic data",
-        "self-instruct",
-        "distillation data",
-        "corpus",
-        "training data",
-        "web data",
-        "common crawl",
-        "document parsing",
-        "pdf parsing",
-        "html to text",
-        "multilingual",
-        "code data",
-        "dedup at scale",
-        "data pipeline",
-        "etl",
-        "spark",
-        "ray data",
-        "mapreduce",
-        "data lake",
-        "parquet",
-        "arrow",
-        "shuffling",
-        "sampling",
-        "token counting",
-        "data skew"
-      ],
-      "categories": ["cs.LG", "cs.CL", "cs.IR", "cs.DC"]
-    }
-  },
-  {
-    "name": "Inference Serving & LLM Systems",
-    "weight": 1.3,
-    "match": {
-      "keywords": [
-        "inference serving",
-        "llm serving",
-        "serving system",
-        "throughput",
-        "latency",
-        "goodput",
-        "slo",
-        "sla",
-        "ttft",
-        "tbt",
-        "prefill",
-        "decode",
-        "prefill decode separation",
-        "pd separation",
-        "disaggregated serving",
-        "kv cache",
-        "kvcache",
-        "pagedattention",
-        "paged attention",
-        "continuous batching",
-        "dynamic batching",
-        "microbatching",
-        "chunked prefill",
-        "prefix cache",
-        "prompt cache",
-        "cache reuse",
-        "cache eviction",
-        "cache admission",
-        "hot spot migration",
-        "kv offload",
-        "cpu offload",
-        "kv compression",
-        "kv quantization",
-        "speculative decoding",
-        "draft model",
-        "verify model",
-        "eagle",
-        "medusa",
-        "lookahead decoding",
-        "rejection sampling decoding",
-        "tensor parallel inference",
-        "pipeline parallel inference",
-        "disaggregated kv",
-        "rdma kv transfer",
-        "nvlink",
-        "infiniband",
-        "gdr",
-        "gpu direct rdma",
-        "vllm",
-        "sglang",
-        "tensorrt-llm",
-        "fastertransformer",
-        "triton inference",
-        "onnx runtime",
-        "torch compile serving",
-        "cuda graphs",
-        "streaming generation",
-        "server-sent events",
-        "grpc",
-        "http streaming",
-        "load shedding",
-        "early rejection",
-        "overload control",
-        "rate limiting",
-        "token bucket",
-        "admission control",
-        "routing",
-        "request scheduling",
-        "kv-aware scheduling"
-      ],
-      "categories": ["cs.DC", "cs.AR", "cs.NI", "cs.LG"]
-    }
-  },
-  {
-    "name": "Training Systems & Distributed Optimization",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "distributed training",
-        "data parallel",
-        "dp",
-        "tensor parallel",
-        "tp",
-        "pipeline parallel",
-        "pp",
-        "sequence parallel",
-        "sp",
-        "context parallel",
-        "cp",
-        "expert parallel",
-        "ep",
-        "fsdp",
-        "zero",
-        "deepspeed",
-        "megatron",
-        "torch distributed",
-        "nccl",
-        "gloo",
-        "mpi",
-        "allreduce",
-        "reducescatter",
-        "allgather",
-        "alltoall",
-        "collective communication",
-        "communication overhead",
-        "overlap communication",
-        "gradient accumulation",
-        "microbatch",
-        "activation checkpointing",
-        "recompute",
-        "optimizer state sharding",
-        "parameter sharding",
-        "mixed precision",
-        "fp16",
-        "bf16",
-        "fp8",
-        "amp",
-        "loss scaling",
-        "gradient clipping",
-        "optimizer",
-        "adamw",
-        "lion",
-        "adafactor",
-        "shampoo",
-        "8-bit optimizer",
-        "quantized optimizer",
-        "checkpoint",
-        "checkpointing",
-        "async checkpoint",
-        "incremental checkpoint",
-        "elastic training",
-        "fault tolerance",
-        "preemption",
-        "resilience",
-        "straggler mitigation",
-        "load balancing",
-        "pipeline bubbles",
-        "schedule",
-        "1f1b",
-        "interleaved pipeline"
-      ],
-      "categories": ["cs.DC", "cs.LG", "cs.NI"]
-    }
-  },
-  {
-    "name": "MoE Systems & Sparse Training/Inference",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "moe",
-        "mixture of experts",
-        "expert",
-        "sparse",
-        "sparse activation",
-        "top-k routing",
-        "router",
-        "routing",
-        "token routing",
-        "load balancing",
-        "auxiliary loss",
-        "router z-loss",
-        "capacity factor",
-        "expert capacity",
-        "expert parallel",
-        "alltoall",
-        "dispatch",
-        "combine",
-        "expert choice",
-        "token choice",
-        "switch transformer",
-        "gshard",
-        "deepseek moe",
-        "sparse attention",
-        "moe inference",
-        "moe serving",
-        "expert cache",
-        "expert placement",
-        "expert replication",
-        "hot experts",
-        "routing collapse",
-        "router instability",
-        "communication heavy",
-        "a2a optimization",
-        "hierarchical alltoall"
-      ],
-      "categories": ["cs.LG", "cs.AI", "cs.DC"]
-    }
-  },
-  {
-    "name": "Long Context, Attention & Efficiency",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "long context",
-        "context length",
-        "context window",
-        "128k",
-        "1m context",
-        "rope",
-        "rotary position embedding",
-        "yarn",
-        "ntk",
-        "alibi",
-        "position encoding",
-        "kv cache growth",
-        "sliding window attention",
-        "windowed attention",
-        "ring attention",
-        "flash attention",
-        "flashattention",
-        "flashinfer",
-        "fused attention",
-        "gqa",
-        "mqa",
-        "mla",
-        "linear attention",
-        "performer",
-        "reformer",
-        "kernel attention",
-        "block sparse attention",
-        "paged kv",
-        "kv eviction",
-        "attention compression",
-        "token pruning",
-        "mamba",
-        "ssm",
-        "state space model",
-        "recurrent",
-        "rwkv",
-        "hyena",
-        "memory efficient attention",
-        "chunked prefill",
-        "context parallelism"
-      ],
-      "categories": ["cs.LG", "cs.CL", "cs.DC"]
-    }
-  },
-  {
-    "name": "Multimodal Systems & VLM Infrastructure",
-    "weight": 1.1,
-    "match": {
-      "keywords": [
-        "multimodal",
-        "vision language model",
-        "vlm",
-        "vision-language",
-        "image encoder",
-        "clip",
-        "vit",
-        "llava",
-        "qwen-vl",
-        "video understanding",
-        "video llm",
-        "speech",
-        "asr",
-        "tts",
-        "streaming asr",
-        "diffusion model",
-        "text-to-image",
-        "image generation",
-        "video generation",
-        "multimodal tokenization",
-        "patch embedding",
-        "vq",
-        "vq-vae",
-        "multimodal serving",
-        "multi-modal batching",
-        "prefill with vision tokens",
-        "vision kv cache"
-      ],
-      "categories": ["cs.CV", "cs.CL", "cs.LG", "cs.DC"]
-    }
-  },
-  {
-    "name": "Quantization, Distillation & Compression",
-    "weight": 1.1,
-    "match": {
-      "keywords": [
-        "quantization",
-        "ptq",
-        "qat",
-        "int8",
-        "int4",
-        "nf4",
-        "fp8",
-        "awq",
-        "gptq",
-        "smoothquant",
-        "gguf",
-        "ggml",
-        "tensor quantization",
-        "activation quantization",
-        "weight-only quantization",
-        "kv quantization",
-        "compression",
-        "pruning",
-        "structured pruning",
-        "unstructured pruning",
-        "sparsity",
-        "2:4 sparsity",
-        "model compression",
-        "knowledge distillation",
-        "distillation",
-        "teacher student",
-        "logit distillation",
-        "sequence-level distillation",
-        "speculative distillation",
-        "low rank",
-        "lora",
-        "qlora",
-        "adapters",
-        "parameter efficient fine-tuning",
-        "peft"
-      ],
-      "categories": ["cs.LG", "cs.AR", "cs.DC"]
-    }
-  },
-
-  {
-    "name": "Retrieval, RAG & Vector Infrastructure",
-    "weight": 1.25,
-    "match": {
-      "keywords": [
-        "retrieval augmented generation",
-        "rag",
-        "retriever",
-        "reranker",
-        "dense retrieval",
-        "sparse retrieval",
-        "bm25",
-        "splade",
-        "colbert",
-        "embedding",
-        "text embedding",
-        "vector database",
-        "vector db",
-        "faiss",
-        "hnsw",
-        "ivf",
-        "pq",
-        "ann",
-        "approximate nearest neighbor",
-        "index building",
-        "index serving",
-        "hybrid search",
-        "query rewriting",
-        "semantic search",
-        "document chunking",
-        "chunking strategy",
-        "contextual retrieval",
-        "citation",
-        "grounded generation",
-        "hallucination reduction",
-        "knowledge base",
-        "kb",
-        "retrieval latency",
-        "caching retrieval",
-        "online indexing",
-        "incremental indexing"
-      ],
-      "categories": ["cs.IR", "cs.CL", "cs.DC", "cs.AI"]
-    }
-  },
-  {
-    "name": "Evaluation, Benchmarking & E2E Quality",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "evaluation",
-        "benchmark",
-        "eval harness",
-        "offline eval",
-        "online eval",
-        "a/b testing",
-        "ab test",
-        "canary",
-        "shadow traffic",
-        "regression testing",
-        "golden set",
-        "rubric",
-        "judge model",
-        "llm-as-a-judge",
-        "pairwise eval",
-        "win rate",
-        "preference eval",
-        "calibration",
-        "reliability",
-        "toxicity eval",
-        "safety eval",
-        "latency eval",
-        "throughput eval",
-        "cost eval",
-        "prompt robustness",
-        "adversarial eval",
-        "dataset shift",
-        "drift detection",
-        "observability metrics",
-        "ttft p90",
-        "tbt p90",
-        "tail latency"
-      ],
-      "categories": ["cs.AI", "cs.LG", "cs.SE", "cs.DC"]
-    }
-  },
-  {
-    "name": "Compilers, Graph Optimization & Kernel Fusion",
-    "weight": 1.25,
-    "match": {
-      "keywords": [
-        "compiler",
-        "graph compiler",
-        "xla",
-        "tvm",
-        "mlir",
-        "llvm",
-        "torch compile",
-        "torchdynamo",
-        "aotautograd",
-        "inductor",
-        "triton",
-        "cutlass",
-        "cute",
-        "kernel fusion",
-        "operator fusion",
-        "epilogue fusion",
-        "memory planning",
-        "liveness analysis",
-        "layout optimization",
-        "tiling",
-        "autotuning",
-        "code generation",
-        "vectorization",
-        "tensor cores",
-        "wmma",
-        "mma",
-        "flash attention kernel",
-        "fused softmax",
-        "fused layernorm",
-        "quantized kernels",
-        "cuda graphs",
-        "stream capture",
-        "graph replay",
-        "nvrtc"
-      ],
-      "categories": ["cs.PL", "cs.DC", "cs.AR", "cs.LG"]
-    }
-  },
-  {
-    "name": "GPU Architecture & Performance Engineering",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "gpu architecture",
-        "sm",
-        "warp",
-        "block",
-        "occupancy",
-        "register pressure",
-        "shared memory",
-        "bank conflict",
-        "l1 cache",
-        "l2 cache",
-        "hbm",
-        "memory bandwidth",
-        "latency hiding",
-        "instruction throughput",
-        "tensor core",
-        "pipeline",
-        "async copy",
-        "cp.async",
-        "prefetch",
-        "stream",
-        "overlap compute communication",
-        "ncu",
-        "nsight compute",
-        "nsight systems",
-        "profiling",
-        "roofline",
-        "bottleneck analysis",
-        "kernel launch overhead",
-        "persistent kernel",
-        "cuda stream priority",
-        "mps",
-        "cuda mps"
-      ],
-      "categories": ["cs.AR", "cs.DC"]
-    }
-  },
-  {
-    "name": "Networking, RDMA & Collective Communication",
-    "weight": 1.25,
-    "match": {
-      "keywords": [
-        "rdma",
-        "infiniband",
-        "roce",
-        "gdr",
-        "gpudirect",
-        "gpudirect rdma",
-        "nccl",
-        "sharp",
-        "collective offload",
-        "allreduce",
-        "reducescatter",
-        "allgather",
-        "alltoall",
-        "topology",
-        "nvlink",
-        "pcie",
-        "nic",
-        "congestion control",
-        "pfc",
-        "ecmp",
-        "fat-tree",
-        "dragonfly",
-        "ring allreduce",
-        "tree allreduce",
-        "hierarchical collectives",
-        "latency jitter",
-        "tail latency networking",
-        "zero-copy",
-        "dma",
-        "rdma verbs",
-        "ibverbs",
-        "ucx"
-      ],
-      "categories": ["cs.NI", "cs.DC"]
-    }
-  },
-  {
-    "name": "Storage, Checkpointing & State Management",
-    "weight": 1.2,
-    "match": {
-      "keywords": [
-        "checkpoint",
-        "checkpointing",
-        "distributed checkpoint",
-        "sharded checkpoint",
-        "async checkpoint",
-        "incremental checkpoint",
-        "delta checkpoint",
-        "snapshot",
-        "fault tolerance",
-        "restart",
-        "preemption",
-        "elasticity",
-        "optimizer state",
-        "state dict",
-        "safetensors",
-        "tensorstore",
-        "zarr",
-        "object store",
-        "s3",
-        "oss",
-        "hdfs",
-        "nvme",
-        "ssd",
-        "io bandwidth",
-        "io pipeline",
-        "write amplification",
-        "compression",
-        "dedup",
-        "metadata scaling",
-        "manifest",
-        "commit protocol",
-        "two-phase commit"
-      ],
-      "categories": ["cs.DC", "cs.OS"]
-    }
-  },
-  {
-    "name": "Cluster Scheduling, Orchestration & Resource Management",
-    "weight": 1.25,
-    "match": {
-      "keywords": [
-        "scheduler",
-        "cluster scheduler",
-        "kubernetes",
-        "k8s",
-        "slurm",
-        "yarn",
-        "mesos",
-        "ray",
-        "placement",
-        "gang scheduling",
-        "bin packing",
-        "gpu scheduling",
-        "heterogeneous scheduling",
-        "fair scheduling",
-        "priority scheduling",
-        "quota",
-        "preemption",
-        "backfilling",
-        "elastic training",
-        "autoscaling",
-        "horizontal pod autoscaler",
-        "resource isolation",
-        "cgroups",
-        "numa",
-        "topology-aware scheduling",
-        "node affinity",
-        "pod affinity",
-        "time slicing",
-        "mig",
-        "multi-instance gpu",
-        "virtualization",
-        "container runtime",
-        "nvidia container toolkit",
-        "device plugin",
-        "capacity planning"
-      ],
-      "categories": ["cs.DC", "cs.OS", "cs.NI"]
-    }
-  },
-  {
-    "name": "MLOps, Deployment & Lifecycle Management",
-    "weight": 1.15,
-    "match": {
-      "keywords": [
-        "mlops",
-        "model deployment",
-        "ci/cd",
-        "continuous training",
-        "continuous evaluation",
-        "model registry",
-        "artifact store",
-        "experiment tracking",
-        "wandb",
-        "mlflow",
-        "feature store",
-        "data versioning",
-        "dvc",
-        "lineage",
-        "rollout",
-        "rollback",
-        "blue green deployment",
-        "canary deployment",
-        "shadow deployment",
-        "serving gateway",
-        "api gateway",
-        "rate limiting",
-        "auth",
-        "apikey rotation",
-        "secret management",
-        "vault",
-        "k8s secrets",
-        "configuration management",
-        "terraform",
-        "helm",
-        "observability"
-      ],
-      "categories": ["cs.SE", "cs.DC"]
-    }
-  },
-  {
-    "name": "Observability, Profiling & Reliability Engineering",
-    "weight": 1.15,
-    "match": {
-      "keywords": [
-        "observability",
-        "monitoring",
-        "logging",
-        "tracing",
-        "distributed tracing",
-        "opentelemetry",
-        "prometheus",
-        "grafana",
-        "jaeger",
-        "slo monitoring",
-        "tail latency",
-        "p99",
-        "p999",
-        "alerting",
-        "incident",
-        "postmortem",
-        "reliability",
-        "sre",
-        "capacity",
-        "load testing",
-        "stress testing",
-        "chaos engineering",
-        "fault injection",
-        "profiling",
-        "cpu profiling",
-        "gpu profiling",
-        "nsys",
-        "ncu",
-        "memory leak",
-        "fragmentation",
-        "oom analysis"
-      ],
-      "categories": ["cs.SE", "cs.DC", "cs.OS"]
-    }
-  },
-  {
-    "name": "Security, Privacy & Model Abuse (Infra-focused)",
-    "weight": 1.1,
-    "match": {
-      "keywords": [
-        "security",
-        "privacy",
-        "pii",
-        "data leakage",
-        "secret leakage",
-        "apikey leakage",
-        "key management",
-        "rotation",
-        "abuse detection",
-        "rate limit abuse",
-        "prompt injection",
-        "jailbreak",
-        "data exfiltration",
-        "model extraction",
-        "model stealing",
-        "distillation attack",
-        "membership inference",
-        "model inversion",
-        "watermarking",
-        "trace watermark",
-        "fingerprinting",
-        "content filtering",
-        "policy enforcement",
-        "sandboxing",
-        "isolation",
-        "secure execution"
-      ],
-      "categories": ["cs.CR", "cs.AI", "cs.SE"]
-    }
-  },
-  {
-    "name": "Edge/On-device LLM Systems",
-    "weight": 1.1,
-    "match": {
-      "keywords": [
-        "edge llm",
-        "on-device llm",
-        "mobile inference",
-        "embedded",
-        "automotive",
-        "npu",
-        "dsp",
-        "heterogeneous compute",
-        "lpddr",
-        "gddr",
-        "unified memory",
-        "kv cache tiering",
-        "cpu-gpu offload",
-        "streaming",
-        "low latency",
-        "power efficiency",
-        "thermal",
-        "quantized inference",
-        "int4 runtime",
-        "gguf runtime",
-        "onnx",
-        "tflite",
-        "coreml",
-        "tensorrt",
-        "ascend",
-        "mps",
-        "metal performance shaders"
-      ],
-      "categories": ["cs.AR", "cs.DC", "cs.OS"]
-    }
-  },
-  {
-    "name": "Data Systems for ML (ETL, Lakes, Streaming)",
-    "weight": 1.15,
-    "match": {
-      "keywords": [
-        "data systems",
-        "etl",
-        "elt",
-        "data pipeline",
-        "batch processing",
-        "stream processing",
-        "kafka",
-        "pulsar",
-        "flink",
-        "spark",
-        "ray",
-        "data lake",
-        "lakehouse",
-        "delta lake",
-        "iceberg",
-        "hudi",
-        "parquet",
-        "arrow",
-        "orc",
-        "schema evolution",
-        "data validation",
-        "great expectations",
-        "data quality",
-        "backfill",
-        "incremental processing",
-        "cdc",
-        "change data capture",
-        "feature computation",
-        "materialization",
-        "cache",
-        "online offline consistency"
-      ],
-      "categories": ["cs.DB", "cs.DC", "cs.SE"]
-    }
-  },
-  {
-    "name": "Memory Management & KVCache Engineering",
-    "weight": 1.25,
-    "match": {
-      "keywords": [
-        "memory management",
-        "allocator",
-        "fragmentation",
-        "arena allocator",
-        "paging",
-        "paged kv cache",
-        "block manager",
-        "slab allocator",
-        "cuda memory pool",
-        "unified virtual addressing",
-        "prefetching",
-        "pin memory",
-        "pinned memory",
-        "zero-copy",
-        "kv cache reuse",
-        "prefix hash",
-        "dedup",
-        "admission control cache",
-        "eviction policy",
-        "lru",
-        "lfu",
-        "clock algorithm",
-        "hotset",
-        "tiered cache",
-        "cpu dram cache",
-        "ssd cache",
-        "compression cache",
-        "kv spill",
-        "kv restore"
-      ],
-      "categories": ["cs.OS", "cs.DC", "cs.AR"]
-    }
-  }
-],
-  directionTopK: 5,
 
   llm: {
     provider: "openai_compatible",
@@ -1369,44 +305,55 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    new Setting(containerEl)
-      .setName("查询关键词 / Keywords")
-      .setDesc("与分类取 AND，为空则只按分类查询 | Combined with categories via AND; leave empty to fetch by category only")
-      .addText(text => text
-        .setPlaceholder("reinforcement learning, agent")
-        .setValue(this.plugin.settings.keywords.join(","))
-        .onChange(async (value) => {
-          this.plugin.settings.keywords = value.split(",").map(s => s.trim()).filter(Boolean);
-          await this.plugin.saveSettings();
-        }));
+    // ── Interest Keywords ─────────────────────────────────────────
+    containerEl.createEl("h2", { text: "兴趣关键词 / Interest Keywords" });
+    containerEl.createEl("p", {
+      text: "用于论文打分与高亮显示，权重越高排名越靠前。",
+      cls: "setting-item-description"
+    });
+
+    const kwListEl = containerEl.createDiv();
+    const renderKwList = () => {
+      kwListEl.empty();
+      const kws = this.plugin.settings.interestKeywords;
+      kws.forEach((kw, i) => {
+        new Setting(kwListEl)
+          .addText(text => text
+            .setPlaceholder("keyword")
+            .setValue(kw.keyword)
+            .onChange(async (val) => {
+              kws[i].keyword = val.trim();
+              await this.plugin.saveSettings();
+            }))
+          .addSlider(slider => slider
+            .setLimits(1, 5, 1)
+            .setValue(kw.weight)
+            .setDynamicTooltip()
+            .onChange(async (val) => {
+              kws[i].weight = val;
+              await this.plugin.saveSettings();
+            }))
+          .addExtraButton(btn => btn
+            .setIcon("trash")
+            .setTooltip("Remove")
+            .onClick(async () => {
+              kws.splice(i, 1);
+              await this.plugin.saveSettings();
+              renderKwList();
+            }));
+      });
+    };
+    renderKwList();
 
     new Setting(containerEl)
-      .setName("兴趣关键词 / Interest Keywords")
-      .setDesc("每行一个，格式：keyword:weight（权重1-5，省略则默认1）| One per line: keyword:weight (weight 1–5, defaults to 1 if omitted)\n例 / e.g.:\nrlhf:3\nagent:3\nkv cache:2");
-    const ikwArea = containerEl.createEl("textarea");
-    ikwArea.style.width = "100%";
-    ikwArea.style.height = "140px";
-    ikwArea.style.fontFamily = "monospace";
-    ikwArea.style.fontSize = "12px";
-    ikwArea.value = this.plugin.settings.interestKeywords
-      .map(k => `${k.keyword}:${k.weight}`)
-      .join("\n");
-    ikwArea.addEventListener("input", async () => {
-      this.plugin.settings.interestKeywords = ikwArea.value
-        .split("\n")
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(line => {
-          const idx = line.lastIndexOf(":");
-          if (idx > 0) {
-            const kw = line.slice(0, idx).trim();
-            const w = parseInt(line.slice(idx + 1).trim(), 10);
-            return { keyword: kw, weight: isNaN(w) || w < 1 ? 1 : Math.min(w, 5) };
-          }
-          return { keyword: line, weight: 1 };
-        });
-      await this.plugin.saveSettings();
-    });
+      .addButton(btn => btn
+        .setButtonText("+ 添加关键词")
+        .setCta()
+        .onClick(async () => {
+          this.plugin.settings.interestKeywords.push({ keyword: "", weight: 3 });
+          await this.plugin.saveSettings();
+          renderKwList();
+        }));
 
     new Setting(containerEl)
       .setName("每日最大结果数 / Max Results Per Day")
@@ -1442,50 +389,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.sortBy = value as "submittedDate" | "lastUpdatedDate";
           await this.plugin.saveSettings();
-        }));
-
-    // ── Directions ───────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "研究方向 / Directions & Themes" });
-
-    new Setting(containerEl)
-      .setName("方向显示数 Top-K / Direction Top-K")
-      .setDesc("每日摘要中展示的最多方向数 | Number of top directions shown in daily digest")
-      .addSlider(slider => slider
-        .setLimits(1, 10, 1)
-        .setValue(this.plugin.settings.directionTopK)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.directionTopK = value;
-          await this.plugin.saveSettings();
-        }));
-
-    containerEl.createEl("p", {
-      text: "方向 JSON（高级）— 直接编辑方向配置 | Directions JSON (advanced) — edit direction config directly:",
-      cls: "setting-item-description"
-    });
-
-    const directionsTextArea = containerEl.createEl("textarea", {
-      cls: "paper-daily-directions-textarea"
-    });
-    directionsTextArea.style.width = "100%";
-    directionsTextArea.style.height = "200px";
-    directionsTextArea.style.fontFamily = "monospace";
-    directionsTextArea.style.fontSize = "12px";
-    directionsTextArea.value = JSON.stringify(this.plugin.settings.directions, null, 2);
-
-    new Setting(containerEl)
-      .addButton(btn => btn
-        .setButtonText("保存方向配置 / Save Directions")
-        .setCta()
-        .onClick(async () => {
-          try {
-            const parsed: DirectionConfig[] = JSON.parse(directionsTextArea.value);
-            this.plugin.settings.directions = parsed;
-            await this.plugin.saveSettings();
-            new Notice("方向配置已保存 / Directions saved.");
-          } catch (e) {
-            new Notice("JSON 格式错误 / Invalid JSON for directions.");
-          }
         }));
 
     // ── LLM ──────────────────────────────────────────────────────
