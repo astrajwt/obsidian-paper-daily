@@ -4789,7 +4789,7 @@ function buildDeepReadFileName(template, paper, baseId, date, modelName) {
   }
   return result.replace(/[/\\:*?"<>|]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || baseId;
 }
-function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, error) {
+function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, interestHotnessSection, error) {
   var _a2, _b;
   const frontmatter = [
     "---",
@@ -4838,7 +4838,10 @@ ${aiDigest}`;
     "|---|-------|-------|-------|---------|------|",
     ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | |"]
   ].join("\n");
-  const sections = [frontmatter, "", header, "", digestSection];
+  const sections = [frontmatter, "", header];
+  if (interestHotnessSection)
+    sections.push("", interestHotnessSection);
+  sections.push("", digestSection);
   if (domainSummary)
     sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
@@ -4851,7 +4854,7 @@ var PipelineAbortError = class extends Error {
   }
 };
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5246,9 +5249,51 @@ From the HuggingFace full list, note any papers NOT already covered above. One l
 LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
   progress(`[5/5] \u{1F4BE} \u5199\u5165\u6587\u4EF6...`);
   try {
+    let interestHotnessSection = "";
+    if (interestKeywords.length > 0) {
+      const areaMap = /* @__PURE__ */ new Map();
+      for (const kw of interestKeywords) {
+        areaMap.set(kw.keyword, { keyword: kw.keyword, weight: kw.weight, count: 0, totalScore: 0, scored: 0 });
+      }
+      for (const paper of rankedPapers) {
+        for (const hit of (_H = paper.interestHits) != null ? _H : []) {
+          const s = areaMap.get(hit);
+          if (s) {
+            s.count++;
+            if (paper.llmScore != null) {
+              s.totalScore += paper.llmScore;
+              s.scored++;
+              if (!s.topPaper || paper.llmScore > ((_I = s.topPaper.llmScore) != null ? _I : 0))
+                s.topPaper = paper;
+            }
+          }
+        }
+      }
+      const hotAreas = [...areaMap.values()].filter((s) => s.count > 0).sort((a, b) => {
+        const hotA = (a.scored > 0 ? a.totalScore / a.scored : 5) * Math.log1p(a.count) * a.weight;
+        const hotB = (b.scored > 0 ? b.totalScore / b.scored : 5) * Math.log1p(b.count) * b.weight;
+        return hotB - hotA;
+      });
+      if (hotAreas.length > 0) {
+        const hasScores = hotAreas.some((s) => s.scored > 0);
+        const rows = hotAreas.map((s) => {
+          const avgScore = s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-";
+          const top = s.topPaper;
+          const topTitle = top ? top.links.html ? `[${escapeTableCell(top.title.slice(0, 45))}${top.title.length > 45 ? "\u2026" : ""}](${top.links.html})` : escapeTableCell(top.title.slice(0, 45)) : "-";
+          return hasScores ? `| ${s.keyword} | ${s.count} | ${avgScore} | ${topTitle} |` : `| ${s.keyword} | ${s.count} | ${topTitle} |`;
+        });
+        interestHotnessSection = [
+          "## \u4ECA\u65E5\u5174\u8DA3\u9886\u57DF\u70ED\u5EA6",
+          "",
+          hasScores ? "| \u5173\u952E\u8BCD | \u547D\u4E2D\u8BBA\u6587 | \u5E73\u5747\u5206 | \u4EE3\u8868\u8BBA\u6587 |" : "| \u5173\u952E\u8BCD | \u547D\u4E2D\u8BBA\u6587 | \u4EE3\u8868\u8BBA\u6587 |",
+          hasScores ? "|--------|---------|--------|---------|" : "|--------|---------|---------|",
+          ...rows
+        ].join("\n");
+      }
+    }
     const catStats2 = /* @__PURE__ */ new Map();
     for (const paper of rankedPapers) {
-      for (const cat of (_H = paper.categories) != null ? _H : []) {
+      for (const cat of (_J = paper.categories) != null ? _J : []) {
         if (!catStats2.has(cat))
           catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
         const s = catStats2.get(cat);
@@ -5269,7 +5314,7 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
         ([cat, s]) => `| ${cat} | ${s.count} | ${s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-"} |`
       )
     ].join("\n") : "";
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, interestHotnessSection, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

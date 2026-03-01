@@ -103,6 +103,7 @@ function buildDailyMarkdown(
   aiDigest: string,
   activeSources: string[],
   domainSummary: string,
+  interestHotnessSection: string,
   error?: string
 ): string {
   const frontmatter = [
@@ -152,7 +153,9 @@ function buildDailyMarkdown(
     ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | |"])
   ].join("\n");
 
-  const sections = [frontmatter, "", header, "", digestSection];
+  const sections = [frontmatter, "", header];
+  if (interestHotnessSection) sections.push("", interestHotnessSection);
+  sections.push("", digestSection);
   if (domainSummary) sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
@@ -603,6 +606,58 @@ export async function runDailyPipeline(
 
   progress(`[5/5] 💾 写入文件...`);
   try {
+    // Build interest area hotness section (based on user's interest keywords)
+    let interestHotnessSection = "";
+    if (interestKeywords.length > 0) {
+      type AreaStat = { keyword: string; weight: number; count: number; totalScore: number; scored: number; topPaper?: Paper };
+      const areaMap = new Map<string, AreaStat>();
+      for (const kw of interestKeywords) {
+        areaMap.set(kw.keyword, { keyword: kw.keyword, weight: kw.weight, count: 0, totalScore: 0, scored: 0 });
+      }
+      for (const paper of rankedPapers) {
+        for (const hit of (paper.interestHits ?? [])) {
+          const s = areaMap.get(hit);
+          if (s) {
+            s.count++;
+            if (paper.llmScore != null) {
+              s.totalScore += paper.llmScore;
+              s.scored++;
+              if (!s.topPaper || (paper.llmScore > (s.topPaper.llmScore ?? 0))) s.topPaper = paper;
+            }
+          }
+        }
+      }
+      const hotAreas = [...areaMap.values()]
+        .filter(s => s.count > 0)
+        .sort((a, b) => {
+          const hotA = (a.scored > 0 ? a.totalScore / a.scored : 5) * Math.log1p(a.count) * a.weight;
+          const hotB = (b.scored > 0 ? b.totalScore / b.scored : 5) * Math.log1p(b.count) * b.weight;
+          return hotB - hotA;
+        });
+      if (hotAreas.length > 0) {
+        const hasScores = hotAreas.some(s => s.scored > 0);
+        const rows = hotAreas.map(s => {
+          const avgScore = s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-";
+          const top = s.topPaper;
+          const topTitle = top
+            ? (top.links.html
+              ? `[${escapeTableCell(top.title.slice(0, 45))}${top.title.length > 45 ? "…" : ""}](${top.links.html})`
+              : escapeTableCell(top.title.slice(0, 45)))
+            : "-";
+          return hasScores
+            ? `| ${s.keyword} | ${s.count} | ${avgScore} | ${topTitle} |`
+            : `| ${s.keyword} | ${s.count} | ${topTitle} |`;
+        });
+        interestHotnessSection = [
+          "## 今日兴趣领域热度",
+          "",
+          hasScores ? "| 关键词 | 命中论文 | 平均分 | 代表论文 |" : "| 关键词 | 命中论文 | 代表论文 |",
+          hasScores ? "|--------|---------|--------|---------|" : "|--------|---------|---------|",
+          ...rows
+        ].join("\n");
+      }
+    }
+
     // Build domain hotness table for markdown
     const catStats2 = new Map<string, { count: number; totalScore: number; scored: number }>();
     for (const paper of rankedPapers) {
@@ -624,7 +679,7 @@ export async function runDailyPipeline(
       )
     ].join("\n") : "";
 
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, interestHotnessSection, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
