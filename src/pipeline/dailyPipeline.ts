@@ -67,32 +67,10 @@ function buildDailyMarkdown(
 
   const header = `# Paper Daily — ${date}`;
 
+  const modelAttr = error ? "" : ` | by ${settings.llm.model} 老师 🤖`;
   const digestSection = error
     ? `## 今日要点（AI 总结）\n\n> **Error**: ${error}`
-    : `## 今日要点（AI 总结）\n\n${aiDigest}`;
-
-  // ── Top-K Detailed Section ────────────────────────────────────
-  const arxivTopK = settings.arxivDetailTopK ?? 10;
-  const arxivTopPapers = rankedPapers.slice(0, arxivTopK);
-  const arxivDetailedLines = arxivTopPapers.map((p, i) => {
-    const links: string[] = [];
-    if (p.links.html) links.push(`[arXiv](${p.links.html})`);
-    if (settings.includePdfLink && p.links.pdf) links.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf) links.push(`[Local PDF](${p.links.localPdf})`);
-    if (p.links.hf) links.push(`[HF](${p.links.hf})`);
-    const hitsStr = (p.interestHits ?? []).slice(0, 3).join(", ") || "_none_";
-    const hfBadge = p.links.hf ? ` 🤗 HF${p.hfUpvotes ? ` ${p.hfUpvotes}↑` : ""}` : "";
-    const scoreStr = p.llmScore != null
-      ? ` ⭐ ${p.llmScore}/10${p.llmScoreReason ? ` — ${p.llmScoreReason}` : ""}`
-      : "";
-    const summaryLine = p.llmSummary ? `\n   > ${p.llmSummary}` : "";
-    return [
-      `${i + 1}. **${p.title}**${hfBadge}${scoreStr}${summaryLine}`,
-      `   - ${links.join(" · ")} | Updated: ${p.updated.slice(0, 10)}`,
-      `   - Hits: ${hitsStr}`,
-    ].join("\n");
-  });
-  const arxivDetailedSection = `## Top ${arxivTopK} Papers\n\n${arxivDetailedLines.join("\n\n") || "_No papers_"}`;
+    : `## 今日要点（AI 总结）${modelAttr}\n\n${aiDigest}`;
 
   // ── All Papers Table ──────────────────────────────────────────
   const tableRows = rankedPapers.map((p, i) => {
@@ -103,7 +81,8 @@ function buildDailyMarkdown(
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf) linkParts.push(`[Local](${p.links.localPdf})`);    const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
+    if (p.links.localPdf) linkParts.push(`[Local PDF](${p.links.localPdf})`);
+    const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
     const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
@@ -116,8 +95,20 @@ function buildDailyMarkdown(
     ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | |"])
   ].join("\n");
 
-  const sections = [frontmatter, "", header, "", digestSection,
-    "", arxivDetailedSection];
+  // ── Local PDFs section ─────────────────────────────────────────
+  let localPdfsSection = "";
+  if (settings.paperDownload?.savePdf) {
+    const pdfsWithLocal = rankedPapers.filter(p => p.links.localPdf);
+    if (pdfsWithLocal.length > 0) {
+      const lines = pdfsWithLocal.map(p =>
+        `- [${p.title}](${p.links.localPdf})`
+      );
+      localPdfsSection = `## 本地 PDF / Local PDFs (${pdfsWithLocal.length} 篇)\n\n${lines.join("\n")}`;
+    }
+  }
+
+  const sections = [frontmatter, "", header, "", digestSection];
+  if (localPdfsSection) sections.push("", localPdfsSection);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
