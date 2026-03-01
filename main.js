@@ -202,6 +202,7 @@ var DEFAULT_SETTINGS = {
   ],
   fetchMode: "all",
   dedup: true,
+  timeWindowHours: 72,
   llm: {
     provider: "openai_compatible",
     baseUrl: "https://api.openai.com/v1",
@@ -285,6 +286,13 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       var _a3, _b;
       return slider.setLimits(0, 7, 1).setValue((_b = (_a3 = this.plugin.settings.hfSource) == null ? void 0 : _a3.lookbackDays) != null ? _b : 3).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("\u65F6\u95F4\u7A97\u53E3\uFF08\u5C0F\u65F6\uFF09/ Time Window (hours)").setDesc("\u6293\u53D6\u8FC7\u53BB N \u5C0F\u65F6\u5185\u53D1\u5E03\u6216\u66F4\u65B0\u7684\u8BBA\u6587\uFF0C\u9ED8\u8BA4 72 \u5C0F\u65F6\u8986\u76D6\u5468\u672B | Fetch papers published/updated within the past N hours. Default 72 covers weekends.").addSlider((slider) => {
+      var _a3;
+      return slider.setLimits(24, 168, 24).setValue((_a3 = this.plugin.settings.timeWindowHours) != null ? _a3 : 72).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.timeWindowHours = value;
         await this.plugin.saveSettings();
       });
     });
@@ -4686,7 +4694,7 @@ ${lines.join("\n")}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4722,7 +4730,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   try {
     const source = new ArxivSource();
     const windowEnd = (_e = options.windowEnd) != null ? _e : now;
-    const windowStart = (_f = options.windowStart) != null ? _f : new Date(windowEnd.getTime() - 72 * 3600 * 1e3);
+    const windowStart = (_g = options.windowStart) != null ? _g : new Date(windowEnd.getTime() - ((_f = settings.timeWindowHours) != null ? _f : 72) * 3600 * 1e3);
     fetchUrl = source.buildUrl(
       { categories: settings.categories, keywords: [], maxResults: 200, sortBy: "submittedDate", windowStart, windowEnd },
       200
@@ -4747,11 +4755,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`Step 1 FETCH ERROR: ${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
-  if (((_g = settings.hfSource) == null ? void 0 : _g.enabled) !== false) {
+  if (((_h = settings.hfSource) == null ? void 0 : _h.enabled) !== false) {
     progress(`[1/5] \u{1F917} \u62C9\u53D6 HuggingFace \u8BBA\u6587...`);
     try {
       const hfSource = new HFSource();
-      const lookback = (_i = (_h = settings.hfSource) == null ? void 0 : _h.lookbackDays) != null ? _i : 3;
+      const lookback = (_j = (_i = settings.hfSource) == null ? void 0 : _i.lookbackDays) != null ? _j : 3;
       let hfFetchDate = date;
       for (let d = 0; d <= lookback; d++) {
         const tryDate = d === 0 ? date : getISODate(new Date(new Date(date + "T12:00:00Z").getTime() - d * 864e5));
@@ -4770,7 +4778,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
             p.hfStreak = options.hfTrackStore.track(p.id, p.title, hfFetchDate);
           }
           await options.hfTrackStore.save();
-          if ((_j = settings.hfSource) == null ? void 0 : _j.dedup) {
+          if ((_k = settings.hfSource) == null ? void 0 : _k.dedup) {
             const before = hfDailyPapers.length;
             hfDailyPapers = hfDailyPapers.filter((p) => !options.hfTrackStore.seenBefore(p.id, hfFetchDate));
             log(`Step 1b HF DEDUP: ${before} \u2192 ${hfDailyPapers.length} papers (removed ${before - hfDailyPapers.length} previously seen)`);
@@ -4788,7 +4796,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
           const baseId = `arxiv:${p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "")}`;
           const hfMatch = hfByBaseId.get(baseId);
           if (hfMatch) {
-            p.hfUpvotes = (_k = hfMatch.hfUpvotes) != null ? _k : 0;
+            p.hfUpvotes = (_l = hfMatch.hfUpvotes) != null ? _l : 0;
             if (hfMatch.links.hf)
               p.links = { ...p.links, hf: hfMatch.links.hf };
             enrichedCount++;
@@ -4808,12 +4816,12 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`Step 1b HF FETCH: skipped (disabled)`);
   }
   const countBeforeDedup = papers.length;
-  const dedupEnabled = ((_l = settings.dedup) != null ? _l : true) && !options.skipDedup;
+  const dedupEnabled = ((_m = settings.dedup) != null ? _m : true) && !options.skipDedup;
   if (dedupEnabled && papers.length > 0) {
     papers = papers.filter((p) => !dedupStore.hasId(p.id));
   }
   log(`Step 2 DEDUP: before=${countBeforeDedup} after=${papers.length} (filtered=${countBeforeDedup - papers.length}${dedupEnabled ? "" : ", dedup disabled"})`);
-  if (((_m = settings.fetchMode) != null ? _m : "all") === "interest_only" && interestKeywords.length > 0) {
+  if (((_n = settings.fetchMode) != null ? _n : "all") === "interest_only" && interestKeywords.length > 0) {
     for (const p of papers) {
       p.interestHits = computeInterestHits(p, interestKeywords);
     }
@@ -4883,7 +4891,7 @@ ${JSON.stringify(papersForScoring)}`;
         });
         log(`Step 3b LLM SCORE: scored ${matched}/${rankedPapers.length} papers (LLM returned ${scores.length}), re-ranked`);
         if (matched === 0) {
-          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_n = scores[0]) == null ? void 0 : _n.id}" vs paper id="${(_o = rankedPapers[0]) == null ? void 0 : _o.id}"`);
+          log(`Step 3b LLM SCORE WARNING: 0 matched \u2014 ID format mismatch? Sample LLM id="${(_o = scores[0]) == null ? void 0 : _o.id}" vs paper id="${(_p = rankedPapers[0]) == null ? void 0 : _p.id}"`);
         }
       } else {
         log(`Step 3b LLM SCORE: could not parse JSON from response (response length=${result.text.length}, likely truncated)`);
@@ -4898,10 +4906,10 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log, date);
   }
   let fulltextSection = "";
-  if (((_p = settings.deepRead) == null ? void 0 : _p.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min((_q = settings.deepRead.topN) != null ? _q : 5, rankedPapers.length);
-    const maxTokens = (_r = settings.deepRead.deepReadMaxTokens) != null ? _r : 1024;
-    const drPrompt = (_s = settings.deepRead.deepReadPromptTemplate) != null ? _s : DEFAULT_DEEP_READ_PROMPT;
+  if (((_q = settings.deepRead) == null ? void 0 : _q.enabled) && rankedPapers.length > 0 && settings.llm.apiKey) {
+    const topN = Math.min((_r = settings.deepRead.topN) != null ? _r : 5, rankedPapers.length);
+    const maxTokens = (_s = settings.deepRead.deepReadMaxTokens) != null ? _s : 1024;
+    const drPrompt = (_t = settings.deepRead.deepReadPromptTemplate) != null ? _t : DEFAULT_DEEP_READ_PROMPT;
     const langStr = settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English";
     progress(`[3/5] \u{1F4D6} Deep Read \u2014 ${topN} \u7BC7\u7CBE\u8BFB\u4E2D...`);
     const llm = buildLLMProvider(settings);
@@ -4913,8 +4921,8 @@ ${JSON.stringify(papersForScoring)}`;
       log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} \u2192 ${htmlUrl}`);
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
-        authors: ((_t = paper.authors) != null ? _t : []).slice(0, 5).join(", ") || "Unknown",
-        interest_hits: ((_u = paper.interestHits) != null ? _u : []).join(", ") || "none",
+        authors: ((_u = paper.authors) != null ? _u : []).slice(0, 5).join(", ") || "Unknown",
+        interest_hits: ((_v = paper.interestHits) != null ? _v : []).join(", ") || "none",
         abstract: paper.abstract,
         fulltext: htmlUrl,
         language: langStr
@@ -4943,7 +4951,7 @@ ${paper.deepReadAnalysis}`);
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_w = (_v = settings.deepRead) == null ? void 0 : _v.enabled) != null ? _w : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_x = (_w = settings.deepRead) == null ? void 0 : _w.enabled) != null ? _x : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);

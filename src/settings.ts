@@ -184,6 +184,7 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   ],
   fetchMode: "all",
   dedup: true,
+  timeWindowHours: 72,
 
   llm: {
     provider: "openai_compatible",
@@ -313,6 +314,18 @@ export class PaperDailySettingTab extends PluginSettingTab {
         .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.hfSource = { ...this.plugin.settings.hfSource, lookbackDays: value };
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("时间窗口（小时）/ Time Window (hours)")
+      .setDesc("抓取过去 N 小时内发布或更新的论文，默认 72 小时覆盖周末 | Fetch papers published/updated within the past N hours. Default 72 covers weekends.")
+      .addSlider(slider => slider
+        .setLimits(24, 168, 24)
+        .setValue(this.plugin.settings.timeWindowHours ?? 72)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.timeWindowHours = value;
           await this.plugin.saveSettings();
         }));
 

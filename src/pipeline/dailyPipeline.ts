@@ -173,7 +173,7 @@ export async function runDailyPipeline(
   try {
     const source = new ArxivSource();
     const windowEnd = options.windowEnd ?? now;
-    const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - 72 * 3600 * 1000);
+    const windowStart = options.windowStart ?? new Date(windowEnd.getTime() - (settings.timeWindowHours ?? 72) * 3600 * 1000);
     fetchUrl = source.buildUrl(
       { categories: settings.categories, keywords: [], maxResults: 200, sortBy: "submittedDate", windowStart, windowEnd },
       200

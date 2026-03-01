@@ -32,6 +32,8 @@ export interface PaperDailySettings {
   fetchMode: "all" | "interest_only";
   /** Skip papers already seen in previous runs; set false to always re-process all fetched papers */
   dedup: boolean;
+  /** How many hours back to search for papers (default 72) */
+  timeWindowHours: number;
 
   // LLM
   llm: LLMConfig;
@@ -69,10 +71,6 @@ export interface PaperDailySettings {
   // Prompt template library
   promptLibrary?: PromptTemplate[];
   activePromptId?: string;
-
-  // Detail section top-K display counts
-  arxivDetailTopK: number;  // how many arXiv papers to show in the detailed section
-  hfDetailTopK: number;     // how many HF papers to show in the detailed section
 
   // Deep read: fetch full paper text from arxiv.org/html and inject into LLM prompt
   deepRead?: {
