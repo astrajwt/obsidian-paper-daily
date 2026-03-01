@@ -385,9 +385,12 @@ export async function runDailyPipeline(
       log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} → ${htmlUrl}`);
 
       // Build per-paper prompt — pass the arxiv HTML URL so the LLM can read it directly
+      const arxivUrl = `https://arxiv.org/abs/${baseId}`;
       const paperPrompt = fillTemplate(drPrompt, {
         title:         paper.title,
         authors:       (paper.authors ?? []).slice(0, 5).join(", ") || "Unknown",
+        published:     paper.published ? paper.published.slice(0, 10) : date,
+        arxiv_url:     arxivUrl,
         interest_hits: (paper.interestHits ?? []).join(", ") || "none",
         abstract:      paper.abstract,
         fulltext:      htmlUrl,
@@ -401,6 +404,35 @@ export async function runDailyPipeline(
         paper.deepReadAnalysis = result.text.trim();
         analysisResults.push(`### [${i + 1}] ${paper.title}\n\n${paper.deepReadAnalysis}`);
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
+
+        // Write per-paper standalone markdown file
+        try {
+          const outputFolder = settings.deepRead?.outputFolder ?? "PaperDaily/deep-read";
+          const fileTags = [
+            ...(settings.deepRead?.tags ?? ["paper", "deep-read"]),
+            ...(paper.interestHits ?? []).map(h => h.replace(/\s+/g, "-"))
+          ];
+          const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const paperFrontmatter = [
+            "---",
+            `type: deep-read`,
+            `title: "${paper.title.replace(/"/g, '\\"')}"`,
+            `date: ${date}`,
+            `arxivId: ${baseId}`,
+            `arxivUrl: ${arxivUrl}`,
+            `authors: [${(paper.authors ?? []).slice(0, 5).map(a => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
+            `published: ${paper.published ? paper.published.slice(0, 10) : date}`,
+            `tags: [${fileTags.map(t => `"${t}"`).join(", ")}]`,
+            ...(paper.llmScore != null ? [`llmScore: ${paper.llmScore}`] : []),
+            "---",
+          ].join("\n");
+
+          const paperMd = `${paperFrontmatter}\n\n# ${paper.title}\n\n${paper.deepReadAnalysis}\n`;
+          await writer.writeNote(`${outputFolder}/${safeId}.md`, paperMd);
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${safeId}.md`);
+        } catch (writeErr) {
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
+        }
       } catch (err) {
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} — skipping`);
       }

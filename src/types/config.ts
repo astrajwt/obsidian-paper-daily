@@ -75,9 +75,11 @@ export interface PaperDailySettings {
   // Deep read: fetch full paper text from arxiv.org/html and inject into LLM prompt
   deepRead?: {
     enabled: boolean;
-    topN: number;             // how many top-ranked papers to fetch (default 5)
-    deepReadMaxTokens?: number;       // per-paper output token limit, default 1024
-    deepReadPromptTemplate?: string;  // if empty, falls back to DEFAULT_DEEP_READ_PROMPT
+    topN: number;                      // how many top-ranked papers to deep-read (default 5)
+    deepReadMaxTokens?: number;        // per-paper output token limit, default 2048
+    deepReadPromptTemplate?: string;   // if empty, falls back to DEFAULT_DEEP_READ_PROMPT
+    outputFolder?: string;             // vault folder for per-paper markdown files; default "{rootFolder}/deep-read"
+    tags?: string[];                   // extra tags written to each paper's frontmatter
   };
 
   // Scoring prompt (Step 3b): if empty falls back to DEFAULT_SCORING_PROMPT

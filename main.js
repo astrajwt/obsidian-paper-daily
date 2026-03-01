@@ -175,28 +175,51 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 
 Papers:
 {{papers_json}}`;
-var DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
+var DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Write a self-contained deep-read note for this paper \u2014 it will be saved as a standalone Markdown reference document.
 
+**Paper:**
 Title: {{title}}
 Authors: {{authors}}
-Interest keyword hits: {{interest_hits}}
-Abstract: {{abstract}}
+Published: {{published}}
+arXiv: {{arxiv_url}}
+Keyword hits: {{interest_hits}}
 
-Full paper HTML (read directly if you can access URLs): {{fulltext}}
+**Abstract:**
+{{abstract}}
 
-Provide a structured analysis with these sections:
+**Full paper** (read directly if the URL is accessible): {{fulltext}}
 
-**\u6838\u5FC3\u8D21\u732E / Core Contribution** (2\u20133 sentences): What exactly is built, proved, or demonstrated? Be specific with method/dataset names and key numbers.
+---
 
-**\u65B9\u6CD5\u4EAE\u70B9 / Method Highlights** (2\u20134 bullet points): Key technical choices, algorithmic novelty, or system design decisions.
+Write the note with the following Markdown sections. Be direct, opinionated, and technically precise. No filler phrases.
 
-**\u5B9E\u9A8C\u4E0E\u7ED3\u679C / Experiments & Results** (2\u20133 sentences): Which benchmarks? Headline numbers vs baselines?
+## TL;DR
+One sentence: what they built/proved + the single most important result number.
 
-**\u5DE5\u7A0B\u542F\u793A / Engineering Takeaway** (1\u20132 sentences): What can a practitioner adopt from this work?
+## \u6838\u5FC3\u8D21\u732E / Core Contribution
+2\u20133 sentences. What exactly is new? Method name, dataset, metric, key numbers.
 
-**\u5C40\u9650\u6027 / Limitations** (1\u20132 sentences): Honest scope limitations or reproducibility concerns.
+## \u65B9\u6CD5 / Method
+3\u20135 bullet points. Key technical decisions and why they matter. What distinguishes this from prior work at the mechanism level?
 
-Keep the total under 400 words. Be direct and opinionated. Output in {{language}}.`;
+## \u5B9E\u9A8C\u7ED3\u679C / Results
+- Which benchmarks / tasks
+- Headline numbers vs strongest baseline (exact figures)
+- Key ablation finding (if any)
+- What is suspiciously missing or underreported?
+
+## \u5DE5\u7A0B\u542F\u793A / Engineering Takeaway
+1\u20132 sentences. What can a practitioner directly adopt? "Use X to achieve Y" \u2014 not "this is interesting".
+
+## \u5C40\u9650\u6027 / Limitations
+1\u20132 sentences. Scope, compute requirements, reproducibility, failure modes in production.
+
+## \u76F8\u5173\u5DE5\u4F5C / Related Work
+2\u20133 papers this most directly builds on or competes with. One line each: title + why it's relevant.
+
+---
+Output language: {{language}}
+Aim for 400\u2013600 words total. Do not copy the abstract verbatim \u2014 synthesize.`;
 var DEFAULT_PROMPT_LIBRARY = [
   { id: "builtin_engineering", name: "\u5DE5\u7A0B\u7CBE\u8BFB", prompt: DEFAULT_DAILY_PROMPT, builtin: true }
 ];
@@ -250,7 +273,9 @@ var DEFAULT_SETTINGS = {
   deepRead: {
     enabled: false,
     topN: 5,
-    deepReadMaxTokens: 1024
+    deepReadMaxTokens: 2048,
+    outputFolder: "PaperDaily/deep-read",
+    tags: ["paper", "deep-read"]
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map((t) => ({ ...t })),
@@ -775,8 +800,29 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(drSubContainer).setName("\u8F93\u51FA\u76EE\u5F55 / Output Folder").setDesc("\u7CBE\u8BFB\u7B14\u8BB0\u4FDD\u5B58\u76EE\u5F55\uFF08Vault \u5185\u8DEF\u5F84\uFF09| Vault folder path for per-paper deep-read notes").addText((text) => {
+      var _a3, _b;
+      return text.setPlaceholder("PaperDaily/deep-read").setValue((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.outputFolder) != null ? _b : "PaperDaily/deep-read").onChange(async (value) => {
+        this.plugin.settings.deepRead = {
+          ...this.plugin.settings.deepRead,
+          outputFolder: value.trim() || "PaperDaily/deep-read"
+        };
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(drSubContainer).setName("\u6807\u7B7E / Tags").setDesc("\u9017\u53F7\u5206\u9694\uFF0C\u5199\u5165\u6BCF\u7BC7\u7CBE\u8BFB\u7B14\u8BB0\u7684 frontmatter tags | Comma-separated tags added to each paper note's frontmatter").addText((text) => {
+      var _a3, _b;
+      return text.setPlaceholder("paper, deep-read").setValue(((_b = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.tags) != null ? _b : ["paper", "deep-read"]).join(", ")).onChange(async (value) => {
+        const tags = value.split(",").map((s) => s.trim()).filter(Boolean);
+        this.plugin.settings.deepRead = {
+          ...this.plugin.settings.deepRead,
+          tags
+        };
+        await this.plugin.saveSettings();
+      });
+    });
     new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u7CBE\u8BFB Prompt / Per-paper Deep Read prompt").setDesc(
-      "\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\u53EF\u7528\u53D8\u91CF: {{title}}, {{authors}}, {{directions}}, {{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
+      "\u7559\u7A7A\u4F7F\u7528\u9ED8\u8BA4\u6A21\u677F\u3002\u53EF\u7528\u53D8\u91CF: {{title}}, {{authors}}, {{published}}, {{arxiv_url}}, {{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
     ).addTextArea((area) => {
       var _a3, _b;
       const plugin = this.plugin;
@@ -4731,7 +4777,7 @@ ${lines.join("\n")}`;
   return sections.join("\n");
 }
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -4954,9 +5000,12 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
       const htmlUrl = `https://arxiv.org/html/${baseId}`;
       log(`Step 3f DEEPREAD [${i + 1}/${topN}]: ${baseId} \u2192 ${htmlUrl}`);
+      const arxivUrl = `https://arxiv.org/abs/${baseId}`;
       const paperPrompt = fillTemplate(drPrompt, {
         title: paper.title,
         authors: ((_u = paper.authors) != null ? _u : []).slice(0, 5).join(", ") || "Unknown",
+        published: paper.published ? paper.published.slice(0, 10) : date,
+        arxiv_url: arxivUrl,
         interest_hits: ((_v = paper.interestHits) != null ? _v : []).join(", ") || "none",
         abstract: paper.abstract,
         fulltext: htmlUrl,
@@ -4971,6 +5020,37 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
 
 ${paper.deepReadAnalysis}`);
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
+        try {
+          const outputFolder = (_x = (_w = settings.deepRead) == null ? void 0 : _w.outputFolder) != null ? _x : "PaperDaily/deep-read";
+          const fileTags = [
+            ...(_z = (_y = settings.deepRead) == null ? void 0 : _y.tags) != null ? _z : ["paper", "deep-read"],
+            ...((_A = paper.interestHits) != null ? _A : []).map((h) => h.replace(/\s+/g, "-"))
+          ];
+          const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const paperFrontmatter = [
+            "---",
+            `type: deep-read`,
+            `title: "${paper.title.replace(/"/g, '\\"')}"`,
+            `date: ${date}`,
+            `arxivId: ${baseId}`,
+            `arxivUrl: ${arxivUrl}`,
+            `authors: [${((_B = paper.authors) != null ? _B : []).slice(0, 5).map((a) => `"${a.replace(/"/g, '\\"')}"`).join(", ")}]`,
+            `published: ${paper.published ? paper.published.slice(0, 10) : date}`,
+            `tags: [${fileTags.map((t) => `"${t}"`).join(", ")}]`,
+            ...paper.llmScore != null ? [`llmScore: ${paper.llmScore}`] : [],
+            "---"
+          ].join("\n");
+          const paperMd = `${paperFrontmatter}
+
+# ${paper.title}
+
+${paper.deepReadAnalysis}
+`;
+          await writer.writeNote(`${outputFolder}/${safeId}.md`, paperMd);
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: wrote ${outputFolder}/${safeId}.md`);
+        } catch (writeErr) {
+          log(`Step 3f DEEPREAD [${i + 1}/${topN}]: failed to write per-paper file: ${String(writeErr)}`);
+        }
       } catch (err) {
         log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} \u2014 skipping`);
       }
@@ -4986,7 +5066,7 @@ ${paper.deepReadAnalysis}`);
     }
     log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f DEEPREAD: skipped (enabled=${(_x = (_w = settings.deepRead) == null ? void 0 : _w.enabled) != null ? _x : false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${(_D = (_C = settings.deepRead) == null ? void 0 : _C.enabled) != null ? _D : false})`);
   }
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);

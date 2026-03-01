@@ -155,28 +155,51 @@ Return ONLY a valid JSON array, no explanation, no markdown fence:
 Papers:
 {{papers_json}}`;
 
-export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
+export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Write a self-contained deep-read note for this paper — it will be saved as a standalone Markdown reference document.
 
+**Paper:**
 Title: {{title}}
 Authors: {{authors}}
-Interest keyword hits: {{interest_hits}}
-Abstract: {{abstract}}
+Published: {{published}}
+arXiv: {{arxiv_url}}
+Keyword hits: {{interest_hits}}
 
-Full paper HTML (read directly if you can access URLs): {{fulltext}}
+**Abstract:**
+{{abstract}}
 
-Provide a structured analysis with these sections:
+**Full paper** (read directly if the URL is accessible): {{fulltext}}
 
-**核心贡献 / Core Contribution** (2–3 sentences): What exactly is built, proved, or demonstrated? Be specific with method/dataset names and key numbers.
+---
 
-**方法亮点 / Method Highlights** (2–4 bullet points): Key technical choices, algorithmic novelty, or system design decisions.
+Write the note with the following Markdown sections. Be direct, opinionated, and technically precise. No filler phrases.
 
-**实验与结果 / Experiments & Results** (2–3 sentences): Which benchmarks? Headline numbers vs baselines?
+## TL;DR
+One sentence: what they built/proved + the single most important result number.
 
-**工程启示 / Engineering Takeaway** (1–2 sentences): What can a practitioner adopt from this work?
+## 核心贡献 / Core Contribution
+2–3 sentences. What exactly is new? Method name, dataset, metric, key numbers.
 
-**局限性 / Limitations** (1–2 sentences): Honest scope limitations or reproducibility concerns.
+## 方法 / Method
+3–5 bullet points. Key technical decisions and why they matter. What distinguishes this from prior work at the mechanism level?
 
-Keep the total under 400 words. Be direct and opinionated. Output in {{language}}.`;
+## 实验结果 / Results
+- Which benchmarks / tasks
+- Headline numbers vs strongest baseline (exact figures)
+- Key ablation finding (if any)
+- What is suspiciously missing or underreported?
+
+## 工程启示 / Engineering Takeaway
+1–2 sentences. What can a practitioner directly adopt? "Use X to achieve Y" — not "this is interesting".
+
+## 局限性 / Limitations
+1–2 sentences. Scope, compute requirements, reproducibility, failure modes in production.
+
+## 相关工作 / Related Work
+2–3 papers this most directly builds on or competes with. One line each: title + why it's relevant.
+
+---
+Output language: {{language}}
+Aim for 400–600 words total. Do not copy the abstract verbatim — synthesize.`;
 
 export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
   { id: "builtin_engineering", name: "工程精读", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
@@ -241,7 +264,9 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
   deepRead: {
     enabled: false,
     topN: 5,
-    deepReadMaxTokens: 1024,
+    deepReadMaxTokens: 2048,
+    outputFolder: "PaperDaily/deep-read",
+    tags: ["paper", "deep-read"],
     // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
 
@@ -981,11 +1006,42 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // --- Output folder ---
+    new Setting(drSubContainer)
+      .setName("输出目录 / Output Folder")
+      .setDesc("精读笔记保存目录（Vault 内路径）| Vault folder path for per-paper deep-read notes")
+      .addText(text => text
+        .setPlaceholder("PaperDaily/deep-read")
+        .setValue(this.plugin.settings.deepRead?.outputFolder ?? "PaperDaily/deep-read")
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = {
+            ...this.plugin.settings.deepRead,
+            outputFolder: value.trim() || "PaperDaily/deep-read"
+          } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
+    // --- Tags ---
+    new Setting(drSubContainer)
+      .setName("标签 / Tags")
+      .setDesc("逗号分隔，写入每篇精读笔记的 frontmatter tags | Comma-separated tags added to each paper note's frontmatter")
+      .addText(text => text
+        .setPlaceholder("paper, deep-read")
+        .setValue((this.plugin.settings.deepRead?.tags ?? ["paper", "deep-read"]).join(", "))
+        .onChange(async (value) => {
+          const tags = value.split(",").map((s: string) => s.trim()).filter(Boolean);
+          this.plugin.settings.deepRead = {
+            ...this.plugin.settings.deepRead,
+            tags
+          } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
     // --- Per-paper prompt textarea ---
     new Setting(drSubContainer)
       .setName("每篇精读 Prompt / Per-paper Deep Read prompt")
       .setDesc(
-        "留空使用默认模板。可用变量: {{title}}, {{authors}}, {{directions}}, " +
+        "留空使用默认模板。可用变量: {{title}}, {{authors}}, {{published}}, {{arxiv_url}}, " +
         "{{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
       )
       .addTextArea(area => {
