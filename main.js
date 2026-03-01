@@ -4943,7 +4943,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   let rankedPapers = papers.length > 0 ? rankPapers(papers, interestKeywords) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    const BATCH_SIZE = 60;
+    const BATCH_SIZE = 10;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
     const scoringTemplate = getActiveScoringPrompt(settings);
     const kwStr = interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", ");

@@ -300,7 +300,7 @@ export async function runDailyPipeline(
 
   // ── Step 3b: LLM scoring (batched, all papers) ───────────────
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
-    const BATCH_SIZE = 60;
+    const BATCH_SIZE = 10;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
     const scoringTemplate = getActiveScoringPrompt(settings);
     const kwStr = interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", ");
