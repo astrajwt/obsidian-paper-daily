@@ -104,20 +104,24 @@ var DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst and critical
 Today: {{date}}
 Output language: {{language}}
 
-## Context
-Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes \u2192 interest keyword weight.
+---
 
-## Papers to analyze (pre-ranked, arXiv + HF):
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
 ## User's interest keywords (with weights, higher = more important):
 {{interest_keywords}}
+
+## Papers to analyze (pre-ranked by HF upvotes + keyword weight):
+{{papers_json}}
 
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
+{{fulltext_section}}
+
+{{local_pdfs}}
+
 ---
+
+## Instructions
 
 Generate the daily digest with the following sections:
 
@@ -125,18 +129,19 @@ Generate the daily digest with the following sections:
 3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
 ### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
-For **each paper** in the list, output exactly this structure:
+For **each paper** in the papers list, output exactly this structure:
 
 **[N]. {title}**
 - \u2B50 \u4EF7\u503C\u8BC4\u7EA7: {\u2605\u2605\u2605\u2605\u2605 to \u2605\u2606\u2606\u2606\u2606}  ({one-phrase reason})
 - \u5173\u952E\u8BCD: {interest hits}
 - \u{1F4A1} \u6838\u5FC3\u8D21\u732E: one sentence \u2014 what exactly did they do / prove / build? Be specific with method names and key numbers.
 - \u{1F52C} \u65B9\u6CD5\u6838\u5FC3: key technical novelty \u2014 principled or ad hoc? any theoretical guarantees or assumptions worth noting?
+  > If a Deep Read note exists for this paper (see fulltext_section above), draw directly from it here and in \u5DE5\u7A0B\u542F\u793A / \u5C40\u9650\u6027. Prefer that analysis over the abstract.
 - \u{1F4CA} \u5B9E\u9A8C\u4E25\u8C28\u6027: are baselines fair and up-to-date? ablations sufficient? any obvious cherry-picking or missing controls?
-- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner adopt? Be concrete \u2014 "use X to achieve Y", not "this is interesting". If full text is available above, draw from methods/experiments.
+- \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner adopt? Be concrete \u2014 "use X to achieve Y", not "this is interesting".
 - \u26A0\uFE0F \u5C40\u9650\u6027 & \u53EF\u590D\u73B0\u6027: scope limitations + code availability + compute requirements. Can a grad student replicate this?
 - \u{1F4DA} \u5EFA\u8BAE: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-- \u{1F517} {links from the paper data}
+- \u{1F517} links from paper data. If a local PDF path is listed in the Local PDFs section above, include it here as "[[Local PDF]]".
 
 Value rating guide \u2014 be calibrated, not generous:
 \u2605\u2605\u2605\u2605\u2605  Breakthrough: likely to shift practice or become a citation anchor
@@ -159,7 +164,9 @@ Rules:
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
 - \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".
-- Recommendations must be specific \u2014 no "interesting direction" hedging.`;
+- Recommendations must be specific \u2014 no "interesting direction" hedging.
+- If fulltext_section is non-empty, you MUST use those deep-read notes to enrich the analysis of the corresponding papers. Do not ignore them.
+- If local_pdfs is non-empty, include the local PDF link in the \u{1F517} line of the corresponding paper.`;
 var DEFAULT_SCORING_PROMPT = `Score each paper 1\u201310 for quality and relevance to the user's interests.
 
 User's interest keywords (higher weight = more important): {{interest_keywords}}
@@ -221,7 +228,7 @@ One sentence: what they built/proved + the single most important result number.
 Output language: {{language}}
 Aim for 400\u2013600 words total. Do not copy the abstract verbatim \u2014 synthesize.`;
 var DEFAULT_PROMPT_LIBRARY = [
-  { id: "builtin_engineering", name: "\u5DE5\u7A0B\u7CBE\u8BFB", prompt: DEFAULT_DAILY_PROMPT, builtin: true }
+  { id: "builtin_engineering", name: "\u6BCF\u65E5trending", prompt: DEFAULT_DAILY_PROMPT, builtin: true }
 ];
 var DEFAULT_SETTINGS = {
   categories: ["cs.AI", "cs.LG", "cs.CL"],

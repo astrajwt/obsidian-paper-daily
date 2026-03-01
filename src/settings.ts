@@ -82,20 +82,24 @@ export const DEFAULT_DAILY_PROMPT = `You are a senior AI/ML research analyst and
 Today: {{date}}
 Output language: {{language}}
 
-## Context
-Papers below (arXiv + HF) have been pre-ranked by: HuggingFace upvotes → interest keyword weight.
+---
 
-## Papers to analyze (pre-ranked, arXiv + HF):
-{{papers_json}}
-{{fulltext_section}}
-{{local_pdfs}}
 ## User's interest keywords (with weights, higher = more important):
 {{interest_keywords}}
+
+## Papers to analyze (pre-ranked by HF upvotes + keyword weight):
+{{papers_json}}
 
 ## HuggingFace Daily Papers (community picks, sorted by upvotes):
 {{hf_papers_json}}
 
+{{fulltext_section}}
+
+{{local_pdfs}}
+
 ---
+
+## Instructions
 
 Generate the daily digest with the following sections:
 
@@ -103,18 +107,19 @@ Generate the daily digest with the following sections:
 3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
 
 ### 精选论文 / Curated Papers
-For **each paper** in the list, output exactly this structure:
+For **each paper** in the papers list, output exactly this structure:
 
 **[N]. {title}**
 - ⭐ 价值评级: {★★★★★ to ★☆☆☆☆}  ({one-phrase reason})
 - 关键词: {interest hits}
 - 💡 核心贡献: one sentence — what exactly did they do / prove / build? Be specific with method names and key numbers.
 - 🔬 方法核心: key technical novelty — principled or ad hoc? any theoretical guarantees or assumptions worth noting?
+  > If a Deep Read note exists for this paper (see fulltext_section above), draw directly from it here and in 工程启示 / 局限性. Prefer that analysis over the abstract.
 - 📊 实验严谨性: are baselines fair and up-to-date? ablations sufficient? any obvious cherry-picking or missing controls?
-- 🔧 工程启示: what can a practitioner adopt? Be concrete — "use X to achieve Y", not "this is interesting". If full text is available above, draw from methods/experiments.
+- 🔧 工程启示: what can a practitioner adopt? Be concrete — "use X to achieve Y", not "this is interesting".
 - ⚠️ 局限性 & 可复现性: scope limitations + code availability + compute requirements. Can a grad student replicate this?
 - 📚 建议: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-- 🔗 {links from the paper data}
+- 🔗 links from paper data. If a local PDF path is listed in the Local PDFs section above, include it here as "[[Local PDF]]".
 
 Value rating guide — be calibrated, not generous:
 ★★★★★  Breakthrough: likely to shift practice or become a citation anchor
@@ -137,7 +142,9 @@ Rules:
 - If a paper seems overhyped relative to its technical content, say so.
 - Keep engineering perspective front and center.
 - 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".
-- Recommendations must be specific — no "interesting direction" hedging.`;
+- Recommendations must be specific — no "interesting direction" hedging.
+- If fulltext_section is non-empty, you MUST use those deep-read notes to enrich the analysis of the corresponding papers. Do not ignore them.
+- If local_pdfs is non-empty, include the local PDF link in the 🔗 line of the corresponding paper.`;
 
 export const DEFAULT_SCORING_PROMPT = `Score each paper 1–10 for quality and relevance to the user's interests.
 
@@ -202,7 +209,7 @@ Output language: {{language}}
 Aim for 400–600 words total. Do not copy the abstract verbatim — synthesize.`;
 
 export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
-  { id: "builtin_engineering", name: "工程精读", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
+  { id: "builtin_engineering", name: "每日trending", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
 ];
 
 
