@@ -4757,7 +4757,6 @@ function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
 function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, error) {
-  var _a2;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4775,7 +4774,7 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
 
 ${aiDigest}`;
   const tableRows = rankedPapers.map((p, i) => {
-    var _a3, _b;
+    var _a2, _b;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -4787,7 +4786,7 @@ ${aiDigest}`;
     if (p.links.localPdf)
       linkParts.push(`[Local PDF](${p.links.localPdf})`);
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
-    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
+    const summary = escapeTableCell((_a2 = p.llmSummary) != null ? _a2 : "");
     const hits = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
@@ -4798,21 +4797,7 @@ ${aiDigest}`;
     "|---|-------|-------|-------|---------|------|",
     ...tableRows.length > 0 ? tableRows : ["| \u2014 | _No papers_ | | | | |"]
   ].join("\n");
-  let localPdfsSection = "";
-  if ((_a2 = settings.paperDownload) == null ? void 0 : _a2.savePdf) {
-    const pdfsWithLocal = rankedPapers.filter((p) => p.links.localPdf);
-    if (pdfsWithLocal.length > 0) {
-      const lines = pdfsWithLocal.map(
-        (p) => `- [${p.title}](${p.links.localPdf})`
-      );
-      localPdfsSection = `## \u672C\u5730 PDF / Local PDFs (${pdfsWithLocal.length} \u7BC7)
-
-${lines.join("\n")}`;
-    }
-  }
   const sections = [frontmatter, "", header, "", digestSection];
-  if (localPdfsSection)
-    sections.push("", localPdfsSection);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
@@ -5137,15 +5122,12 @@ ${paper.deepReadAnalysis}
           ...p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {}
         };
       });
-      const localPdfEntries = rankedPapers.filter((p) => p.links.localPdf).map((p) => `- [${p.title}](${p.links.localPdf})`);
-      const localPdfsSection = localPdfEntries.length > 0 ? `## Local PDFs (${date})
-${localPdfEntries.join("\n")}` : "";
       const prompt2 = fillTemplate(getActivePrompt(settings), {
         date,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
-        local_pdfs: localPdfsSection,
+        local_pdfs: "",
         interest_keywords: interestKeywords.map((k) => `${k.keyword}(weight:${k.weight})`).join(", "),
         language: settings.language === "zh" ? "Chinese (\u4E2D\u6587)" : "English"
       });

@@ -111,20 +111,7 @@ function buildDailyMarkdown(
     ...(tableRows.length > 0 ? tableRows : ["| — | _No papers_ | | | | |"])
   ].join("\n");
 
-  // ── Local PDFs section ─────────────────────────────────────────
-  let localPdfsSection = "";
-  if (settings.paperDownload?.savePdf) {
-    const pdfsWithLocal = rankedPapers.filter(p => p.links.localPdf);
-    if (pdfsWithLocal.length > 0) {
-      const lines = pdfsWithLocal.map(p =>
-        `- [${p.title}](${p.links.localPdf})`
-      );
-      localPdfsSection = `## 本地 PDF / Local PDFs (${pdfsWithLocal.length} 篇)\n\n${lines.join("\n")}`;
-    }
-  }
-
   const sections = [frontmatter, "", header, "", digestSection];
-  if (localPdfsSection) sections.push("", localPdfsSection);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
@@ -492,20 +479,13 @@ export async function runDailyPipeline(
         hfUpvotes: p.hfUpvotes ?? 0,
         ...(p.hfStreak && p.hfStreak > 1 ? { streakDays: p.hfStreak } : {})
       }));
-      // Build local_pdfs section: list of papers that have a locally downloaded PDF
-      const localPdfEntries = rankedPapers
-        .filter(p => p.links.localPdf)
-        .map(p => `- [${p.title}](${p.links.localPdf})`);
-      const localPdfsSection = localPdfEntries.length > 0
-        ? `## Local PDFs (${date})\n${localPdfEntries.join("\n")}`
-        : "";
 
       const prompt = fillTemplate(getActivePrompt(settings), {
         date,
         papers_json: JSON.stringify(topPapersForLLM, null, 2),
         hf_papers_json: JSON.stringify(hfForLLM, null, 2),
         fulltext_section: fulltextSection,
-        local_pdfs: localPdfsSection,
+        local_pdfs: "",
         interest_keywords: interestKeywords.map(k => `${k.keyword}(weight:${k.weight})`).join(", "),
         language: settings.language === "zh" ? "Chinese (中文)" : "English"
       });
