@@ -101,7 +101,6 @@ function buildDailyMarkdown(
   rankedPapers: Paper[],
   aiDigest: string,
   activeSources: string[],
-  domainSummary: string,
   interestHotnessSection: string,
   error?: string
 ): string {
@@ -182,7 +181,6 @@ function buildDailyMarkdown(
   if (interestHotnessSection) sections.push("", interestHotnessSection);
   sections.push("", digestSection);
   if (featuredPapersSection) sections.push("", featuredPapersSection);
-  if (domainSummary) sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
@@ -684,28 +682,7 @@ export async function runDailyPipeline(
       }
     }
 
-    // Build domain hotness table for markdown
-    const catStats2 = new Map<string, { count: number; totalScore: number; scored: number }>();
-    for (const paper of rankedPapers) {
-      for (const cat of (paper.categories ?? [])) {
-        if (!catStats2.has(cat)) catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
-        const s = catStats2.get(cat)!;
-        s.count++;
-        if (paper.llmScore != null) { s.totalScore += paper.llmScore; s.scored++; }
-      }
-    }
-    const topCats2 = [...catStats2.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
-    const domainSummary = topCats2.length > 0 ? [
-      "## 领域热度 / Domain Hotness",
-      "",
-      "| 领域 | 论文数 | 平均分 |",
-      "|------|--------|--------|",
-      ...topCats2.map(([cat, s]) =>
-        `| ${cat} | ${s.count} | ${s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-"} |`
-      )
-    ].join("\n") : "";
-
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, interestHotnessSection, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, interestHotnessSection, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {

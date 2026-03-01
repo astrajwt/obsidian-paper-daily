@@ -4749,7 +4749,7 @@ function buildDeepReadFileName(template, paper, baseId, date, modelName) {
   }
   return result.replace(/[/\\:*?"<>|]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || baseId;
 }
-function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, domainSummary, interestHotnessSection, error) {
+function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, interestHotnessSection, error) {
   var _a2, _b, _c, _d;
   const frontmatter = [
     "---",
@@ -4825,8 +4825,6 @@ ${aiDigest}`;
   sections.push("", digestSection);
   if (featuredPapersSection)
     sections.push("", featuredPapersSection);
-  if (domainSummary)
-    sections.push("", domainSummary);
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
@@ -4837,7 +4835,7 @@ var PipelineAbortError = class extends Error {
   }
 };
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
   const writer = new VaultWriter(app);
   const now = new Date();
   const date = (_a2 = options.targetDate) != null ? _a2 : getISODate(now);
@@ -5276,30 +5274,7 @@ LLM failed: ${llmError}` : ""}` : llmError ? `LLM failed: ${llmError}` : void 0;
         ].join("\n");
       }
     }
-    const catStats2 = /* @__PURE__ */ new Map();
-    for (const paper of rankedPapers) {
-      for (const cat of (_J = paper.categories) != null ? _J : []) {
-        if (!catStats2.has(cat))
-          catStats2.set(cat, { count: 0, totalScore: 0, scored: 0 });
-        const s = catStats2.get(cat);
-        s.count++;
-        if (paper.llmScore != null) {
-          s.totalScore += paper.llmScore;
-          s.scored++;
-        }
-      }
-    }
-    const topCats2 = [...catStats2.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
-    const domainSummary = topCats2.length > 0 ? [
-      "## \u9886\u57DF\u70ED\u5EA6 / Domain Hotness",
-      "",
-      "| \u9886\u57DF | \u8BBA\u6587\u6570 | \u5E73\u5747\u5206 |",
-      "|------|--------|--------|",
-      ...topCats2.map(
-        ([cat, s]) => `| ${cat} | ${s.count} | ${s.scored > 0 ? (s.totalScore / s.scored).toFixed(1) : "-"} |`
-      )
-    ].join("\n") : "";
-    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, domainSummary, interestHotnessSection, errorMsg);
+    const markdown = buildDailyMarkdown(date, settings, rankedPapers, llmDigest, activeSources, interestHotnessSection, errorMsg);
     await writer.writeNote(inboxPath, markdown);
     log(`Step 5 WRITE: markdown written to ${inboxPath}`);
   } catch (err) {
