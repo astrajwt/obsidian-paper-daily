@@ -22,6 +22,7 @@ export interface Paper {
   llmScore?: number;
   llmScoreReason?: string;
   llmSummary?: string;
+  deepReadAnalysis?: string;   // Stage 2 per-paper LLM analysis
 }
 
 export interface FetchParams {

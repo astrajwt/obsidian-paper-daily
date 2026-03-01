@@ -15,6 +15,7 @@ import { OpenAICompatibleProvider } from "../llm/openaiCompatible";
 import { AnthropicProvider } from "../llm/anthropicProvider";
 import type { LLMProvider } from "../llm/provider";
 import type { HFTrackStore } from "../storage/hfTrackStore";
+import { DEFAULT_DEEP_READ_PROMPT } from "../settings";
 
 function getISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -405,32 +406,64 @@ ${JSON.stringify(papersForScoring)}`;
     await downloadPapersForDay(app, rankedPapers, settings, log);
   }
 
-  // ── Step 3f: Full-text fetch for top-N papers (Deep Read) ─────
+  // ── Step 3f: Deep Read — per-paper LLM analysis ───────────────
   let fulltextSection = "";
   if (settings.deepRead?.enabled && rankedPapers.length > 0 && settings.llm.apiKey) {
-    const topN = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
-    const maxChars = settings.deepRead.maxCharsPerPaper ?? 8000;
-    const parts: string[] = [];
+    const topN      = Math.min(settings.deepRead.topN ?? 5, rankedPapers.length);
+    const maxChars  = settings.deepRead.maxCharsPerPaper ?? 8000;
+    const maxTokens = settings.deepRead.deepReadMaxTokens ?? 1024;
+    const drPrompt  = settings.deepRead.deepReadPromptTemplate ?? DEFAULT_DEEP_READ_PROMPT;
+    const langStr   = settings.language === "zh" ? "Chinese (中文)" : "English";
+
+    progress(`[3/5] 📖 Deep Read — ${topN} 篇精读中...`);
+    const llm = buildLLMProvider(settings);
+    const analysisResults: string[] = [];
 
     for (let i = 0; i < topN; i++) {
-      const paper = rankedPapers[i];
+      const paper  = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
-      log(`Step 3f FULLTEXT: fetching ${baseId}...`);
-      const text = await fetchArxivFullText(baseId, maxChars);
-      if (text) {
-        parts.push(`### [${i + 1}] ${paper.title}\n\n${text}`);
-        log(`Step 3f FULLTEXT: fetched ${baseId} (${text.length} chars)`);
-      } else {
-        log(`Step 3f FULLTEXT: could not fetch ${baseId}, skipping`);
+
+      // 1. Fetch full text (fallback to abstract)
+      log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fetching ${baseId}...`);
+      const rawText = await fetchArxivFullText(baseId, maxChars);
+      const fulltextForPrompt = rawText ?? paper.abstract;
+      if (!rawText) log(`Step 3f DEEPREAD [${i + 1}/${topN}]: fulltext unavailable, using abstract`);
+
+      // 2. Build per-paper prompt
+      const paperPrompt = fillTemplate(drPrompt, {
+        title:         paper.title,
+        authors:       (paper.authors ?? []).slice(0, 5).join(", ") || "Unknown",
+        directions:    (paper.topDirections ?? []).join(", ") || "none",
+        interest_hits: (paper.interestHits ?? []).join(", ") || "none",
+        abstract:      paper.abstract,
+        fulltext:      fulltextForPrompt,
+        language:      langStr,
+      });
+
+      // 3. LLM call — non-fatal
+      try {
+        const result = await llm.generate({ prompt: paperPrompt, temperature: 0.2, maxTokens });
+        if (result.usage) trackUsage(`Step 3f deepread [${i + 1}]`, result.usage.inputTokens, result.usage.outputTokens);
+        paper.deepReadAnalysis = result.text.trim();
+        analysisResults.push(`### [${i + 1}] ${paper.title}\n\n${paper.deepReadAnalysis}`);
+        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: done (${result.text.length} chars)`);
+      } catch (err) {
+        log(`Step 3f DEEPREAD [${i + 1}/${topN}]: LLM error: ${String(err)} — skipping`);
       }
     }
 
-    if (parts.length > 0) {
-      fulltextSection = `\n\n## Full Paper Text (top ${parts.length} papers — use this for deeper per-paper analysis):\n> Texts are truncated. Focus on methods, experiments, and findings.\n\n${parts.join("\n\n---\n\n")}`;
+    if (analysisResults.length > 0) {
+      fulltextSection = [
+        "",
+        `## Deep Read Analysis (top ${analysisResults.length} papers):`,
+        `> Per-paper LLM analysis based on full paper text.`,
+        "",
+        analysisResults.join("\n\n---\n\n"),
+      ].join("\n");
     }
-    log(`Step 3f FULLTEXT: ${parts.length}/${topN} papers fetched`);
+    log(`Step 3f DEEPREAD: ${analysisResults.length}/${topN} papers analysed`);
   } else {
-    log(`Step 3f FULLTEXT: skipped (enabled=${settings.deepRead?.enabled ?? false})`);
+    log(`Step 3f DEEPREAD: skipped (enabled=${settings.deepRead?.enabled ?? false})`);
   }
 
   // ── Step 4: LLM ───────────────────────────────────────────────

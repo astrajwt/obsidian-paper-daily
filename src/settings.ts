@@ -202,6 +202,31 @@ Rules:
 - Call out benchmark overfitting, p-hacking, insufficient baselines, or vague claims explicitly.
 - Recommendations must be specific — no "interesting direction" hedging.`;
 
+export const DEFAULT_DEEP_READ_PROMPT = `You are a senior AI/ML research analyst. Analyze the following paper concisely.
+
+Title: {{title}}
+Authors: {{authors}}
+Directions: {{directions}}
+Interest keyword hits: {{interest_hits}}
+Abstract: {{abstract}}
+
+Full paper text (may be truncated):
+{{fulltext}}
+
+Provide a structured analysis with these sections:
+
+**核心贡献 / Core Contribution** (2–3 sentences): What exactly is built, proved, or demonstrated? Be specific with method/dataset names and key numbers.
+
+**方法亮点 / Method Highlights** (2–4 bullet points): Key technical choices, algorithmic novelty, or system design decisions.
+
+**实验与结果 / Experiments & Results** (2–3 sentences): Which benchmarks? Headline numbers vs baselines?
+
+**工程启示 / Engineering Takeaway** (1–2 sentences): What can a practitioner adopt from this work?
+
+**局限性 / Limitations** (1–2 sentences): Honest scope limitations or reproducibility concerns.
+
+Keep the total under 400 words. Be direct and opinionated. Output in {{language}}.`;
+
 export const DEFAULT_PROMPT_LIBRARY: PromptTemplate[] = [
   { id: "builtin_engineering", name: "工程精读", prompt: DEFAULT_DAILY_PROMPT, builtin: true },
   { id: "builtin_quickscan",   name: "速览",     prompt: DEFAULT_QUICKSCAN_PROMPT, builtin: true },
@@ -1308,6 +1333,8 @@ export const DEFAULT_SETTINGS: PaperDailySettings = {
     topN: 5,
     maxCharsPerPaper: 8000,
     cacheTTLDays: 60,
+    deepReadMaxTokens: 1024,
+    // deepReadPromptTemplate intentionally omitted → pipeline falls back to DEFAULT_DEEP_READ_PROMPT
   },
 
   promptLibrary: DEFAULT_PROMPT_LIBRARY.map(t => ({ ...t })),
@@ -2074,6 +2101,46 @@ export class PaperDailySettingTab extends PluginSettingTab {
           this.plugin.settings.deepRead = { ...this.plugin.settings.deepRead, cacheTTLDays: value } as typeof this.plugin.settings.deepRead;
           await this.plugin.saveSettings();
         }));
+
+    // --- Max tokens slider ---
+    new Setting(drSubContainer)
+      .setName("每篇分析 Token 上限 / Max tokens per paper")
+      .setDesc("Deep Read 每篇论文 LLM 调用的输出 token 上限（默认 1024，建议 512–2048）")
+      .addSlider(slider => slider
+        .setLimits(256, 4096, 128)
+        .setValue(this.plugin.settings.deepRead?.deepReadMaxTokens ?? 1024)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.deepRead = {
+            ...this.plugin.settings.deepRead, deepReadMaxTokens: value
+          } as typeof this.plugin.settings.deepRead;
+          await this.plugin.saveSettings();
+        }));
+
+    // --- Per-paper prompt textarea ---
+    new Setting(drSubContainer)
+      .setName("每篇精读 Prompt / Per-paper Deep Read prompt")
+      .setDesc(
+        "留空使用默认模板。可用变量: {{title}}, {{authors}}, {{directions}}, " +
+        "{{interest_hits}}, {{abstract}}, {{fulltext}}, {{language}}"
+      )
+      .addTextArea(area => {
+        const plugin = this.plugin;
+        area.setPlaceholder("(leave blank for default)");
+        area.setValue(plugin.settings.deepRead?.deepReadPromptTemplate ?? "");
+        area.inputEl.rows = 8;
+        area.inputEl.style.width = "100%";
+        area.inputEl.style.fontFamily = "monospace";
+        area.inputEl.style.fontSize = "0.85em";
+        area.inputEl.addEventListener("input", async () => {
+          const val = area.inputEl.value.trim();
+          plugin.settings.deepRead = {
+            ...plugin.settings.deepRead,
+            deepReadPromptTemplate: val || undefined
+          } as typeof plugin.settings.deepRead;
+          await plugin.saveSettings();
+        });
+      });
 
     refreshDrSub();
 
