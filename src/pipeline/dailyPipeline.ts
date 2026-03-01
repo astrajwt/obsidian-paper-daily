@@ -124,6 +124,10 @@ function buildDailyMarkdown(
   return sections.join("\n");
 }
 
+export class PipelineAbortError extends Error {
+  constructor() { super("Pipeline aborted by user"); this.name = "PipelineAbortError"; }
+}
+
 export interface DailyPipelineOptions {
   targetDate?: string;
   windowStart?: Date;
@@ -132,6 +136,8 @@ export interface DailyPipelineOptions {
   hfTrackStore?: HFTrackStore;
   /** Called at each major pipeline step with a human-readable status message */
   onProgress?: (msg: string) => void;
+  /** Abort signal — throw PipelineAbortError when aborted */
+  signal?: AbortSignal;
 }
 
 export async function runDailyPipeline(
@@ -156,6 +162,9 @@ export async function runDailyPipeline(
     console.log(`[PaperDaily] ${msg}`);
   };
   const progress = options.onProgress ?? (() => {});
+  const checkAbort = () => {
+    if (options.signal?.aborted) throw new PipelineAbortError();
+  };
 
   // Token usage accumulator
   let totalInputTokens = 0;
@@ -211,6 +220,7 @@ export async function runDailyPipeline(
   }
 
   // ── Step 1b: Fetch HuggingFace Papers ─────────────────────────
+  checkAbort();
   if (settings.hfSource?.enabled !== false) {
     progress(`[1/5] 🤗 拉取 HuggingFace 论文...`);
     try {
@@ -307,6 +317,7 @@ export async function runDailyPipeline(
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
 
   // ── Step 3b: LLM scoring (batched, all papers) ───────────────
+  checkAbort();
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     const BATCH_SIZE = 10;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
@@ -319,6 +330,7 @@ export async function runDailyPipeline(
     for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
       const batchStart = batchIdx * BATCH_SIZE;
       const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
+      checkAbort();
       const paperFrom = batchStart + 1;
       const paperTo = batchStart + batchPapers.length;
       const paperTotal = rankedPapers.length;
@@ -409,6 +421,7 @@ export async function runDailyPipeline(
     const analysisResults: string[] = [];
 
     for (let i = 0; i < topN; i++) {
+      checkAbort();
       progress(`[3/5] 📖 Deep Read (${i + 1}/${topN})...`);
       const paper  = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
@@ -485,6 +498,7 @@ export async function runDailyPipeline(
   }
 
   // ── Step 4: LLM ───────────────────────────────────────────────
+  checkAbort();
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] 📝 正在生成日报...`);
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);

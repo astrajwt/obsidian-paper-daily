@@ -978,8 +978,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
         }));
 
 
-    // ── Test ─────────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "测试 / Test" });
+    // ── Tools ─────────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "工具 / Tools" });
 
     const testStatusEl = containerEl.createEl("pre", { text: "" });
     testStatusEl.style.color = "var(--text-muted)";
@@ -1004,19 +1004,55 @@ export class PaperDailySettingTab extends PluginSettingTab {
       .addButton(btn => {
         btn.setButtonText("▶ 立即运行 / Run Daily Now")
           .setCta()
-          .onClick(async () => {
-            btn.setButtonText("Running...").setDisabled(true);
-            setStatus("启动中...");
-            try {
-              await this.plugin.runDaily((msg) => setStatus(msg));
-              setStatus("✓ 完成！请查看 PaperDaily/inbox/ 中今天的文件 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
-            } catch (err) {
-              setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");
-            } finally {
-              btn.setButtonText("▶ 立即运行 / Run Daily Now").setDisabled(false);
-            }
+          .onClick(() => {
+            this.plugin.runDailyWithUI();
           });
       });
+
+    // ── Backfill ──────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "批量生成日报 / Batch Generate Daily Reports" });
+    containerEl.createEl("p", {
+      text: "按日期范围批量生成每日报告，适合补全历史记录 | Generate daily reports for a date range to backfill historical records.",
+      cls: "setting-item-description"
+    });
+
+    let bfStartDate = "";
+    let bfEndDate = "";
+
+    new Setting(containerEl)
+      .setName("开始日期 / Start Date")
+      .setDesc("YYYY-MM-DD")
+      .addText(text => text
+        .setPlaceholder("2026-02-01")
+        .onChange(v => { bfStartDate = v.trim(); }));
+
+    new Setting(containerEl)
+      .setName("结束日期 / End Date")
+      .setDesc("YYYY-MM-DD")
+      .addText(text => text
+        .setPlaceholder("2026-02-28")
+        .onChange(v => { bfEndDate = v.trim(); }));
+
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText("▶ 批量生成 / Run Batch")
+        .setCta()
+        .onClick(async () => {
+          if (!bfStartDate || !bfEndDate) {
+            setStatus("请填写开始和结束日期。", "var(--color-red)");
+            return;
+          }
+          btn.setDisabled(true);
+          setStatus("批量生成中，请稍候...");
+          try {
+            await this.plugin.runBackfill(bfStartDate, bfEndDate, (msg) => setStatus(msg));
+            setStatus("✓ 完成！", "var(--color-green)");
+          } catch (err) {
+            setStatus(`✗ 错误: ${String(err)}`, "var(--color-red)");
+          } finally {
+            btn.setDisabled(false);
+          }
+        }));
 
     // ── Config File ───────────────────────────────────────────────
     containerEl.createEl("h2", { text: "配置文件 / Config File" });

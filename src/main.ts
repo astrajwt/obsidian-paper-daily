@@ -6,10 +6,11 @@ import { StateStore } from "./storage/stateStore";
 import { DedupStore } from "./storage/dedupStore";
 import { SnapshotStore } from "./storage/snapshotStore";
 import { HFTrackStore } from "./storage/hfTrackStore";
-import { runDailyPipeline } from "./pipeline/dailyPipeline";
+import { runDailyPipeline, PipelineAbortError } from "./pipeline/dailyPipeline";
 import { runBackfillPipeline } from "./pipeline/backfillPipeline";
 import { Scheduler } from "./scheduler/scheduler";
 import { ArxivSource } from "./sources/arxivSource";
+import { FloatingProgress } from "./ui/floatingProgress";
 
 export default class PaperDailyPlugin extends Plugin {
   settings!: PaperDailySettings;
@@ -19,6 +20,7 @@ export default class PaperDailyPlugin extends Plugin {
   private snapshotStore!: SnapshotStore;
   private hfTrackStore!: HFTrackStore;
   private scheduler!: Scheduler;
+  private activeAbortController: AbortController | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -118,13 +120,8 @@ export default class PaperDailyPlugin extends Plugin {
       this.stateStore,
       {
         onDaily: () => {
-          const notice = new Notice("Paper Daily: 定时任务启动中...", 0);
-          return this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`))
-            .then(() => { setTimeout(() => notice.hide(), 4000); })
-            .catch((err) => {
-              notice.setMessage(`Paper Daily 错误: ${String(err)}`);
-              setTimeout(() => notice.hide(), 6000);
-            });
+          if (this.activeAbortController) return Promise.resolve(); // manual run in progress
+          return this.runDailyWithUI();
         },
         todayFileExists: (date) => this.todayFileExists(date)
       }
@@ -136,16 +133,7 @@ export default class PaperDailyPlugin extends Plugin {
     this.addCommand({
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
-      callback: async () => {
-        const notice = new Notice("Paper Daily: 启动中...", 0);
-        try {
-          await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
-          setTimeout(() => notice.hide(), 4000);
-        } catch (err) {
-          notice.setMessage(`Paper Daily 错误: ${String(err)}`);
-          setTimeout(() => notice.hide(), 6000);
-        }
-      }
+      callback: () => { void this.runDailyWithUI(); }
     });
 
     this.addCommand({
@@ -181,15 +169,42 @@ export default class PaperDailyPlugin extends Plugin {
     });
   }
 
-  async runDaily(onProgress?: (msg: string) => void): Promise<void> {
+  async runDaily(onProgress?: (msg: string) => void, signal?: AbortSignal): Promise<void> {
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
       this.snapshotStore,
-      { hfTrackStore: this.hfTrackStore, onProgress }
+      { hfTrackStore: this.hfTrackStore, onProgress, signal }
     );
+  }
+
+  /** Run daily pipeline with floating UI and stop button. */
+  async runDailyWithUI(): Promise<void> {
+    if (this.activeAbortController) {
+      new Notice("Paper Daily: 任务已在运行中。");
+      return;
+    }
+    const controller = new AbortController();
+    this.activeAbortController = controller;
+
+    const fp = new FloatingProgress(() => { controller.abort(); });
+    try {
+      await this.runDaily((msg) => fp.setMessage(msg), controller.signal);
+      fp.setMessage("✅ 完成！");
+      setTimeout(() => fp.destroy(), 3000);
+    } catch (err) {
+      if (err instanceof PipelineAbortError) {
+        fp.setMessage("⏹ 已停止。");
+        setTimeout(() => fp.destroy(), 2000);
+      } else {
+        fp.setMessage(`❌ 错误: ${String(err)}`);
+        setTimeout(() => fp.destroy(), 6000);
+      }
+    } finally {
+      this.activeAbortController = null;
+    }
   }
 
   private todayFileExists(date: string): Promise<boolean> {
@@ -201,14 +216,7 @@ export default class PaperDailyPlugin extends Plugin {
   private async runTodayIfMissing(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     if (await this.todayFileExists(today)) return;
-    const notice = new Notice("Paper Daily: 今日文档缺失，正在生成...", 0);
-    try {
-      await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
-      setTimeout(() => notice.hide(), 4000);
-    } catch (err) {
-      notice.setMessage(`Paper Daily 错误: ${String(err)}`);
-      setTimeout(() => notice.hide(), 6000);
-    }
+    void this.runDailyWithUI();
   }
 
   async clearDedup(): Promise<void> {
