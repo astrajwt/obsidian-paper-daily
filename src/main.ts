@@ -170,14 +170,14 @@ export default class PaperDailyPlugin extends Plugin {
     });
   }
 
-  async runDaily(onProgress?: (msg: string) => void, signal?: AbortSignal): Promise<void> {
+  async runDaily(onProgress?: (msg: string) => void, signal?: AbortSignal, onTokenUpdate?: (i: number, o: number) => void): Promise<void> {
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
       this.snapshotStore,
-      { hfTrackStore: this.hfTrackStore, onProgress, signal }
+      { hfTrackStore: this.hfTrackStore, onProgress, signal, onTokenUpdate }
     );
   }
 
@@ -192,7 +192,7 @@ export default class PaperDailyPlugin extends Plugin {
 
     const fp = new FloatingProgress(() => { controller.abort(); });
     try {
-      await this.runDaily((msg) => fp.setMessage(msg), controller.signal);
+      await this.runDaily((msg) => fp.setMessage(msg), controller.signal, (i, o) => fp.setTokens(i, o));
       fp.setMessage("✅ 完成！");
       setTimeout(() => fp.destroy(), 3000);
     } catch (err) {

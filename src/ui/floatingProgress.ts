@@ -2,6 +2,7 @@
 export class FloatingProgress {
   private el: HTMLElement;
   private msgEl: HTMLElement;
+  private tokenEl: HTMLElement;
 
   constructor(onStop: () => void, title = "📚 Paper Daily 运行中") {
     this.el = document.body.createDiv();
@@ -47,10 +48,27 @@ export class FloatingProgress {
     this.msgEl = this.el.createEl("div");
     this.msgEl.style.cssText = "font-size:0.83em;color:var(--text-muted);word-break:break-word;line-height:1.4;";
     this.msgEl.setText("初始化中...");
+
+    // Token usage display (hidden until first update)
+    this.tokenEl = this.el.createEl("div");
+    this.tokenEl.style.cssText = [
+      "font-size:0.78em",
+      "color:var(--text-faint)",
+      "margin-top:6px",
+      "display:none",
+    ].join(";");
   }
 
   setMessage(msg: string): void {
     this.msgEl.setText(msg);
+  }
+
+  setTokens(inputTokens: number, outputTokens: number): void {
+    const total = inputTokens + outputTokens;
+    this.tokenEl.setText(
+      `Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${total.toLocaleString()}`
+    );
+    this.tokenEl.style.display = "";
   }
 
   destroy(): void {

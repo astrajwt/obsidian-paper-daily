@@ -170,6 +170,8 @@ export interface DailyPipelineOptions {
   hfTrackStore?: HFTrackStore;
   /** Called at each major pipeline step with a human-readable status message */
   onProgress?: (msg: string) => void;
+  /** Called after each LLM call with cumulative token counts */
+  onTokenUpdate?: (inputTokens: number, outputTokens: number) => void;
   /** Abort signal — throw PipelineAbortError when aborted */
   signal?: AbortSignal;
 }
@@ -207,6 +209,7 @@ export async function runDailyPipeline(
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
+    options.onTokenUpdate?.(totalInputTokens, totalOutputTokens);
   };
 
   log(`=== Daily pipeline START date=${date} ===`);

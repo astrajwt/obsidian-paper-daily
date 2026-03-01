@@ -4874,9 +4874,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   const trackUsage = (label, inputTokens, outputTokens) => {
+    var _a3;
     totalInputTokens += inputTokens;
     totalOutputTokens += outputTokens;
     log(`${label} tokens: input=${inputTokens} output=${outputTokens}`);
+    (_a3 = options.onTokenUpdate) == null ? void 0 : _a3.call(options, totalInputTokens, totalOutputTokens);
   };
   log(`=== Daily pipeline START date=${date} ===`);
   const interestKeywords = (_c = settings.interestKeywords) != null ? _c : [];
@@ -5443,9 +5445,23 @@ var FloatingProgress = class {
     this.msgEl = this.el.createEl("div");
     this.msgEl.style.cssText = "font-size:0.83em;color:var(--text-muted);word-break:break-word;line-height:1.4;";
     this.msgEl.setText("\u521D\u59CB\u5316\u4E2D...");
+    this.tokenEl = this.el.createEl("div");
+    this.tokenEl.style.cssText = [
+      "font-size:0.78em",
+      "color:var(--text-faint)",
+      "margin-top:6px",
+      "display:none"
+    ].join(";");
   }
   setMessage(msg) {
     this.msgEl.setText(msg);
+  }
+  setTokens(inputTokens, outputTokens) {
+    const total = inputTokens + outputTokens;
+    this.tokenEl.setText(
+      `Tokens: ${inputTokens.toLocaleString()} in + ${outputTokens.toLocaleString()} out = ${total.toLocaleString()}`
+    );
+    this.tokenEl.style.display = "";
   }
   destroy() {
     this.el.remove();
@@ -5586,14 +5602,14 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       }
     });
   }
-  async runDaily(onProgress, signal) {
+  async runDaily(onProgress, signal, onTokenUpdate) {
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
       this.snapshotStore,
-      { hfTrackStore: this.hfTrackStore, onProgress, signal }
+      { hfTrackStore: this.hfTrackStore, onProgress, signal, onTokenUpdate }
     );
   }
   /** Run daily pipeline with floating UI and stop button. */
@@ -5608,7 +5624,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       controller.abort();
     });
     try {
-      await this.runDaily((msg) => fp.setMessage(msg), controller.signal);
+      await this.runDaily((msg) => fp.setMessage(msg), controller.signal, (i, o) => fp.setTokens(i, o));
       fp.setMessage("\u2705 \u5B8C\u6210\uFF01");
       setTimeout(() => fp.destroy(), 3e3);
     } catch (err) {
