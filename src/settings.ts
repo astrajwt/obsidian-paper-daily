@@ -391,6 +391,10 @@ export class PaperDailySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName("RSS 订阅源 / RSS Sources")
+      .setDesc("🚧 Coming Soon — 自定义 RSS/Atom 订阅源将在后续版本支持 | Custom RSS/Atom feed ingestion is planned for a future release.");
+
     // ── Interest Keywords ─────────────────────────────────────────
     containerEl.createEl("h2", { text: "兴趣关键词 / Interest Keywords" });
     containerEl.createEl("p", {
@@ -441,209 +445,8 @@ export class PaperDailySettingTab extends PluginSettingTab {
           renderKwList();
         }));
 
-    // ── LLM ──────────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "模型配置 / LLM Provider" });
-
-    // ── Preset buttons ───────────────────────────────────────────
-    const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
-    presetWrap.style.display = "flex";
-    presetWrap.style.flexWrap = "wrap";
-    presetWrap.style.gap = "6px";
-    presetWrap.style.marginBottom = "16px";
-
-    let activePreset = detectPreset(this.plugin.settings.llm.baseUrl);
-
-    // refs updated by preset selection
-    let baseUrlInput: HTMLInputElement;
-    let modelSelect: HTMLSelectElement;
-    let customModelInput: HTMLInputElement;
-    let modelCustomRow: HTMLElement;
-    let apiKeyInput: HTMLInputElement;
-
-    const renderModelOptions = (presetKey: string) => {
-      if (!modelSelect) return;
-      const preset = PROVIDER_PRESETS[presetKey];
-      modelSelect.empty();
-      for (const m of preset.models) {
-        const opt = modelSelect.createEl("option", { text: m, value: m });
-        if (m === this.plugin.settings.llm.model) opt.selected = true;
-      }
-      const customOpt = modelSelect.createEl("option", { text: "Other (custom)...", value: "__custom__" });
-      // if current model not in preset list, select custom
-      if (!preset.models.includes(this.plugin.settings.llm.model)) {
-        customOpt.selected = true;
-        if (modelCustomRow) modelCustomRow.style.display = "";
-        if (customModelInput) customModelInput.value = this.plugin.settings.llm.model;
-      } else {
-        if (modelCustomRow) modelCustomRow.style.display = "none";
-      }
-    };
-
-    const applyPreset = async (presetKey: string) => {
-      activePreset = presetKey;
-      const preset = PROVIDER_PRESETS[presetKey];
-      this.plugin.settings.llm.provider = preset.provider;
-      if (preset.baseUrl) {
-        this.plugin.settings.llm.baseUrl = preset.baseUrl;
-        if (baseUrlInput) baseUrlInput.value = preset.baseUrl;
-      }
-      if (apiKeyInput) apiKeyInput.placeholder = preset.keyPlaceholder;
-      renderModelOptions(presetKey);
-      // pick first model if current model not in new preset
-      if (preset.models.length > 0 && !preset.models.includes(this.plugin.settings.llm.model)) {
-        this.plugin.settings.llm.model = preset.models[0];
-        if (modelSelect) modelSelect.value = preset.models[0];
-        if (modelCustomRow) modelCustomRow.style.display = "none";
-      }
-      // refresh button styles
-      presetWrap.querySelectorAll(".paper-daily-preset-btn").forEach(b => {
-        const el = b as HTMLElement;
-        if (el.dataset.preset === presetKey) {
-          el.style.opacity = "1";
-          el.style.fontWeight = "600";
-          el.style.borderColor = "var(--interactive-accent)";
-          el.style.color = "var(--interactive-accent)";
-        } else {
-          el.style.opacity = "0.6";
-          el.style.fontWeight = "400";
-          el.style.borderColor = "var(--background-modifier-border)";
-          el.style.color = "var(--text-normal)";
-        }
-      });
-      await this.plugin.saveSettings();
-    };
-
-    for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
-      const btn = presetWrap.createEl("button", {
-        text: preset.label,
-        cls: "paper-daily-preset-btn"
-      });
-      btn.dataset.preset = key;
-      btn.style.padding = "4px 12px";
-      btn.style.borderRadius = "6px";
-      btn.style.border = "1px solid var(--background-modifier-border)";
-      btn.style.cursor = "pointer";
-      btn.style.fontSize = "0.85em";
-      btn.style.background = "var(--background-secondary)";
-      btn.style.transition = "all 0.15s";
-      if (key === activePreset) {
-        btn.style.opacity = "1";
-        btn.style.fontWeight = "600";
-        btn.style.borderColor = "var(--interactive-accent)";
-        btn.style.color = "var(--interactive-accent)";
-      } else {
-        btn.style.opacity = "0.6";
-        btn.style.color = "var(--text-normal)";
-      }
-      btn.addEventListener("click", () => applyPreset(key));
-    }
-
-    // ── Base URL ─────────────────────────────────────────────────
-    new Setting(containerEl)
-      .setName("接口地址 / Base URL")
-      .setDesc("API 端点，选择预设后自动填入 | API endpoint (auto-filled by preset; edit for custom deployments)")
-      .addText(text => {
-        baseUrlInput = text.inputEl;
-        text
-          .setPlaceholder("https://api.openai.com/v1")
-          .setValue(this.plugin.settings.llm.baseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.llm.baseUrl = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    // ── API Key ──────────────────────────────────────────────────
-    new Setting(containerEl)
-      .setName("API 密钥 / API Key")
-      .setDesc("所选服务商的 API 密钥 | Your API key for the selected provider")
-      .addText(text => {
-        apiKeyInput = text.inputEl;
-        text.inputEl.type = "password";
-        text.inputEl.placeholder = PROVIDER_PRESETS[activePreset]?.keyPlaceholder ?? "sk-...";
-        text.inputEl.value = this.plugin.settings.llm.apiKey;
-        // Use native "input" event — Obsidian's onChange can be unreliable on password fields
-        text.inputEl.addEventListener("input", async () => {
-          this.plugin.settings.llm.apiKey = text.inputEl.value;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    // ── Model dropdown ───────────────────────────────────────────
-    const modelSetting = new Setting(containerEl)
-      .setName("模型 / Model")
-      .setDesc("从预设中选择，或选 Other 手动输入 | Select a preset model or choose Other to type a custom name");
-
-    modelSetting.controlEl.style.flexDirection = "column";
-    modelSetting.controlEl.style.alignItems = "flex-start";
-    modelSetting.controlEl.style.gap = "6px";
-
-    modelSelect = modelSetting.controlEl.createEl("select");
-    modelSelect.style.width = "100%";
-    modelSelect.style.padding = "4px 6px";
-    modelSelect.style.borderRadius = "4px";
-    modelSelect.style.border = "1px solid var(--background-modifier-border)";
-    modelSelect.style.background = "var(--background-primary)";
-    modelSelect.style.color = "var(--text-normal)";
-    modelSelect.style.fontSize = "0.9em";
-
-    modelCustomRow = modelSetting.controlEl.createDiv();
-    modelCustomRow.style.width = "100%";
-    modelCustomRow.style.display = "none";
-    customModelInput = modelCustomRow.createEl("input", { type: "text" });
-    customModelInput.placeholder = "Enter model name...";
-    customModelInput.style.width = "100%";
-    customModelInput.style.padding = "4px 6px";
-    customModelInput.style.borderRadius = "4px";
-    customModelInput.style.border = "1px solid var(--background-modifier-border)";
-    customModelInput.style.background = "var(--background-primary)";
-    customModelInput.style.color = "var(--text-normal)";
-    customModelInput.style.fontSize = "0.9em";
-    customModelInput.addEventListener("input", async () => {
-      this.plugin.settings.llm.model = customModelInput.value;
-      await this.plugin.saveSettings();
-    });
-
-    renderModelOptions(activePreset);
-
-    modelSelect.addEventListener("change", async () => {
-      if (modelSelect.value === "__custom__") {
-        modelCustomRow.style.display = "";
-        customModelInput.focus();
-      } else {
-        modelCustomRow.style.display = "none";
-        this.plugin.settings.llm.model = modelSelect.value;
-        await this.plugin.saveSettings();
-      }
-    });
-
-    // ── Temperature + Max Tokens ─────────────────────────────────
-    new Setting(containerEl)
-      .setName("温度 / Temperature")
-      .setDesc("模型生成温度（0 = 确定性，1 = 最大随机）| LLM temperature (0.0 = deterministic, 1.0 = most random)")
-      .addSlider(slider => slider
-        .setLimits(0, 1, 0.05)
-        .setValue(this.plugin.settings.llm.temperature)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.llm.temperature = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("最大 Token 数 / Max Tokens")
-      .setDesc("模型单次响应的最大 token 数 | Maximum tokens for LLM response")
-      .addSlider(slider => slider
-        .setLimits(512, 8192, 256)
-        .setValue(this.plugin.settings.llm.maxTokens)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.plugin.settings.llm.maxTokens = value;
-          await this.plugin.saveSettings();
-        }));
-
     // ── Prompt Templates (tabbed library) ────────────────────────
-    containerEl.createEl("h3", { text: "Prompt 模板库 / Prompt Library" });
+    containerEl.createEl("h2", { text: "Prompt 模板库 / Prompt Library" });
     {
       const TYPE_LABELS: Record<string, string> = { daily: "日报", scoring: "评分", deepread: "精读" };
       const TYPE_COLORS: Record<string, string> = { daily: "#4a90d9", scoring: "#5cb85c", deepread: "#9b59b6" };
@@ -866,113 +669,6 @@ export class PaperDailySettingTab extends PluginSettingTab {
       renderActions();
     }
 
-    // ── Output ───────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "输出格式 / Output" });
-
-    new Setting(containerEl)
-      .setName("根目录 / Root Folder")
-      .setDesc("Vault 内所有 Paper Daily 文件的存放目录 | Folder inside vault where all Paper Daily files are written")
-      .addText(text => text
-        .setPlaceholder("PaperDaily")
-        .setValue(this.plugin.settings.rootFolder)
-        .onChange(async (value) => {
-          this.plugin.settings.rootFolder = value || "PaperDaily";
-          await this.plugin.saveSettings();
-        }));
-
-    // ── Scheduling ────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "定时任务 / Scheduling" });
-
-    new Setting(containerEl)
-      .setName("每日抓取时间 / Daily Fetch Time")
-      .setDesc("每天自动运行的时间（24 小时制 HH:MM）| Time to run daily fetch (HH:MM, 24-hour)")
-      .addText(text => text
-        .setPlaceholder("08:30")
-        .setValue(this.plugin.settings.schedule.dailyTime)
-        .onChange(async (value) => {
-          this.plugin.settings.schedule.dailyTime = value;
-          await this.plugin.saveSettings();
-        }));
-
-
-    // ── Test ─────────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "测试 / Test" });
-
-    const testStatusEl = containerEl.createEl("pre", { text: "" });
-    testStatusEl.style.color = "var(--text-muted)";
-    testStatusEl.style.fontSize = "0.82em";
-    testStatusEl.style.whiteSpace = "pre-wrap";
-    testStatusEl.style.wordBreak = "break-all";
-    testStatusEl.style.background = "var(--background-secondary)";
-    testStatusEl.style.padding = "8px 10px";
-    testStatusEl.style.borderRadius = "6px";
-    testStatusEl.style.minHeight = "1.8em";
-    testStatusEl.style.display = "none";
-
-    const setStatus = (text: string, color = "var(--text-muted)") => {
-      testStatusEl.style.display = "";
-      testStatusEl.style.color = color;
-      testStatusEl.setText(text);
-    };
-
-    new Setting(containerEl)
-      .setName("立即运行每日报告 / Run Daily Report Now")
-      .setDesc("完整流程：抓取 + AI 摘要 + 写入 inbox/（请先确认 API Key 和配置正确）| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.")
-      .addButton(btn => {
-        btn.setButtonText("▶ 立即运行 / Run Daily Now")
-          .setCta()
-          .onClick(async () => {
-            btn.setButtonText("Running...").setDisabled(true);
-            setStatus("启动中...");
-            try {
-              await this.plugin.runDaily((msg) => setStatus(msg));
-              setStatus("✓ 完成！请查看 PaperDaily/inbox/ 中今天的文件 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
-            } catch (err) {
-              setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");
-            } finally {
-              btn.setButtonText("▶ 立即运行 / Run Daily Now").setDisabled(false);
-            }
-          });
-      });
-
-    // ── RSS Sources [beta] ────────────────────────────────────────
-    const rssHeader = containerEl.createEl("h2");
-    rssHeader.appendText("RSS 订阅源 / RSS Sources ");
-    rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
-
-    containerEl.createEl("p", {
-      text: "订阅自定义 RSS/Atom 源（如 Semantic Scholar 提醒、期刊订阅等）。Feed 解析功能尚未激活，可提前配置 URL，后续版本将支持 | Subscribe to custom RSS/Atom feeds. Feed parsing is not yet active — configure URLs now and they will be fetched in a future update.",
-      cls: "setting-item-description"
-    });
-
-    new Setting(containerEl)
-      .setName("开启 RSS 源 / Enable RSS source")
-      .setDesc("（Beta）开启后将在可用时包含 RSS 订阅内容 | (Beta) Toggle on to include RSS feeds when available")
-      .addToggle(toggle => toggle
-        .setValue(this.plugin.settings.rssSource?.enabled ?? false)
-        .setDisabled(true)   // grayed out until implemented
-        .onChange(async (value) => {
-          this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("订阅地址 / Feed URLs")
-      .setDesc("每行一个 RSS/Atom URL，Beta 功能激活后将自动解析 | One RSS/Atom URL per line. Will be parsed when beta feature activates.")
-      .addTextArea(area => {
-        area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
-        area.setValue((this.plugin.settings.rssSource?.feeds ?? []).join("\n"));
-        area.inputEl.rows = 4;
-        area.inputEl.addEventListener("input", async () => {
-          const feeds = area.inputEl.value
-            .split("\n")
-            .map(s => s.trim())
-            .filter(Boolean);
-          this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, feeds };
-          await this.plugin.saveSettings();
-        });
-      });
-
     // ── Deep Read ────────────────────────────────────────────────
     containerEl.createEl("h2", { text: "全文精读 / Deep Read" });
 
@@ -1052,20 +748,275 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     refreshDrSub();
 
-    // ── Backfill ──────────────────────────────────────────────────
-    containerEl.createEl("h2", { text: "历史回填 / Backfill" });
+    // ── LLM ──────────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "模型配置 / LLM Provider" });
 
+    // ── Preset buttons ───────────────────────────────────────────
+    const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
+    presetWrap.style.display = "flex";
+    presetWrap.style.flexWrap = "wrap";
+    presetWrap.style.gap = "6px";
+    presetWrap.style.marginBottom = "16px";
+
+    let activePreset = detectPreset(this.plugin.settings.llm.baseUrl);
+
+    // refs updated by preset selection
+    let baseUrlInput: HTMLInputElement;
+    let modelSelect: HTMLSelectElement;
+    let customModelInput: HTMLInputElement;
+    let modelCustomRow: HTMLElement;
+    let apiKeyInput: HTMLInputElement;
+
+    const renderModelOptions = (presetKey: string) => {
+      if (!modelSelect) return;
+      const preset = PROVIDER_PRESETS[presetKey];
+      modelSelect.empty();
+      for (const m of preset.models) {
+        const opt = modelSelect.createEl("option", { text: m, value: m });
+        if (m === this.plugin.settings.llm.model) opt.selected = true;
+      }
+      const customOpt = modelSelect.createEl("option", { text: "Other (custom)...", value: "__custom__" });
+      // if current model not in preset list, select custom
+      if (!preset.models.includes(this.plugin.settings.llm.model)) {
+        customOpt.selected = true;
+        if (modelCustomRow) modelCustomRow.style.display = "";
+        if (customModelInput) customModelInput.value = this.plugin.settings.llm.model;
+      } else {
+        if (modelCustomRow) modelCustomRow.style.display = "none";
+      }
+    };
+
+    const applyPreset = async (presetKey: string) => {
+      activePreset = presetKey;
+      const preset = PROVIDER_PRESETS[presetKey];
+      this.plugin.settings.llm.provider = preset.provider;
+      if (preset.baseUrl) {
+        this.plugin.settings.llm.baseUrl = preset.baseUrl;
+        if (baseUrlInput) baseUrlInput.value = preset.baseUrl;
+      }
+      if (apiKeyInput) apiKeyInput.placeholder = preset.keyPlaceholder;
+      renderModelOptions(presetKey);
+      // pick first model if current model not in new preset
+      if (preset.models.length > 0 && !preset.models.includes(this.plugin.settings.llm.model)) {
+        this.plugin.settings.llm.model = preset.models[0];
+        if (modelSelect) modelSelect.value = preset.models[0];
+        if (modelCustomRow) modelCustomRow.style.display = "none";
+      }
+      // refresh button styles
+      presetWrap.querySelectorAll(".paper-daily-preset-btn").forEach(b => {
+        const el = b as HTMLElement;
+        if (el.dataset.preset === presetKey) {
+          el.style.opacity = "1";
+          el.style.fontWeight = "600";
+          el.style.borderColor = "var(--interactive-accent)";
+          el.style.color = "var(--interactive-accent)";
+        } else {
+          el.style.opacity = "0.6";
+          el.style.fontWeight = "400";
+          el.style.borderColor = "var(--background-modifier-border)";
+          el.style.color = "var(--text-normal)";
+        }
+      });
+      await this.plugin.saveSettings();
+    };
+
+    for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
+      const btn = presetWrap.createEl("button", {
+        text: preset.label,
+        cls: "paper-daily-preset-btn"
+      });
+      btn.dataset.preset = key;
+      btn.style.padding = "4px 12px";
+      btn.style.borderRadius = "6px";
+      btn.style.border = "1px solid var(--background-modifier-border)";
+      btn.style.cursor = "pointer";
+      btn.style.fontSize = "0.85em";
+      btn.style.background = "var(--background-secondary)";
+      btn.style.transition = "all 0.15s";
+      if (key === activePreset) {
+        btn.style.opacity = "1";
+        btn.style.fontWeight = "600";
+        btn.style.borderColor = "var(--interactive-accent)";
+        btn.style.color = "var(--interactive-accent)";
+      } else {
+        btn.style.opacity = "0.6";
+        btn.style.color = "var(--text-normal)";
+      }
+      btn.addEventListener("click", () => applyPreset(key));
+    }
+
+    // ── Base URL ─────────────────────────────────────────────────
     new Setting(containerEl)
-      .setName("最大回填天数 / Max Backfill Days")
-      .setDesc("单次回填允许的最大天数范围（安全上限）| Maximum number of days allowed in a backfill range (guardrail)")
+      .setName("接口地址 / Base URL")
+      .setDesc("API 端点，选择预设后自动填入 | API endpoint (auto-filled by preset; edit for custom deployments)")
+      .addText(text => {
+        baseUrlInput = text.inputEl;
+        text
+          .setPlaceholder("https://api.openai.com/v1")
+          .setValue(this.plugin.settings.llm.baseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.llm.baseUrl = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // ── API Key ──────────────────────────────────────────────────
+    new Setting(containerEl)
+      .setName("API 密钥 / API Key")
+      .setDesc("所选服务商的 API 密钥 | Your API key for the selected provider")
+      .addText(text => {
+        apiKeyInput = text.inputEl;
+        text.inputEl.type = "password";
+        text.inputEl.placeholder = PROVIDER_PRESETS[activePreset]?.keyPlaceholder ?? "sk-...";
+        text.inputEl.value = this.plugin.settings.llm.apiKey;
+        // Use native "input" event — Obsidian's onChange can be unreliable on password fields
+        text.inputEl.addEventListener("input", async () => {
+          this.plugin.settings.llm.apiKey = text.inputEl.value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    // ── Model dropdown ───────────────────────────────────────────
+    const modelSetting = new Setting(containerEl)
+      .setName("模型 / Model")
+      .setDesc("从预设中选择，或选 Other 手动输入 | Select a preset model or choose Other to type a custom name");
+
+    modelSetting.controlEl.style.flexDirection = "column";
+    modelSetting.controlEl.style.alignItems = "flex-start";
+    modelSetting.controlEl.style.gap = "6px";
+
+    modelSelect = modelSetting.controlEl.createEl("select");
+    modelSelect.style.width = "100%";
+    modelSelect.style.padding = "4px 6px";
+    modelSelect.style.borderRadius = "4px";
+    modelSelect.style.border = "1px solid var(--background-modifier-border)";
+    modelSelect.style.background = "var(--background-primary)";
+    modelSelect.style.color = "var(--text-normal)";
+    modelSelect.style.fontSize = "0.9em";
+
+    modelCustomRow = modelSetting.controlEl.createDiv();
+    modelCustomRow.style.width = "100%";
+    modelCustomRow.style.display = "none";
+    customModelInput = modelCustomRow.createEl("input", { type: "text" });
+    customModelInput.placeholder = "Enter model name...";
+    customModelInput.style.width = "100%";
+    customModelInput.style.padding = "4px 6px";
+    customModelInput.style.borderRadius = "4px";
+    customModelInput.style.border = "1px solid var(--background-modifier-border)";
+    customModelInput.style.background = "var(--background-primary)";
+    customModelInput.style.color = "var(--text-normal)";
+    customModelInput.style.fontSize = "0.9em";
+    customModelInput.addEventListener("input", async () => {
+      this.plugin.settings.llm.model = customModelInput.value;
+      await this.plugin.saveSettings();
+    });
+
+    renderModelOptions(activePreset);
+
+    modelSelect.addEventListener("change", async () => {
+      if (modelSelect.value === "__custom__") {
+        modelCustomRow.style.display = "";
+        customModelInput.focus();
+      } else {
+        modelCustomRow.style.display = "none";
+        this.plugin.settings.llm.model = modelSelect.value;
+        await this.plugin.saveSettings();
+      }
+    });
+
+    // ── Temperature + Max Tokens ─────────────────────────────────
+    new Setting(containerEl)
+      .setName("温度 / Temperature")
+      .setDesc("模型生成温度（0 = 确定性，1 = 最大随机）| LLM temperature (0.0 = deterministic, 1.0 = most random)")
       .addSlider(slider => slider
-        .setLimits(1, 90, 1)
-        .setValue(this.plugin.settings.backfillMaxDays)
+        .setLimits(0, 1, 0.05)
+        .setValue(this.plugin.settings.llm.temperature)
         .setDynamicTooltip()
         .onChange(async (value) => {
-          this.plugin.settings.backfillMaxDays = value;
+          this.plugin.settings.llm.temperature = value;
           await this.plugin.saveSettings();
         }));
+
+    new Setting(containerEl)
+      .setName("最大 Token 数 / Max Tokens")
+      .setDesc("模型单次响应的最大 token 数 | Maximum tokens for LLM response")
+      .addSlider(slider => slider
+        .setLimits(512, 8192, 256)
+        .setValue(this.plugin.settings.llm.maxTokens)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.llm.maxTokens = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // ── Output ───────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "输出格式 / Output" });
+
+    new Setting(containerEl)
+      .setName("根目录 / Root Folder")
+      .setDesc("Vault 内所有 Paper Daily 文件的存放目录 | Folder inside vault where all Paper Daily files are written")
+      .addText(text => text
+        .setPlaceholder("PaperDaily")
+        .setValue(this.plugin.settings.rootFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.rootFolder = value || "PaperDaily";
+          await this.plugin.saveSettings();
+        }));
+
+    // ── Scheduling ────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "定时任务 / Scheduling" });
+
+    new Setting(containerEl)
+      .setName("每日抓取时间 / Daily Fetch Time")
+      .setDesc("每天自动运行的时间（24 小时制 HH:MM）| Time to run daily fetch (HH:MM, 24-hour)")
+      .addText(text => text
+        .setPlaceholder("08:30")
+        .setValue(this.plugin.settings.schedule.dailyTime)
+        .onChange(async (value) => {
+          this.plugin.settings.schedule.dailyTime = value;
+          await this.plugin.saveSettings();
+        }));
+
+
+    // ── Test ─────────────────────────────────────────────────────
+    containerEl.createEl("h2", { text: "测试 / Test" });
+
+    const testStatusEl = containerEl.createEl("pre", { text: "" });
+    testStatusEl.style.color = "var(--text-muted)";
+    testStatusEl.style.fontSize = "0.82em";
+    testStatusEl.style.whiteSpace = "pre-wrap";
+    testStatusEl.style.wordBreak = "break-all";
+    testStatusEl.style.background = "var(--background-secondary)";
+    testStatusEl.style.padding = "8px 10px";
+    testStatusEl.style.borderRadius = "6px";
+    testStatusEl.style.minHeight = "1.8em";
+    testStatusEl.style.display = "none";
+
+    const setStatus = (text: string, color = "var(--text-muted)") => {
+      testStatusEl.style.display = "";
+      testStatusEl.style.color = color;
+      testStatusEl.setText(text);
+    };
+
+    new Setting(containerEl)
+      .setName("立即运行每日报告 / Run Daily Report Now")
+      .setDesc("完整流程：抓取 + AI 摘要 + 写入 inbox/（请先确认 API Key 和配置正确）| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.")
+      .addButton(btn => {
+        btn.setButtonText("▶ 立即运行 / Run Daily Now")
+          .setCta()
+          .onClick(async () => {
+            btn.setButtonText("Running...").setDisabled(true);
+            setStatus("启动中...");
+            try {
+              await this.plugin.runDaily((msg) => setStatus(msg));
+              setStatus("✓ 完成！请查看 PaperDaily/inbox/ 中今天的文件 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
+            } catch (err) {
+              setStatus(`✗ Error: ${String(err)}`, "var(--color-red)");
+            } finally {
+              btn.setButtonText("▶ 立即运行 / Run Daily Now").setDisabled(false);
+            }
+          });
+      });
 
     // ── Config File ───────────────────────────────────────────────
     containerEl.createEl("h2", { text: "配置文件 / Config File" });
