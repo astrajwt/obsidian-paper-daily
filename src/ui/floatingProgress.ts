@@ -10,12 +10,12 @@ export class FloatingProgress {
   private msgEl: HTMLElement;
   private tokenEl: HTMLElement;
 
-  constructor(onStop: () => void, title = "📚 Paper Daily 运行中") {
+  constructor(onStop: () => void, title = "📚 Paper Daily 运行中", side: "left" | "right" = "right") {
     this.el = document.body.createDiv();
     this.el.style.cssText = [
       "position:fixed",
       "bottom:24px",
-      "right:24px",
+      side === "left" ? "left:24px" : "right:24px",
       "z-index:9999",
       "background:var(--background-secondary)",
       "border:1px solid var(--background-modifier-border)",

@@ -261,7 +261,7 @@ export default class PaperDailyPlugin extends Plugin {
     const fp = new FloatingProgress(() => {
       controller.abort();
       fp.setMessage("⏹ 正在停止...");
-    }, "📅 批量生成日报");
+    }, "📅 批量生成日报", "left");
     try {
       await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
       fp.setMessage("✅ 完成！");
