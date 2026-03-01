@@ -311,7 +311,10 @@ export async function runDailyPipeline(
     for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
       const batchStart = batchIdx * BATCH_SIZE;
       const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
-      progress(`[2/5] 🔍 快速预筛 (${batchIdx + 1}/${totalBatches}) ${batchPapers.length} 篇...`);
+      const paperFrom = batchStart + 1;
+      const paperTo = batchStart + batchPapers.length;
+      const paperTotal = rankedPapers.length;
+      progress(`[2/5] 🔍 快速预筛 (${paperFrom}–${paperTo} / ${paperTotal} 篇)...`);
 
       const papersForScoring = batchPapers.map(p => ({
         id: p.id,

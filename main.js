@@ -4953,7 +4953,10 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
       const batchStart = batchIdx * BATCH_SIZE;
       const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
-      progress(`[2/5] \u{1F50D} \u5FEB\u901F\u9884\u7B5B (${batchIdx + 1}/${totalBatches}) ${batchPapers.length} \u7BC7...`);
+      const paperFrom = batchStart + 1;
+      const paperTo = batchStart + batchPapers.length;
+      const paperTotal = rankedPapers.length;
+      progress(`[2/5] \u{1F50D} \u5FEB\u901F\u9884\u7B5B (${paperFrom}\u2013${paperTo} / ${paperTotal} \u7BC7)...`);
       const papersForScoring = batchPapers.map((p) => {
         var _a3;
         return {
