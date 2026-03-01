@@ -354,6 +354,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("RSS \u8BA2\u9605\u6E90 / RSS Sources").setDesc("\u{1F6A7} Coming Soon \u2014 \u81EA\u5B9A\u4E49 RSS/Atom \u8BA2\u9605\u6E90\u5C06\u5728\u540E\u7EED\u7248\u672C\u652F\u6301 | Custom RSS/Atom feed ingestion is planned for a future release.");
     containerEl.createEl("h2", { text: "\u5174\u8DA3\u5173\u952E\u8BCD / Interest Keywords" });
     containerEl.createEl("p", {
       text: "\u7528\u4E8E\u8BBA\u6587\u6253\u5206\u4E0E\u9AD8\u4EAE\u663E\u793A\uFF0C\u6743\u91CD\u8D8A\u9AD8\u6392\u540D\u8D8A\u9760\u524D\u3002\u5339\u914D\u4E0D\u533A\u5206\u5927\u5C0F\u5199\u3002",
@@ -383,165 +384,7 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
       renderKwList();
     }));
-    containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
-    const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
-    presetWrap.style.display = "flex";
-    presetWrap.style.flexWrap = "wrap";
-    presetWrap.style.gap = "6px";
-    presetWrap.style.marginBottom = "16px";
-    let activePreset = detectPreset(this.plugin.settings.llm.baseUrl);
-    let baseUrlInput;
-    let modelSelect;
-    let customModelInput;
-    let modelCustomRow;
-    let apiKeyInput;
-    const renderModelOptions = (presetKey) => {
-      if (!modelSelect)
-        return;
-      const preset = PROVIDER_PRESETS[presetKey];
-      modelSelect.empty();
-      for (const m of preset.models) {
-        const opt = modelSelect.createEl("option", { text: m, value: m });
-        if (m === this.plugin.settings.llm.model)
-          opt.selected = true;
-      }
-      const customOpt = modelSelect.createEl("option", { text: "Other (custom)...", value: "__custom__" });
-      if (!preset.models.includes(this.plugin.settings.llm.model)) {
-        customOpt.selected = true;
-        if (modelCustomRow)
-          modelCustomRow.style.display = "";
-        if (customModelInput)
-          customModelInput.value = this.plugin.settings.llm.model;
-      } else {
-        if (modelCustomRow)
-          modelCustomRow.style.display = "none";
-      }
-    };
-    const applyPreset = async (presetKey) => {
-      activePreset = presetKey;
-      const preset = PROVIDER_PRESETS[presetKey];
-      this.plugin.settings.llm.provider = preset.provider;
-      if (preset.baseUrl) {
-        this.plugin.settings.llm.baseUrl = preset.baseUrl;
-        if (baseUrlInput)
-          baseUrlInput.value = preset.baseUrl;
-      }
-      if (apiKeyInput)
-        apiKeyInput.placeholder = preset.keyPlaceholder;
-      renderModelOptions(presetKey);
-      if (preset.models.length > 0 && !preset.models.includes(this.plugin.settings.llm.model)) {
-        this.plugin.settings.llm.model = preset.models[0];
-        if (modelSelect)
-          modelSelect.value = preset.models[0];
-        if (modelCustomRow)
-          modelCustomRow.style.display = "none";
-      }
-      presetWrap.querySelectorAll(".paper-daily-preset-btn").forEach((b) => {
-        const el = b;
-        if (el.dataset.preset === presetKey) {
-          el.style.opacity = "1";
-          el.style.fontWeight = "600";
-          el.style.borderColor = "var(--interactive-accent)";
-          el.style.color = "var(--interactive-accent)";
-        } else {
-          el.style.opacity = "0.6";
-          el.style.fontWeight = "400";
-          el.style.borderColor = "var(--background-modifier-border)";
-          el.style.color = "var(--text-normal)";
-        }
-      });
-      await this.plugin.saveSettings();
-    };
-    for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
-      const btn = presetWrap.createEl("button", {
-        text: preset.label,
-        cls: "paper-daily-preset-btn"
-      });
-      btn.dataset.preset = key;
-      btn.style.padding = "4px 12px";
-      btn.style.borderRadius = "6px";
-      btn.style.border = "1px solid var(--background-modifier-border)";
-      btn.style.cursor = "pointer";
-      btn.style.fontSize = "0.85em";
-      btn.style.background = "var(--background-secondary)";
-      btn.style.transition = "all 0.15s";
-      if (key === activePreset) {
-        btn.style.opacity = "1";
-        btn.style.fontWeight = "600";
-        btn.style.borderColor = "var(--interactive-accent)";
-        btn.style.color = "var(--interactive-accent)";
-      } else {
-        btn.style.opacity = "0.6";
-        btn.style.color = "var(--text-normal)";
-      }
-      btn.addEventListener("click", () => applyPreset(key));
-    }
-    new import_obsidian.Setting(containerEl).setName("\u63A5\u53E3\u5730\u5740 / Base URL").setDesc("API \u7AEF\u70B9\uFF0C\u9009\u62E9\u9884\u8BBE\u540E\u81EA\u52A8\u586B\u5165 | API endpoint (auto-filled by preset; edit for custom deployments)").addText((text) => {
-      baseUrlInput = text.inputEl;
-      text.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.llm.baseUrl).onChange(async (value) => {
-        this.plugin.settings.llm.baseUrl = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("API \u5BC6\u94A5 / API Key").setDesc("\u6240\u9009\u670D\u52A1\u5546\u7684 API \u5BC6\u94A5 | Your API key for the selected provider").addText((text) => {
-      var _a3, _b2;
-      apiKeyInput = text.inputEl;
-      text.inputEl.type = "password";
-      text.inputEl.placeholder = (_b2 = (_a3 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a3.keyPlaceholder) != null ? _b2 : "sk-...";
-      text.inputEl.value = this.plugin.settings.llm.apiKey;
-      text.inputEl.addEventListener("input", async () => {
-        this.plugin.settings.llm.apiKey = text.inputEl.value;
-        await this.plugin.saveSettings();
-      });
-    });
-    const modelSetting = new import_obsidian.Setting(containerEl).setName("\u6A21\u578B / Model").setDesc("\u4ECE\u9884\u8BBE\u4E2D\u9009\u62E9\uFF0C\u6216\u9009 Other \u624B\u52A8\u8F93\u5165 | Select a preset model or choose Other to type a custom name");
-    modelSetting.controlEl.style.flexDirection = "column";
-    modelSetting.controlEl.style.alignItems = "flex-start";
-    modelSetting.controlEl.style.gap = "6px";
-    modelSelect = modelSetting.controlEl.createEl("select");
-    modelSelect.style.width = "100%";
-    modelSelect.style.padding = "4px 6px";
-    modelSelect.style.borderRadius = "4px";
-    modelSelect.style.border = "1px solid var(--background-modifier-border)";
-    modelSelect.style.background = "var(--background-primary)";
-    modelSelect.style.color = "var(--text-normal)";
-    modelSelect.style.fontSize = "0.9em";
-    modelCustomRow = modelSetting.controlEl.createDiv();
-    modelCustomRow.style.width = "100%";
-    modelCustomRow.style.display = "none";
-    customModelInput = modelCustomRow.createEl("input", { type: "text" });
-    customModelInput.placeholder = "Enter model name...";
-    customModelInput.style.width = "100%";
-    customModelInput.style.padding = "4px 6px";
-    customModelInput.style.borderRadius = "4px";
-    customModelInput.style.border = "1px solid var(--background-modifier-border)";
-    customModelInput.style.background = "var(--background-primary)";
-    customModelInput.style.color = "var(--text-normal)";
-    customModelInput.style.fontSize = "0.9em";
-    customModelInput.addEventListener("input", async () => {
-      this.plugin.settings.llm.model = customModelInput.value;
-      await this.plugin.saveSettings();
-    });
-    renderModelOptions(activePreset);
-    modelSelect.addEventListener("change", async () => {
-      if (modelSelect.value === "__custom__") {
-        modelCustomRow.style.display = "";
-        customModelInput.focus();
-      } else {
-        modelCustomRow.style.display = "none";
-        this.plugin.settings.llm.model = modelSelect.value;
-        await this.plugin.saveSettings();
-      }
-    });
-    new import_obsidian.Setting(containerEl).setName("\u6E29\u5EA6 / Temperature").setDesc("\u6A21\u578B\u751F\u6210\u6E29\u5EA6\uFF080 = \u786E\u5B9A\u6027\uFF0C1 = \u6700\u5927\u968F\u673A\uFF09| LLM temperature (0.0 = deterministic, 1.0 = most random)").addSlider((slider) => slider.setLimits(0, 1, 0.05).setValue(this.plugin.settings.llm.temperature).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.llm.temperature = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u6700\u5927 Token \u6570 / Max Tokens").setDesc("\u6A21\u578B\u5355\u6B21\u54CD\u5E94\u7684\u6700\u5927 token \u6570 | Maximum tokens for LLM response").addSlider((slider) => slider.setLimits(512, 8192, 256).setValue(this.plugin.settings.llm.maxTokens).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.llm.maxTokens = value;
-      await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("h3", { text: "Prompt \u6A21\u677F\u5E93 / Prompt Library" });
+    containerEl.createEl("h2", { text: "Prompt \u6A21\u677F\u5E93 / Prompt Library" });
     {
       const TYPE_LABELS = { daily: "\u65E5\u62A5", scoring: "\u8BC4\u5206", deepread: "\u7CBE\u8BFB" };
       const TYPE_COLORS = { daily: "#4a90d9", scoring: "#5cb85c", deepread: "#9b59b6" };
@@ -749,71 +592,6 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       renderTabs();
       renderActions();
     }
-    containerEl.createEl("h2", { text: "\u8F93\u51FA\u683C\u5F0F / Output" });
-    new import_obsidian.Setting(containerEl).setName("\u6839\u76EE\u5F55 / Root Folder").setDesc("Vault \u5185\u6240\u6709 Paper Daily \u6587\u4EF6\u7684\u5B58\u653E\u76EE\u5F55 | Folder inside vault where all Paper Daily files are written").addText((text) => text.setPlaceholder("PaperDaily").setValue(this.plugin.settings.rootFolder).onChange(async (value) => {
-      this.plugin.settings.rootFolder = value || "PaperDaily";
-      await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
-    new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
-      this.plugin.settings.schedule.dailyTime = value;
-      await this.plugin.saveSettings();
-    }));
-    containerEl.createEl("h2", { text: "\u6D4B\u8BD5 / Test" });
-    const testStatusEl = containerEl.createEl("pre", { text: "" });
-    testStatusEl.style.color = "var(--text-muted)";
-    testStatusEl.style.fontSize = "0.82em";
-    testStatusEl.style.whiteSpace = "pre-wrap";
-    testStatusEl.style.wordBreak = "break-all";
-    testStatusEl.style.background = "var(--background-secondary)";
-    testStatusEl.style.padding = "8px 10px";
-    testStatusEl.style.borderRadius = "6px";
-    testStatusEl.style.minHeight = "1.8em";
-    testStatusEl.style.display = "none";
-    const setStatus = (text, color = "var(--text-muted)") => {
-      testStatusEl.style.display = "";
-      testStatusEl.style.color = color;
-      testStatusEl.setText(text);
-    };
-    new import_obsidian.Setting(containerEl).setName("\u7ACB\u5373\u8FD0\u884C\u6BCF\u65E5\u62A5\u544A / Run Daily Report Now").setDesc("\u5B8C\u6574\u6D41\u7A0B\uFF1A\u6293\u53D6 + AI \u6458\u8981 + \u5199\u5165 inbox/\uFF08\u8BF7\u5148\u786E\u8BA4 API Key \u548C\u914D\u7F6E\u6B63\u786E\uFF09| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.").addButton((btn) => {
-      btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setCta().onClick(async () => {
-        btn.setButtonText("Running...").setDisabled(true);
-        setStatus("\u542F\u52A8\u4E2D...");
-        try {
-          await this.plugin.runDaily((msg) => setStatus(msg));
-          setStatus("\u2713 \u5B8C\u6210\uFF01\u8BF7\u67E5\u770B PaperDaily/inbox/ \u4E2D\u4ECA\u5929\u7684\u6587\u4EF6 / Done! Check PaperDaily/inbox/ for today's file.", "var(--color-green)");
-        } catch (err) {
-          setStatus(`\u2717 Error: ${String(err)}`, "var(--color-red)");
-        } finally {
-          btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setDisabled(false);
-        }
-      });
-    });
-    const rssHeader = containerEl.createEl("h2");
-    rssHeader.appendText("RSS \u8BA2\u9605\u6E90 / RSS Sources ");
-    rssHeader.createEl("span", { text: "beta", cls: "paper-daily-badge-beta" });
-    containerEl.createEl("p", {
-      text: "\u8BA2\u9605\u81EA\u5B9A\u4E49 RSS/Atom \u6E90\uFF08\u5982 Semantic Scholar \u63D0\u9192\u3001\u671F\u520A\u8BA2\u9605\u7B49\uFF09\u3002Feed \u89E3\u6790\u529F\u80FD\u5C1A\u672A\u6FC0\u6D3B\uFF0C\u53EF\u63D0\u524D\u914D\u7F6E URL\uFF0C\u540E\u7EED\u7248\u672C\u5C06\u652F\u6301 | Subscribe to custom RSS/Atom feeds. Feed parsing is not yet active \u2014 configure URLs now and they will be fetched in a future update.",
-      cls: "setting-item-description"
-    });
-    new import_obsidian.Setting(containerEl).setName("\u5F00\u542F RSS \u6E90 / Enable RSS source").setDesc("\uFF08Beta\uFF09\u5F00\u542F\u540E\u5C06\u5728\u53EF\u7528\u65F6\u5305\u542B RSS \u8BA2\u9605\u5185\u5BB9 | (Beta) Toggle on to include RSS feeds when available").addToggle((toggle) => {
-      var _a3, _b2;
-      return toggle.setValue((_b2 = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.enabled) != null ? _b2 : false).setDisabled(true).onChange(async (value) => {
-        this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, enabled: value };
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("\u8BA2\u9605\u5730\u5740 / Feed URLs").setDesc("\u6BCF\u884C\u4E00\u4E2A RSS/Atom URL\uFF0CBeta \u529F\u80FD\u6FC0\u6D3B\u540E\u5C06\u81EA\u52A8\u89E3\u6790 | One RSS/Atom URL per line. Will be parsed when beta feature activates.").addTextArea((area) => {
-      var _a3, _b2;
-      area.setPlaceholder("https://export.arxiv.org/rss/cs.AI\nhttps://example.com/feed.xml");
-      area.setValue(((_b2 = (_a3 = this.plugin.settings.rssSource) == null ? void 0 : _a3.feeds) != null ? _b2 : []).join("\n"));
-      area.inputEl.rows = 4;
-      area.inputEl.addEventListener("input", async () => {
-        const feeds = area.inputEl.value.split("\n").map((s) => s.trim()).filter(Boolean);
-        this.plugin.settings.rssSource = { ...this.plugin.settings.rssSource, feeds };
-        await this.plugin.saveSettings();
-      });
-    });
     containerEl.createEl("h2", { text: "\u5168\u6587\u7CBE\u8BFB / Deep Read" });
     const drSubContainer = containerEl.createDiv();
     const refreshDrSub = () => {
@@ -867,10 +645,223 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     refreshDrSub();
-    containerEl.createEl("h2", { text: "\u5386\u53F2\u56DE\u586B / Backfill" });
-    new import_obsidian.Setting(containerEl).setName("\u6700\u5927\u56DE\u586B\u5929\u6570 / Max Backfill Days").setDesc("\u5355\u6B21\u56DE\u586B\u5141\u8BB8\u7684\u6700\u5927\u5929\u6570\u8303\u56F4\uFF08\u5B89\u5168\u4E0A\u9650\uFF09| Maximum number of days allowed in a backfill range (guardrail)").addSlider((slider) => slider.setLimits(1, 90, 1).setValue(this.plugin.settings.backfillMaxDays).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.backfillMaxDays = value;
+    containerEl.createEl("h2", { text: "\u6A21\u578B\u914D\u7F6E / LLM Provider" });
+    const presetWrap = containerEl.createDiv({ cls: "paper-daily-preset-wrap" });
+    presetWrap.style.display = "flex";
+    presetWrap.style.flexWrap = "wrap";
+    presetWrap.style.gap = "6px";
+    presetWrap.style.marginBottom = "16px";
+    let activePreset = detectPreset(this.plugin.settings.llm.baseUrl);
+    let baseUrlInput;
+    let modelSelect;
+    let customModelInput;
+    let modelCustomRow;
+    let apiKeyInput;
+    const renderModelOptions = (presetKey) => {
+      if (!modelSelect)
+        return;
+      const preset = PROVIDER_PRESETS[presetKey];
+      modelSelect.empty();
+      for (const m of preset.models) {
+        const opt = modelSelect.createEl("option", { text: m, value: m });
+        if (m === this.plugin.settings.llm.model)
+          opt.selected = true;
+      }
+      const customOpt = modelSelect.createEl("option", { text: "Other (custom)...", value: "__custom__" });
+      if (!preset.models.includes(this.plugin.settings.llm.model)) {
+        customOpt.selected = true;
+        if (modelCustomRow)
+          modelCustomRow.style.display = "";
+        if (customModelInput)
+          customModelInput.value = this.plugin.settings.llm.model;
+      } else {
+        if (modelCustomRow)
+          modelCustomRow.style.display = "none";
+      }
+    };
+    const applyPreset = async (presetKey) => {
+      activePreset = presetKey;
+      const preset = PROVIDER_PRESETS[presetKey];
+      this.plugin.settings.llm.provider = preset.provider;
+      if (preset.baseUrl) {
+        this.plugin.settings.llm.baseUrl = preset.baseUrl;
+        if (baseUrlInput)
+          baseUrlInput.value = preset.baseUrl;
+      }
+      if (apiKeyInput)
+        apiKeyInput.placeholder = preset.keyPlaceholder;
+      renderModelOptions(presetKey);
+      if (preset.models.length > 0 && !preset.models.includes(this.plugin.settings.llm.model)) {
+        this.plugin.settings.llm.model = preset.models[0];
+        if (modelSelect)
+          modelSelect.value = preset.models[0];
+        if (modelCustomRow)
+          modelCustomRow.style.display = "none";
+      }
+      presetWrap.querySelectorAll(".paper-daily-preset-btn").forEach((b) => {
+        const el = b;
+        if (el.dataset.preset === presetKey) {
+          el.style.opacity = "1";
+          el.style.fontWeight = "600";
+          el.style.borderColor = "var(--interactive-accent)";
+          el.style.color = "var(--interactive-accent)";
+        } else {
+          el.style.opacity = "0.6";
+          el.style.fontWeight = "400";
+          el.style.borderColor = "var(--background-modifier-border)";
+          el.style.color = "var(--text-normal)";
+        }
+      });
       await this.plugin.saveSettings();
+    };
+    for (const [key, preset] of Object.entries(PROVIDER_PRESETS)) {
+      const btn = presetWrap.createEl("button", {
+        text: preset.label,
+        cls: "paper-daily-preset-btn"
+      });
+      btn.dataset.preset = key;
+      btn.style.padding = "4px 12px";
+      btn.style.borderRadius = "6px";
+      btn.style.border = "1px solid var(--background-modifier-border)";
+      btn.style.cursor = "pointer";
+      btn.style.fontSize = "0.85em";
+      btn.style.background = "var(--background-secondary)";
+      btn.style.transition = "all 0.15s";
+      if (key === activePreset) {
+        btn.style.opacity = "1";
+        btn.style.fontWeight = "600";
+        btn.style.borderColor = "var(--interactive-accent)";
+        btn.style.color = "var(--interactive-accent)";
+      } else {
+        btn.style.opacity = "0.6";
+        btn.style.color = "var(--text-normal)";
+      }
+      btn.addEventListener("click", () => applyPreset(key));
+    }
+    new import_obsidian.Setting(containerEl).setName("\u63A5\u53E3\u5730\u5740 / Base URL").setDesc("API \u7AEF\u70B9\uFF0C\u9009\u62E9\u9884\u8BBE\u540E\u81EA\u52A8\u586B\u5165 | API endpoint (auto-filled by preset; edit for custom deployments)").addText((text) => {
+      baseUrlInput = text.inputEl;
+      text.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.llm.baseUrl).onChange(async (value) => {
+        this.plugin.settings.llm.baseUrl = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("API \u5BC6\u94A5 / API Key").setDesc("\u6240\u9009\u670D\u52A1\u5546\u7684 API \u5BC6\u94A5 | Your API key for the selected provider").addText((text) => {
+      var _a3, _b2;
+      apiKeyInput = text.inputEl;
+      text.inputEl.type = "password";
+      text.inputEl.placeholder = (_b2 = (_a3 = PROVIDER_PRESETS[activePreset]) == null ? void 0 : _a3.keyPlaceholder) != null ? _b2 : "sk-...";
+      text.inputEl.value = this.plugin.settings.llm.apiKey;
+      text.inputEl.addEventListener("input", async () => {
+        this.plugin.settings.llm.apiKey = text.inputEl.value;
+        await this.plugin.saveSettings();
+      });
+    });
+    const modelSetting = new import_obsidian.Setting(containerEl).setName("\u6A21\u578B / Model").setDesc("\u4ECE\u9884\u8BBE\u4E2D\u9009\u62E9\uFF0C\u6216\u9009 Other \u624B\u52A8\u8F93\u5165 | Select a preset model or choose Other to type a custom name");
+    modelSetting.controlEl.style.flexDirection = "column";
+    modelSetting.controlEl.style.alignItems = "flex-start";
+    modelSetting.controlEl.style.gap = "6px";
+    modelSelect = modelSetting.controlEl.createEl("select");
+    modelSelect.style.width = "100%";
+    modelSelect.style.padding = "4px 6px";
+    modelSelect.style.borderRadius = "4px";
+    modelSelect.style.border = "1px solid var(--background-modifier-border)";
+    modelSelect.style.background = "var(--background-primary)";
+    modelSelect.style.color = "var(--text-normal)";
+    modelSelect.style.fontSize = "0.9em";
+    modelCustomRow = modelSetting.controlEl.createDiv();
+    modelCustomRow.style.width = "100%";
+    modelCustomRow.style.display = "none";
+    customModelInput = modelCustomRow.createEl("input", { type: "text" });
+    customModelInput.placeholder = "Enter model name...";
+    customModelInput.style.width = "100%";
+    customModelInput.style.padding = "4px 6px";
+    customModelInput.style.borderRadius = "4px";
+    customModelInput.style.border = "1px solid var(--background-modifier-border)";
+    customModelInput.style.background = "var(--background-primary)";
+    customModelInput.style.color = "var(--text-normal)";
+    customModelInput.style.fontSize = "0.9em";
+    customModelInput.addEventListener("input", async () => {
+      this.plugin.settings.llm.model = customModelInput.value;
+      await this.plugin.saveSettings();
+    });
+    renderModelOptions(activePreset);
+    modelSelect.addEventListener("change", async () => {
+      if (modelSelect.value === "__custom__") {
+        modelCustomRow.style.display = "";
+        customModelInput.focus();
+      } else {
+        modelCustomRow.style.display = "none";
+        this.plugin.settings.llm.model = modelSelect.value;
+        await this.plugin.saveSettings();
+      }
+    });
+    new import_obsidian.Setting(containerEl).setName("\u6E29\u5EA6 / Temperature").setDesc("\u6A21\u578B\u751F\u6210\u6E29\u5EA6\uFF080 = \u786E\u5B9A\u6027\uFF0C1 = \u6700\u5927\u968F\u673A\uFF09| LLM temperature (0.0 = deterministic, 1.0 = most random)").addSlider((slider) => slider.setLimits(0, 1, 0.05).setValue(this.plugin.settings.llm.temperature).setDynamicTooltip().onChange(async (value) => {
+      this.plugin.settings.llm.temperature = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u6700\u5927 Token \u6570 / Max Tokens").setDesc("\u6A21\u578B\u5355\u6B21\u54CD\u5E94\u7684\u6700\u5927 token \u6570 | Maximum tokens for LLM response").addSlider((slider) => slider.setLimits(512, 8192, 256).setValue(this.plugin.settings.llm.maxTokens).setDynamicTooltip().onChange(async (value) => {
+      this.plugin.settings.llm.maxTokens = value;
+      await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h2", { text: "\u8F93\u51FA\u683C\u5F0F / Output" });
+    new import_obsidian.Setting(containerEl).setName("\u6839\u76EE\u5F55 / Root Folder").setDesc("Vault \u5185\u6240\u6709 Paper Daily \u6587\u4EF6\u7684\u5B58\u653E\u76EE\u5F55 | Folder inside vault where all Paper Daily files are written").addText((text) => text.setPlaceholder("PaperDaily").setValue(this.plugin.settings.rootFolder).onChange(async (value) => {
+      this.plugin.settings.rootFolder = value || "PaperDaily";
+      await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h2", { text: "\u5B9A\u65F6\u4EFB\u52A1 / Scheduling" });
+    new import_obsidian.Setting(containerEl).setName("\u6BCF\u65E5\u6293\u53D6\u65F6\u95F4 / Daily Fetch Time").setDesc("\u6BCF\u5929\u81EA\u52A8\u8FD0\u884C\u7684\u65F6\u95F4\uFF0824 \u5C0F\u65F6\u5236 HH:MM\uFF09| Time to run daily fetch (HH:MM, 24-hour)").addText((text) => text.setPlaceholder("08:30").setValue(this.plugin.settings.schedule.dailyTime).onChange(async (value) => {
+      this.plugin.settings.schedule.dailyTime = value;
+      await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h2", { text: "\u5DE5\u5177 / Tools" });
+    const testStatusEl = containerEl.createEl("pre", { text: "" });
+    testStatusEl.style.color = "var(--text-muted)";
+    testStatusEl.style.fontSize = "0.82em";
+    testStatusEl.style.whiteSpace = "pre-wrap";
+    testStatusEl.style.wordBreak = "break-all";
+    testStatusEl.style.background = "var(--background-secondary)";
+    testStatusEl.style.padding = "8px 10px";
+    testStatusEl.style.borderRadius = "6px";
+    testStatusEl.style.minHeight = "1.8em";
+    testStatusEl.style.display = "none";
+    const setStatus = (text, color = "var(--text-muted)") => {
+      testStatusEl.style.display = "";
+      testStatusEl.style.color = color;
+      testStatusEl.setText(text);
+    };
+    new import_obsidian.Setting(containerEl).setName("\u7ACB\u5373\u8FD0\u884C\u6BCF\u65E5\u62A5\u544A / Run Daily Report Now").setDesc("\u5B8C\u6574\u6D41\u7A0B\uFF1A\u6293\u53D6 + AI \u6458\u8981 + \u5199\u5165 inbox/\uFF08\u8BF7\u5148\u786E\u8BA4 API Key \u548C\u914D\u7F6E\u6B63\u786E\uFF09| Full pipeline: fetch + AI digest + write to inbox/. Verify your API key first.").addButton((btn) => {
+      btn.setButtonText("\u25B6 \u7ACB\u5373\u8FD0\u884C / Run Daily Now").setCta().onClick(() => {
+        this.plugin.runDailyWithUI();
+      });
+    });
+    containerEl.createEl("h3", { text: "\u6279\u91CF\u751F\u6210\u65E5\u62A5 / Batch Generate Daily Reports" });
+    containerEl.createEl("p", {
+      text: "\u6309\u65E5\u671F\u8303\u56F4\u6279\u91CF\u751F\u6210\u6BCF\u65E5\u62A5\u544A\uFF0C\u9002\u5408\u8865\u5168\u5386\u53F2\u8BB0\u5F55 | Generate daily reports for a date range to backfill historical records.",
+      cls: "setting-item-description"
+    });
+    let bfStartDate = "";
+    let bfEndDate = "";
+    new import_obsidian.Setting(containerEl).setName("\u5F00\u59CB\u65E5\u671F / Start Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-01").onChange((v) => {
+      bfStartDate = v.trim();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u7ED3\u675F\u65E5\u671F / End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
+      bfEndDate = v.trim();
+    }));
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u25B6 \u6279\u91CF\u751F\u6210 / Run Batch").setCta().onClick(async () => {
+      if (!bfStartDate || !bfEndDate) {
+        setStatus("\u8BF7\u586B\u5199\u5F00\u59CB\u548C\u7ED3\u675F\u65E5\u671F\u3002", "var(--color-red)");
+        return;
+      }
+      btn.setDisabled(true);
+      setStatus("\u6279\u91CF\u751F\u6210\u4E2D\uFF0C\u8BF7\u7A0D\u5019...");
+      try {
+        await this.plugin.runBackfill(bfStartDate, bfEndDate, (msg) => setStatus(msg));
+        setStatus("\u2713 \u5B8C\u6210\uFF01", "var(--color-green)");
+      } catch (err) {
+        setStatus(`\u2717 \u9519\u8BEF: ${String(err)}`, "var(--color-red)");
+      } finally {
+        btn.setDisabled(false);
+      }
     }));
     containerEl.createEl("h2", { text: "\u914D\u7F6E\u6587\u4EF6 / Config File" });
     const configPath = `${this.plugin.settings.rootFolder}/config.json`;
@@ -4831,6 +4822,12 @@ ${aiDigest}`;
   sections.push("", allPapersTableSection);
   return sections.join("\n");
 }
+var PipelineAbortError = class extends Error {
+  constructor() {
+    super("Pipeline aborted by user");
+    this.name = "PipelineAbortError";
+  }
+};
 async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotStore, options = {}) {
   var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
   const writer = new VaultWriter(app);
@@ -4846,6 +4843,11 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     console.log(`[PaperDaily] ${msg}`);
   };
   const progress = (_b = options.onProgress) != null ? _b : () => {
+  };
+  const checkAbort = () => {
+    var _a3;
+    if ((_a3 = options.signal) == null ? void 0 : _a3.aborted)
+      throw new PipelineAbortError();
   };
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -4893,6 +4895,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     log(`Step 1 FETCH ERROR: ${fetchError}`);
     await stateStore.setLastError("fetch", fetchError);
   }
+  checkAbort();
   if (((_h = settings.hfSource) == null ? void 0 : _h.enabled) !== false) {
     progress(`[1/5] \u{1F917} \u62C9\u53D6 HuggingFace \u8BBA\u6587...`);
     try {
@@ -4972,6 +4975,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
   }
   let rankedPapers = papers.length > 0 ? rankPapers(papers, interestKeywords) : [];
   log(`Step 3 RANK: ${rankedPapers.length} papers ranked`);
+  checkAbort();
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     const BATCH_SIZE = 10;
     const totalBatches = Math.ceil(rankedPapers.length / BATCH_SIZE);
@@ -4983,6 +4987,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
       const batchStart = batchIdx * BATCH_SIZE;
       const batchPapers = rankedPapers.slice(batchStart, batchStart + BATCH_SIZE);
+      checkAbort();
       const paperFrom = batchStart + 1;
       const paperTo = batchStart + batchPapers.length;
       const paperTotal = rankedPapers.length;
@@ -5073,6 +5078,7 @@ async function runDailyPipeline(app, settings, stateStore, dedupStore, snapshotS
     const llm = buildLLMProvider(settings);
     const analysisResults = [];
     for (let i = 0; i < topN; i++) {
+      checkAbort();
       progress(`[3/5] \u{1F4D6} Deep Read (${i + 1}/${topN})...`);
       const paper = rankedPapers[i];
       const baseId = paper.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
@@ -5146,6 +5152,7 @@ ${paper.deepReadAnalysis}
   } else {
     log(`Step 3f DEEPREAD: skipped (enabled=${(_D = (_C = settings.deepRead) == null ? void 0 : _C.enabled) != null ? _D : false})`);
   }
+  checkAbort();
   if (rankedPapers.length > 0 && settings.llm.apiKey) {
     progress(`[4/5] \u{1F4DD} \u6B63\u5728\u751F\u6210\u65E5\u62A5...`);
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
@@ -5369,8 +5376,61 @@ var Scheduler = class {
   }
 };
 
+// src/ui/floatingProgress.ts
+var FloatingProgress = class {
+  constructor(onStop) {
+    this.el = document.body.createDiv();
+    this.el.style.cssText = [
+      "position:fixed",
+      "bottom:24px",
+      "right:24px",
+      "z-index:9999",
+      "background:var(--background-secondary)",
+      "border:1px solid var(--background-modifier-border)",
+      "border-radius:10px",
+      "padding:14px 18px 12px",
+      "min-width:300px",
+      "max-width:420px",
+      "box-shadow:0 4px 20px rgba(0,0,0,0.25)",
+      "font-family:var(--font-interface)"
+    ].join(";");
+    const header = this.el.createDiv();
+    header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;";
+    const title = header.createEl("span", { text: "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D" });
+    title.style.cssText = "font-weight:600;font-size:0.92em;color:var(--text-normal);";
+    const stopBtn = header.createEl("button", { text: "\u505C\u6B62" });
+    stopBtn.style.cssText = [
+      "padding:2px 10px",
+      "border-radius:4px",
+      "cursor:pointer",
+      "font-size:0.8em",
+      "border:1px solid var(--text-error,#cc4444)",
+      "color:var(--text-error,#cc4444)",
+      "background:transparent"
+    ].join(";");
+    stopBtn.onclick = () => {
+      onStop();
+      stopBtn.disabled = true;
+      stopBtn.textContent = "\u505C\u6B62\u4E2D...";
+    };
+    this.msgEl = this.el.createEl("div");
+    this.msgEl.style.cssText = "font-size:0.83em;color:var(--text-muted);word-break:break-word;line-height:1.4;";
+    this.msgEl.setText("\u521D\u59CB\u5316\u4E2D...");
+  }
+  setMessage(msg) {
+    this.msgEl.setText(msg);
+  }
+  destroy() {
+    this.el.remove();
+  }
+};
+
 // src/main.ts
 var PaperDailyPlugin = class extends import_obsidian7.Plugin {
+  constructor() {
+    super(...arguments);
+    this.activeAbortController = null;
+  }
   async onload() {
     await this.loadSettings();
     await this.initStorage();
@@ -5452,13 +5512,9 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       this.stateStore,
       {
         onDaily: () => {
-          const notice = new import_obsidian7.Notice("Paper Daily: \u5B9A\u65F6\u4EFB\u52A1\u542F\u52A8\u4E2D...", 0);
-          return this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`)).then(() => {
-            setTimeout(() => notice.hide(), 4e3);
-          }).catch((err) => {
-            notice.setMessage(`Paper Daily \u9519\u8BEF: ${String(err)}`);
-            setTimeout(() => notice.hide(), 6e3);
-          });
+          if (this.activeAbortController)
+            return Promise.resolve();
+          return this.runDailyWithUI();
         },
         todayFileExists: (date) => this.todayFileExists(date)
       }
@@ -5469,15 +5525,8 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     this.addCommand({
       id: "run-daily-now",
       name: "Run daily fetch & summarize now",
-      callback: async () => {
-        const notice = new import_obsidian7.Notice("Paper Daily: \u542F\u52A8\u4E2D...", 0);
-        try {
-          await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
-          setTimeout(() => notice.hide(), 4e3);
-        } catch (err) {
-          notice.setMessage(`Paper Daily \u9519\u8BEF: ${String(err)}`);
-          setTimeout(() => notice.hide(), 6e3);
-        }
+      callback: () => {
+        void this.runDailyWithUI();
       }
     });
     this.addCommand({
@@ -5509,15 +5558,42 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       }
     });
   }
-  async runDaily(onProgress) {
+  async runDaily(onProgress, signal) {
     await runDailyPipeline(
       this.app,
       this.settings,
       this.stateStore,
       this.dedupStore,
       this.snapshotStore,
-      { hfTrackStore: this.hfTrackStore, onProgress }
+      { hfTrackStore: this.hfTrackStore, onProgress, signal }
     );
+  }
+  /** Run daily pipeline with floating UI and stop button. */
+  async runDailyWithUI() {
+    if (this.activeAbortController) {
+      new import_obsidian7.Notice("Paper Daily: \u4EFB\u52A1\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
+      return;
+    }
+    const controller = new AbortController();
+    this.activeAbortController = controller;
+    const fp = new FloatingProgress(() => {
+      controller.abort();
+    });
+    try {
+      await this.runDaily((msg) => fp.setMessage(msg), controller.signal);
+      fp.setMessage("\u2705 \u5B8C\u6210\uFF01");
+      setTimeout(() => fp.destroy(), 3e3);
+    } catch (err) {
+      if (err instanceof PipelineAbortError) {
+        fp.setMessage("\u23F9 \u5DF2\u505C\u6B62\u3002");
+        setTimeout(() => fp.destroy(), 2e3);
+      } else {
+        fp.setMessage(`\u274C \u9519\u8BEF: ${String(err)}`);
+        setTimeout(() => fp.destroy(), 6e3);
+      }
+    } finally {
+      this.activeAbortController = null;
+    }
   }
   todayFileExists(date) {
     const writer = new VaultWriter(this.app);
@@ -5528,14 +5604,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
     const today = new Date().toISOString().slice(0, 10);
     if (await this.todayFileExists(today))
       return;
-    const notice = new import_obsidian7.Notice("Paper Daily: \u4ECA\u65E5\u6587\u6863\u7F3A\u5931\uFF0C\u6B63\u5728\u751F\u6210...", 0);
-    try {
-      await this.runDaily((msg) => notice.setMessage(`Paper Daily: ${msg}`));
-      setTimeout(() => notice.hide(), 4e3);
-    } catch (err) {
-      notice.setMessage(`Paper Daily \u9519\u8BEF: ${String(err)}`);
-      setTimeout(() => notice.hide(), 6e3);
-    }
+    void this.runDailyWithUI();
   }
   async clearDedup() {
     await this.dedupStore.clear();
