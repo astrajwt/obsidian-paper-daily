@@ -21,6 +21,7 @@ export default class PaperDailyPlugin extends Plugin {
   private hfTrackStore!: HFTrackStore;
   private scheduler!: Scheduler;
   private activeAbortController: AbortController | null = null;
+  private activeBackfillController: AbortController | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -223,7 +224,7 @@ export default class PaperDailyPlugin extends Plugin {
     await this.dedupStore.clear();
   }
 
-  async runBackfill(startDate: string, endDate: string, onProgress: (msg: string) => void): Promise<void> {
+  async runBackfill(startDate: string, endDate: string, onProgress: (msg: string) => void, signal?: AbortSignal): Promise<void> {
     const result = await runBackfillPipeline(
       this.app,
       this.settings,
@@ -233,6 +234,7 @@ export default class PaperDailyPlugin extends Plugin {
       {
         startDate,
         endDate,
+        signal,
         onProgress: (date, index, total) => {
           onProgress(`Processing ${date} (${index}/${total})...`);
         }
@@ -243,6 +245,33 @@ export default class PaperDailyPlugin extends Plugin {
       onProgress(`Done. ${result.processed.length} succeeded, ${errCount} failed: ${Object.keys(result.errors).join(", ")}`);
     } else {
       onProgress(`Done. ${result.processed.length} days processed.`);
+    }
+  }
+
+  /** Run backfill pipeline with floating UI and stop button. */
+  async runBackfillWithUI(startDate: string, endDate: string): Promise<void> {
+    if (this.activeBackfillController) {
+      new Notice("Paper Daily: 批量生成已在运行中。");
+      return;
+    }
+    const controller = new AbortController();
+    this.activeBackfillController = controller;
+
+    const fp = new FloatingProgress(() => { controller.abort(); }, "📅 批量生成日报");
+    try {
+      await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
+      fp.setMessage("✅ 完成！");
+      setTimeout(() => fp.destroy(), 3000);
+    } catch (err) {
+      if (err instanceof PipelineAbortError) {
+        fp.setMessage("⏹ 已停止。");
+        setTimeout(() => fp.destroy(), 2000);
+      } else {
+        fp.setMessage(`❌ 错误: ${String(err)}`);
+        setTimeout(() => fp.destroy(), 6000);
+      }
+    } finally {
+      this.activeBackfillController = null;
     }
   }
 

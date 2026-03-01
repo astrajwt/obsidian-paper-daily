@@ -1037,21 +1037,12 @@ export class PaperDailySettingTab extends PluginSettingTab {
       .addButton(btn => btn
         .setButtonText("▶ 批量生成 / Run Batch")
         .setCta()
-        .onClick(async () => {
+        .onClick(() => {
           if (!bfStartDate || !bfEndDate) {
             setStatus("请填写开始和结束日期。", "var(--color-red)");
             return;
           }
-          btn.setDisabled(true);
-          setStatus("批量生成中，请稍候...");
-          try {
-            await this.plugin.runBackfill(bfStartDate, bfEndDate, (msg) => setStatus(msg));
-            setStatus("✓ 完成！", "var(--color-green)");
-          } catch (err) {
-            setStatus(`✗ 错误: ${String(err)}`, "var(--color-red)");
-          } finally {
-            btn.setDisabled(false);
-          }
+          this.plugin.runBackfillWithUI(bfStartDate, bfEndDate);
         }));
 
     // ── Config File ───────────────────────────────────────────────

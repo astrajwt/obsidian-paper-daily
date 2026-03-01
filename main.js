@@ -847,21 +847,12 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u7ED3\u675F\u65E5\u671F / End Date").setDesc("YYYY-MM-DD").addText((text) => text.setPlaceholder("2026-02-28").onChange((v) => {
       bfEndDate = v.trim();
     }));
-    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u25B6 \u6279\u91CF\u751F\u6210 / Run Batch").setCta().onClick(async () => {
+    new import_obsidian.Setting(containerEl).addButton((btn) => btn.setButtonText("\u25B6 \u6279\u91CF\u751F\u6210 / Run Batch").setCta().onClick(() => {
       if (!bfStartDate || !bfEndDate) {
         setStatus("\u8BF7\u586B\u5199\u5F00\u59CB\u548C\u7ED3\u675F\u65E5\u671F\u3002", "var(--color-red)");
         return;
       }
-      btn.setDisabled(true);
-      setStatus("\u6279\u91CF\u751F\u6210\u4E2D\uFF0C\u8BF7\u7A0D\u5019...");
-      try {
-        await this.plugin.runBackfill(bfStartDate, bfEndDate, (msg) => setStatus(msg));
-        setStatus("\u2713 \u5B8C\u6210\uFF01", "var(--color-green)");
-      } catch (err) {
-        setStatus(`\u2717 \u9519\u8BEF: ${String(err)}`, "var(--color-red)");
-      } finally {
-        btn.setDisabled(false);
-      }
+      this.plugin.runBackfillWithUI(bfStartDate, bfEndDate);
     }));
     containerEl.createEl("h2", { text: "\u914D\u7F6E\u6587\u4EF6 / Config File" });
     const configPath = `${this.plugin.settings.rootFolder}/config.json`;
@@ -5281,6 +5272,7 @@ function toDateStr(d) {
   return d.toISOString().slice(0, 10);
 }
 async function runBackfillPipeline(app, settings, stateStore, dedupStore, snapshotStore, options) {
+  var _a2;
   const start = parseDateYMD(options.startDate);
   const end = parseDateYMD(options.endDate);
   const diffMs = end.getTime() - start.getTime();
@@ -5300,6 +5292,8 @@ async function runBackfillPipeline(app, settings, stateStore, dedupStore, snapsh
   const processed = [];
   const errors = {};
   for (let i = 0; i < dates.length; i++) {
+    if ((_a2 = options.signal) == null ? void 0 : _a2.aborted)
+      throw new PipelineAbortError();
     const date = dates[i];
     if (options.onProgress) {
       options.onProgress(date, i + 1, dates.length);
@@ -5311,7 +5305,8 @@ async function runBackfillPipeline(app, settings, stateStore, dedupStore, snapsh
         targetDate: date,
         windowStart: dayStart,
         windowEnd: dayEnd,
-        skipDedup: false
+        skipDedup: false,
+        signal: options.signal
       });
       processed.push(date);
     } catch (err) {
@@ -5378,7 +5373,7 @@ var Scheduler = class {
 
 // src/ui/floatingProgress.ts
 var FloatingProgress = class {
-  constructor(onStop) {
+  constructor(onStop, title = "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D") {
     this.el = document.body.createDiv();
     this.el.style.cssText = [
       "position:fixed",
@@ -5396,8 +5391,8 @@ var FloatingProgress = class {
     ].join(";");
     const header = this.el.createDiv();
     header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;";
-    const title = header.createEl("span", { text: "\u{1F4DA} Paper Daily \u8FD0\u884C\u4E2D" });
-    title.style.cssText = "font-weight:600;font-size:0.92em;color:var(--text-normal);";
+    const titleEl = header.createEl("span", { text: title });
+    titleEl.style.cssText = "font-weight:600;font-size:0.92em;color:var(--text-normal);";
     const stopBtn = header.createEl("button", { text: "\u505C\u6B62" });
     stopBtn.style.cssText = [
       "padding:2px 10px",
@@ -5430,6 +5425,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
     this.activeAbortController = null;
+    this.activeBackfillController = null;
   }
   async onload() {
     await this.loadSettings();
@@ -5609,7 +5605,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
   async clearDedup() {
     await this.dedupStore.clear();
   }
-  async runBackfill(startDate, endDate, onProgress) {
+  async runBackfill(startDate, endDate, onProgress, signal) {
     const result = await runBackfillPipeline(
       this.app,
       this.settings,
@@ -5619,6 +5615,7 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       {
         startDate,
         endDate,
+        signal,
         onProgress: (date, index, total) => {
           onProgress(`Processing ${date} (${index}/${total})...`);
         }
@@ -5629,6 +5626,33 @@ var PaperDailyPlugin = class extends import_obsidian7.Plugin {
       onProgress(`Done. ${result.processed.length} succeeded, ${errCount} failed: ${Object.keys(result.errors).join(", ")}`);
     } else {
       onProgress(`Done. ${result.processed.length} days processed.`);
+    }
+  }
+  /** Run backfill pipeline with floating UI and stop button. */
+  async runBackfillWithUI(startDate, endDate) {
+    if (this.activeBackfillController) {
+      new import_obsidian7.Notice("Paper Daily: \u6279\u91CF\u751F\u6210\u5DF2\u5728\u8FD0\u884C\u4E2D\u3002");
+      return;
+    }
+    const controller = new AbortController();
+    this.activeBackfillController = controller;
+    const fp = new FloatingProgress(() => {
+      controller.abort();
+    }, "\u{1F4C5} \u6279\u91CF\u751F\u6210\u65E5\u62A5");
+    try {
+      await this.runBackfill(startDate, endDate, (msg) => fp.setMessage(msg), controller.signal);
+      fp.setMessage("\u2705 \u5B8C\u6210\uFF01");
+      setTimeout(() => fp.destroy(), 3e3);
+    } catch (err) {
+      if (err instanceof PipelineAbortError) {
+        fp.setMessage("\u23F9 \u5DF2\u505C\u6B62\u3002");
+        setTimeout(() => fp.destroy(), 2e3);
+      } else {
+        fp.setMessage(`\u274C \u9519\u8BEF: ${String(err)}`);
+        setTimeout(() => fp.destroy(), 6e3);
+      }
+    } finally {
+      this.activeBackfillController = null;
     }
   }
   async testFetch() {

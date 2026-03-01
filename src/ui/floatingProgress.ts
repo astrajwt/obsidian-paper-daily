@@ -1,9 +1,9 @@
-/** Floating progress widget shown while the daily pipeline runs in the background. */
+/** Floating progress widget shown while a pipeline runs in the background. */
 export class FloatingProgress {
   private el: HTMLElement;
   private msgEl: HTMLElement;
 
-  constructor(onStop: () => void) {
+  constructor(onStop: () => void, title = "📚 Paper Daily 运行中") {
     this.el = document.body.createDiv();
     this.el.style.cssText = [
       "position:fixed",
@@ -24,8 +24,8 @@ export class FloatingProgress {
     const header = this.el.createDiv();
     header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;";
 
-    const title = header.createEl("span", { text: "📚 Paper Daily 运行中" });
-    title.style.cssText = "font-weight:600;font-size:0.92em;color:var(--text-normal);";
+    const titleEl = header.createEl("span", { text: title });
+    titleEl.style.cssText = "font-weight:600;font-size:0.92em;color:var(--text-normal);";
 
     const stopBtn = header.createEl("button", { text: "停止" });
     stopBtn.style.cssText = [

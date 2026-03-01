@@ -3,7 +3,7 @@ import type { PaperDailySettings } from "../types/config";
 import { StateStore } from "../storage/stateStore";
 import { DedupStore } from "../storage/dedupStore";
 import { SnapshotStore } from "../storage/snapshotStore";
-import { runDailyPipeline } from "./dailyPipeline";
+import { runDailyPipeline, PipelineAbortError } from "./dailyPipeline";
 
 function parseDateYMD(str: string): Date {
   const [y, m, d] = str.split("-").map(Number);
@@ -24,6 +24,7 @@ export interface BackfillOptions {
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   onProgress?: (date: string, index: number, total: number) => void;
+  signal?: AbortSignal;
 }
 
 export async function runBackfillPipeline(
@@ -59,6 +60,7 @@ export async function runBackfillPipeline(
   const errors: Record<string, string> = {};
 
   for (let i = 0; i < dates.length; i++) {
+    if (options.signal?.aborted) throw new PipelineAbortError();
     const date = dates[i];
     if (options.onProgress) {
       options.onProgress(date, i + 1, dates.length);
@@ -73,7 +75,8 @@ export async function runBackfillPipeline(
         targetDate: date,
         windowStart: dayStart,
         windowEnd: dayEnd,
-        skipDedup: false
+        skipDedup: false,
+        signal: options.signal
       });
       processed.push(date);
     } catch (err) {
