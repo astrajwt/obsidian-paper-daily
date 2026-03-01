@@ -109,15 +109,15 @@ Output language: {{language}}
 ## User's interest keywords (with weights, higher = more important):
 {{interest_keywords}}
 
-## Papers to analyze (pre-ranked by HF upvotes + keyword weight):
+## Papers to analyze (pre-ranked, arXiv + HuggingFace combined):
 {{papers_json}}
 
-## HuggingFace Daily Papers (community picks, sorted by upvotes):
+Note: papers with a "source" field of "hf" are HuggingFace-only picks. Treat them identically to arXiv papers \u2014 same depth of analysis, same rating criteria.
+
+## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
 {{hf_papers_json}}
 
 {{fulltext_section}}
-
-{{local_pdfs}}
 
 ---
 
@@ -126,7 +126,7 @@ Output language: {{language}}
 Generate the daily digest with the following sections:
 
 ### \u4ECA\u65E5\u8981\u70B9 / Key Takeaways
-3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
+3\u20135 punchy bullet points. What actually moved the needle today vs what is incremental noise? Be direct.
 
 ### \u7CBE\u9009\u8BBA\u6587 / Curated Papers
 For **each paper** in the papers list, output exactly this structure:
@@ -141,7 +141,7 @@ For **each paper** in the papers list, output exactly this structure:
 - \u{1F527} \u5DE5\u7A0B\u542F\u793A: what can a practitioner adopt? Be concrete \u2014 "use X to achieve Y", not "this is interesting".
 - \u26A0\uFE0F \u5C40\u9650\u6027 & \u53EF\u590D\u73B0\u6027: scope limitations + code availability + compute requirements. Can a grad student replicate this?
 - \u{1F4DA} \u5EFA\u8BAE: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-- \u{1F517} links from paper data. If a local PDF path is listed in the Local PDFs section above, include it here as "[[Local PDF]]".
+- \u{1F517} links from the paper data (arXiv / HF / PDF as available)
 
 Value rating guide \u2014 be calibrated, not generous:
 \u2605\u2605\u2605\u2605\u2605  Breakthrough: likely to shift practice or become a citation anchor
@@ -151,7 +151,7 @@ Value rating guide \u2014 be calibrated, not generous:
 \u2605\u2606\u2606\u2606\u2606  Skip: below standard, off-topic, or superseded
 
 ### HF \u793E\u533A\u4FE1\u53F7 / HF Community Signal
-From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
+From the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
 ### \u4ECA\u65E5\u6279\u6B21\u8D28\u91CF & \u7ED3\u8BED / Batch Quality & Closing
 2\u20133 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
@@ -166,7 +166,7 @@ Rules:
 - \u5DE5\u7A0B\u542F\u793A must be actionable \u2014 not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific \u2014 no "interesting direction" hedging.
 - If fulltext_section is non-empty, you MUST use those deep-read notes to enrich the analysis of the corresponding papers. Do not ignore them.
-- If local_pdfs is non-empty, include the local PDF link in the \u{1F517} line of the corresponding paper.`;
+- HuggingFace papers in papers_json must receive the same full analysis treatment as arXiv papers.`;
 var DEFAULT_SCORING_PROMPT = `Score each paper 1\u201310 for quality and relevance to the user's interests.
 
 User's interest keywords (higher weight = more important): {{interest_keywords}}
@@ -4757,6 +4757,7 @@ function escapeTableCell(s) {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "").trim();
 }
 function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSources, error) {
+  var _a2, _b;
   const frontmatter = [
     "---",
     "type: paper-daily",
@@ -4773,8 +4774,9 @@ function buildDailyMarkdown(date, settings, rankedPapers, aiDigest, activeSource
 > **Error**: ${error}` : `## \u4ECA\u65E5\u8981\u70B9\uFF08AI \u603B\u7ED3\uFF09${modelAttr}
 
 ${aiDigest}`;
+  const deepReadFolder = (_b = (_a2 = settings.deepRead) == null ? void 0 : _a2.outputFolder) != null ? _b : "PaperDaily/deep-read";
   const tableRows = rankedPapers.map((p, i) => {
-    var _a2, _b;
+    var _a3, _b2;
     const titleLink = p.links.html ? `[${escapeTableCell(p.title)}](${p.links.html})` : escapeTableCell(p.title);
     const linkParts = [];
     if (p.links.html)
@@ -4784,10 +4786,15 @@ ${aiDigest}`;
     if (settings.includePdfLink && p.links.pdf)
       linkParts.push(`[PDF](${p.links.pdf})`);
     if (p.links.localPdf)
-      linkParts.push(`[Local PDF](${p.links.localPdf})`);
+      linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
+    if (p.deepReadAnalysis) {
+      const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+      linkParts.push(`[[${deepReadFolder}/${safeId}|Deep Read]]`);
+    }
     const score = p.llmScore != null ? `\u2B50${p.llmScore}/10` : "-";
-    const summary = escapeTableCell((_a2 = p.llmSummary) != null ? _a2 : "");
-    const hits = ((_b = p.interestHits) != null ? _b : []).slice(0, 3).join(", ") || "-";
+    const summary = escapeTableCell((_a3 = p.llmSummary) != null ? _a3 : "");
+    const hits = ((_b2 = p.interestHits) != null ? _b2 : []).slice(0, 3).join(", ") || "-";
     return `| ${i + 1} | ${titleLink} | ${linkParts.join(" ")} | ${score} | ${summary} | ${hits} |`;
   });
   const allPapersTableSection = [
@@ -5102,7 +5109,7 @@ ${paper.deepReadAnalysis}
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
-      const topK = Math.min(rankedPapers.length, 10);
+      const topK = Math.min(rankedPapers.length, 20);
       const topPapersForLLM = rankedPapers.slice(0, topK).map((p) => {
         var _a3;
         return {

@@ -89,6 +89,7 @@ function buildDailyMarkdown(
     : `## 今日要点（AI 总结）${modelAttr}\n\n${aiDigest}`;
 
   // ── All Papers Table ──────────────────────────────────────────
+  const deepReadFolder = settings.deepRead?.outputFolder ?? "PaperDaily/deep-read";
   const tableRows = rankedPapers.map((p, i) => {
     const titleLink = p.links.html
       ? `[${escapeTableCell(p.title)}](${p.links.html})`
@@ -97,7 +98,12 @@ function buildDailyMarkdown(
     if (p.links.html) linkParts.push(`[arXiv](${p.links.html})`);
     if (p.links.hf) linkParts.push(`[🤗 HF](${p.links.hf})`);
     if (settings.includePdfLink && p.links.pdf) linkParts.push(`[PDF](${p.links.pdf})`);
-    if (p.links.localPdf) linkParts.push(`[Local PDF](${p.links.localPdf})`);
+    if (p.links.localPdf) linkParts.push(`[[${p.links.localPdf}|Local PDF]]`);
+    if (p.deepReadAnalysis) {
+      const baseId = p.id.replace(/^arxiv:/i, "").replace(/v\d+$/i, "");
+      const safeId = baseId.replace(/[^a-zA-Z0-9._-]/g, "_");
+      linkParts.push(`[[${deepReadFolder}/${safeId}|Deep Read]]`);
+    }
     const score = p.llmScore != null ? `⭐${p.llmScore}/10` : "-";
     const summary = escapeTableCell(p.llmSummary ?? "");
     const hits = (p.interestHits ?? []).slice(0, 3).join(", ") || "-";
@@ -465,7 +471,7 @@ export async function runDailyPipeline(
     log(`Step 4 LLM: provider=${settings.llm.provider} model=${settings.llm.model}`);
     try {
       const llm = buildLLMProvider(settings);
-      const topK = Math.min(rankedPapers.length, 10);
+      const topK = Math.min(rankedPapers.length, 20);
       const topPapersForLLM = rankedPapers.slice(0, topK).map(p => ({
         id: p.id,
         title: p.title,

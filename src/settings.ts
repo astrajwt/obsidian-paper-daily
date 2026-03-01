@@ -87,15 +87,15 @@ Output language: {{language}}
 ## User's interest keywords (with weights, higher = more important):
 {{interest_keywords}}
 
-## Papers to analyze (pre-ranked by HF upvotes + keyword weight):
+## Papers to analyze (pre-ranked, arXiv + HuggingFace combined):
 {{papers_json}}
 
-## HuggingFace Daily Papers (community picks, sorted by upvotes):
+Note: papers with a "source" field of "hf" are HuggingFace-only picks. Treat them identically to arXiv papers — same depth of analysis, same rating criteria.
+
+## HuggingFace Daily Papers (full list for reference, sorted by upvotes):
 {{hf_papers_json}}
 
 {{fulltext_section}}
-
-{{local_pdfs}}
 
 ---
 
@@ -104,7 +104,7 @@ Output language: {{language}}
 Generate the daily digest with the following sections:
 
 ### 今日要点 / Key Takeaways
-3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Note any papers appearing in both arXiv results and HF daily. Be direct.
+3–5 punchy bullet points. What actually moved the needle today vs what is incremental noise? Be direct.
 
 ### 精选论文 / Curated Papers
 For **each paper** in the papers list, output exactly this structure:
@@ -119,7 +119,7 @@ For **each paper** in the papers list, output exactly this structure:
 - 🔧 工程启示: what can a practitioner adopt? Be concrete — "use X to achieve Y", not "this is interesting".
 - ⚠️ 局限性 & 可复现性: scope limitations + code availability + compute requirements. Can a grad student replicate this?
 - 📚 建议: {Skip | Read abstract | Skim methods | Read in full | Implement & test}
-- 🔗 links from paper data. If a local PDF path is listed in the Local PDFs section above, include it here as "[[Local PDF]]".
+- 🔗 links from the paper data (arXiv / HF / PDF as available)
 
 Value rating guide — be calibrated, not generous:
 ★★★★★  Breakthrough: likely to shift practice or become a citation anchor
@@ -129,7 +129,7 @@ Value rating guide — be calibrated, not generous:
 ★☆☆☆☆  Skip: below standard, off-topic, or superseded
 
 ### HF 社区信号 / HF Community Signal
-From the HuggingFace daily picks, list any papers NOT already covered above that are worth noting. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
+From the HuggingFace full list, note any papers NOT already covered above. One line each: title + why the community is upvoting it + your take on whether it lives up to the hype.
 
 ### 今日批次质量 & 结语 / Batch Quality & Closing
 2–3 sentences: Is today a high-signal or low-signal day? What's the overall quality distribution? The single most important thing to keep an eye on from today's batch.
@@ -144,7 +144,7 @@ Rules:
 - 工程启示 must be actionable — not "this is interesting" but "you can use X to achieve Y in your system".
 - Recommendations must be specific — no "interesting direction" hedging.
 - If fulltext_section is non-empty, you MUST use those deep-read notes to enrich the analysis of the corresponding papers. Do not ignore them.
-- If local_pdfs is non-empty, include the local PDF link in the 🔗 line of the corresponding paper.`;
+- HuggingFace papers in papers_json must receive the same full analysis treatment as arXiv papers.`;
 
 export const DEFAULT_SCORING_PROMPT = `Score each paper 1–10 for quality and relevance to the user's interests.
 
