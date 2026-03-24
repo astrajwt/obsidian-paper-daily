@@ -606,14 +606,17 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       });
     });
-    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5206\u6790 Token \u4E0A\u9650 / Max tokens per paper").setDesc("Deep Read \u6BCF\u7BC7\u8BBA\u6587 LLM \u8C03\u7528\u7684\u8F93\u51FA token \u4E0A\u9650\uFF08\u9ED8\u8BA4 1024\uFF0C\u5EFA\u8BAE 512\u20132048\uFF09").addSlider((slider) => {
+    new import_obsidian.Setting(drSubContainer).setName("\u6BCF\u7BC7\u5206\u6790 Token \u4E0A\u9650 / Max tokens per paper").setDesc("Deep Read \u6BCF\u7BC7\u8BBA\u6587 LLM \u8C03\u7528\u7684\u8F93\u51FA token \u4E0A\u9650\uFF0C\u6309\u6A21\u578B\u4E0A\u9650\u586B\u5199\uFF08\u5982 8192\uFF09| Max output tokens per paper deep-read call \u2014 set to your model's limit").addText((text) => {
       var _a3, _b2;
-      return slider.setLimits(256, 4096, 128).setValue((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.deepReadMaxTokens) != null ? _b2 : 1024).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.deepRead = {
-          ...this.plugin.settings.deepRead,
-          deepReadMaxTokens: value
-        };
-        await this.plugin.saveSettings();
+      return text.setPlaceholder("2048").setValue(String((_b2 = (_a3 = this.plugin.settings.deepRead) == null ? void 0 : _a3.deepReadMaxTokens) != null ? _b2 : 2048)).onChange(async (value) => {
+        const n = parseInt(value, 10);
+        if (!isNaN(n) && n > 0) {
+          this.plugin.settings.deepRead = {
+            ...this.plugin.settings.deepRead,
+            deepReadMaxTokens: n
+          };
+          await this.plugin.saveSettings();
+        }
       });
     });
     new import_obsidian.Setting(drSubContainer).setName("\u8F93\u51FA\u76EE\u5F55 / Output Folder").setDesc("\u7CBE\u8BFB\u7B14\u8BB0\u4FDD\u5B58\u76EE\u5F55\uFF08Vault \u5185\u8DEF\u5F84\uFF09| Vault folder path for per-paper deep-read notes").addText((text) => {
@@ -802,9 +805,12 @@ var PaperDailySettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.llm.temperature = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u6700\u5927 Token \u6570 / Max Tokens").setDesc("\u6A21\u578B\u5355\u6B21\u54CD\u5E94\u7684\u6700\u5927 token \u6570 | Maximum tokens for LLM response").addSlider((slider) => slider.setLimits(512, 8192, 256).setValue(this.plugin.settings.llm.maxTokens).setDynamicTooltip().onChange(async (value) => {
-      this.plugin.settings.llm.maxTokens = value;
-      await this.plugin.saveSettings();
+    new import_obsidian.Setting(containerEl).setName("\u6700\u5927 Token \u6570 / Max Tokens").setDesc("\u6A21\u578B\u5355\u6B21\u54CD\u5E94\u7684\u6700\u5927 token \u6570\uFF0C\u6309\u6A21\u578B\u4E0A\u9650\u586B\u5199\uFF08\u5982 DeepSeek-R1 \u586B 64000\uFF09| Maximum output tokens \u2014 set to your model's limit (e.g. 64000 for DeepSeek-R1)").addText((text) => text.setPlaceholder("4096").setValue(String(this.plugin.settings.llm.maxTokens)).onChange(async (value) => {
+      const n = parseInt(value, 10);
+      if (!isNaN(n) && n > 0) {
+        this.plugin.settings.llm.maxTokens = n;
+        await this.plugin.saveSettings();
+      }
     }));
     containerEl.createEl("h2", { text: "\u8F93\u51FA\u683C\u5F0F / Output" });
     new import_obsidian.Setting(containerEl).setName("\u6839\u76EE\u5F55 / Root Folder").setDesc("Vault \u5185\u6240\u6709 Paper Daily \u6587\u4EF6\u7684\u5B58\u653E\u76EE\u5F55 | Folder inside vault where all Paper Daily files are written").addText((text) => text.setPlaceholder("PaperDaily").setValue(this.plugin.settings.rootFolder).onChange(async (value) => {
@@ -5505,11 +5511,12 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    await this.initStorage();
-    this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
-    this.app.workspace.onLayoutReady(() => {
+    this.app.workspace.onLayoutReady(async () => {
+      await this.loadSettingsFromVaultFile();
+      await this.initStorage();
+      this.initScheduler();
       void this.runTodayIfMissing();
     });
     console.log("Paper Daily loaded.");
@@ -5530,7 +5537,6 @@ var PaperDailyPlugin = class extends import_obsidian6.Plugin {
     }
     const locale = (_b = (_a2 = window.moment) == null ? void 0 : _a2.locale()) != null ? _b : "";
     this.settings.language = locale.startsWith("zh") ? "zh" : "en";
-    await this.loadSettingsFromVaultFile();
   }
   async saveSettings() {
     await this.saveData(this.settings);
