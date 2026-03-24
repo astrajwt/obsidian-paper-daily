@@ -25,13 +25,19 @@ export default class PaperDailyPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    await this.initStorage();
-    this.initScheduler();
     this.registerCommands();
     this.addSettingTab(new PaperDailySettingTab(this.app, this));
 
-    // On startup: generate today's document immediately if it doesn't exist yet.
-    this.app.workspace.onLayoutReady(() => { void this.runTodayIfMissing(); });
+    // Defer all vault operations until the workspace is fully ready.
+    // Obsidian's vault index is not built when onload() fires, so calling
+    // vault.createFolder() on an already-existing folder throws an error.
+    // loadSettingsFromVaultFile() also requires an indexed vault.
+    this.app.workspace.onLayoutReady(async () => {
+      await this.loadSettingsFromVaultFile();
+      await this.initStorage();
+      this.initScheduler();
+      void this.runTodayIfMissing();
+    });
 
     console.log("Paper Daily loaded.");
   }
@@ -57,8 +63,7 @@ export default class PaperDailyPlugin extends Plugin {
     // Auto-detect language from Obsidian locale
     const locale = (window as Window & { moment?: { locale(): string } }).moment?.locale() ?? "";
     this.settings.language = locale.startsWith("zh") ? "zh" : "en";
-    // Load from vault config file (overrides data.json if file exists)
-    await this.loadSettingsFromVaultFile();
+    // Note: vault config file is loaded later in onLayoutReady, after the vault is indexed.
   }
 
   async saveSettings(): Promise<void> {

@@ -688,19 +688,21 @@ export class PaperDailySettingTab extends PluginSettingTab {
           }
         }));
 
-    // --- Max tokens slider ---
+    // --- Max tokens text input ---
     new Setting(drSubContainer)
       .setName("每篇分析 Token 上限 / Max tokens per paper")
-      .setDesc("Deep Read 每篇论文 LLM 调用的输出 token 上限（默认 1024，建议 512–2048）")
-      .addSlider(slider => slider
-        .setLimits(256, 4096, 128)
-        .setValue(this.plugin.settings.deepRead?.deepReadMaxTokens ?? 1024)
-        .setDynamicTooltip()
+      .setDesc("Deep Read 每篇论文 LLM 调用的输出 token 上限，按模型上限填写（如 8192）| Max output tokens per paper deep-read call — set to your model's limit")
+      .addText(text => text
+        .setPlaceholder("2048")
+        .setValue(String(this.plugin.settings.deepRead?.deepReadMaxTokens ?? 2048))
         .onChange(async (value) => {
-          this.plugin.settings.deepRead = {
-            ...this.plugin.settings.deepRead, deepReadMaxTokens: value
-          } as typeof this.plugin.settings.deepRead;
-          await this.plugin.saveSettings();
+          const n = parseInt(value, 10);
+          if (!isNaN(n) && n > 0) {
+            this.plugin.settings.deepRead = {
+              ...this.plugin.settings.deepRead, deepReadMaxTokens: n
+            } as typeof this.plugin.settings.deepRead;
+            await this.plugin.saveSettings();
+          }
         }));
 
     // --- Output folder ---
@@ -942,14 +944,16 @@ export class PaperDailySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("最大 Token 数 / Max Tokens")
-      .setDesc("模型单次响应的最大 token 数 | Maximum tokens for LLM response")
-      .addSlider(slider => slider
-        .setLimits(512, 8192, 256)
-        .setValue(this.plugin.settings.llm.maxTokens)
-        .setDynamicTooltip()
+      .setDesc("模型单次响应的最大 token 数，按模型上限填写（如 DeepSeek-R1 填 64000）| Maximum output tokens — set to your model's limit (e.g. 64000 for DeepSeek-R1)")
+      .addText(text => text
+        .setPlaceholder("4096")
+        .setValue(String(this.plugin.settings.llm.maxTokens))
         .onChange(async (value) => {
-          this.plugin.settings.llm.maxTokens = value;
-          await this.plugin.saveSettings();
+          const n = parseInt(value, 10);
+          if (!isNaN(n) && n > 0) {
+            this.plugin.settings.llm.maxTokens = n;
+            await this.plugin.saveSettings();
+          }
         }));
 
     // ── Output ───────────────────────────────────────────────────
